@@ -1,0 +1,8 @@
+{
+  "name": "Nirapod Kroy",
+  "description": "Nirapod Kroy (নিরাপদ ক্রয়) - Complete all-in-one multi-category e-commerce platform offering groceries, electronics, fashion, beauty, home appliances, baby care, and lifestyle products with cash on delivery, bKash payments, and Google Sheets order sync.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
