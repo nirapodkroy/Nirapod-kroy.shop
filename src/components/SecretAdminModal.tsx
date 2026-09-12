@@ -54,8 +54,9 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const { addToast } = useToast();
 
   // Login Form State
-  const [adminEmail, setAdminEmail] = useState("mtarifprodhan@gmail.com");
+  const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Admin View Tabs
@@ -410,6 +411,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setIsLoggingIn(false);
     if (success) {
       setAdminPassword("");
+      setAdminEmail("");
     }
   };
 
@@ -553,17 +555,22 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         const data = await res.json();
         const savedProd: Product = data.product;
 
-        // Optimistically update admin product list
-        if (editingProduct) {
-          setAdminProducts((prev) =>
-            prev.map((p) => (p.id === editingProduct.id ? savedProd : p))
-          );
-        } else {
-          setAdminProducts((prev) => [savedProd, ...prev]);
-        }
+        // Optimistically update admin product list and public cache immediately
+        setAdminProducts((prev) => {
+          const updated = editingProduct
+            ? prev.map((p) => (p.id === editingProduct.id ? savedProd : p))
+            : [savedProd, ...prev];
+          try {
+            const publicCatalog = updated.filter((p) => p.isActive !== false);
+            localStorage.setItem("nirapod_products_cache", JSON.stringify(publicCatalog));
+          } catch {}
+          return updated;
+        });
 
         addToast(
-          editingProduct ? "Product updated successfully!" : "New product created successfully!",
+          editingProduct
+            ? "পণ্য সফলভাবে আপডেট ও সেভ হয়েছে (Product updated & saved)!"
+            : "নতুন পণ্য তৈরি ও স্থায়ীভাবে সেভ হয়েছে (Product saved permanently)!",
           "success"
         );
         setIsProductFormOpen(false);
@@ -586,15 +593,22 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setProductToDelete({ id, title });
   };
 
-  // Confirmed Delete execution (Instant removal)
+  // Confirmed Delete execution (Instant removal and permanent save)
   const confirmDeleteProduct = async () => {
     if (!productToDelete) return;
     const { id, title } = productToDelete;
     setProductToDelete(null);
 
-    // 1. Instant optimistic UI removal
-    setAdminProducts((prev) => prev.filter((p) => p.id !== id));
-    addToast(`"${title}" deleted instantly!`, "info");
+    // 1. Instant optimistic UI removal and cache update
+    setAdminProducts((prev) => {
+      const remaining = prev.filter((p) => p.id !== id);
+      try {
+        const publicCatalog = remaining.filter((p) => p.isActive !== false);
+        localStorage.setItem("nirapod_products_cache", JSON.stringify(publicCatalog));
+      } catch {}
+      return remaining;
+    });
+    addToast(`"${title}" মুছে ফেলা হয়েছে এবং সেভ হয়েছে (Deleted & Saved)!`, "info");
 
     try {
       const res = await fetch(`/api/products/${id}`, {
@@ -619,19 +633,24 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  // Toggle Active/Inactive status instantly
+  // Toggle Active/Inactive status instantly with one-click save
   const handleToggleActive = async (id: string, currentlyActive: boolean) => {
     const nextState = !currentlyActive;
 
-    // 1. Instant optimistic update in admin list
-    setAdminProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, isActive: nextState } : p))
-    );
+    // 1. Instant optimistic update in admin list and public store cache
+    setAdminProducts((prev) => {
+      const updated = prev.map((p) => (p.id === id ? { ...p, isActive: nextState } : p));
+      try {
+        const publicCatalog = updated.filter((p) => p.isActive !== false);
+        localStorage.setItem("nirapod_products_cache", JSON.stringify(publicCatalog));
+      } catch {}
+      return updated;
+    });
 
     addToast(
       nextState
-        ? "Product Activated (ওয়েবসাইটে এখন লাইভ)"
-        : "Product Inactivated (ওয়েবসাইট থেকে লুকানো হয়েছে)",
+        ? "পণ্যটি এখন Active (ওয়েবসাইটে সরাসরি লাইভ প্রদর্শিত হচ্ছে)"
+        : "পণ্যটি এখন Inactive (ওয়েবসাইট থেকে নিরাপদে লুকানো হয়েছে)",
       "success"
     );
 
@@ -775,7 +794,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-start sm:justify-center p-2 sm:p-4 md:p-6 overflow-y-auto overscroll-contain">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -793,7 +812,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           className="relative w-full max-w-5xl rounded-3xl bg-zinc-900 border border-zinc-700/80 text-zinc-100 shadow-2xl overflow-hidden z-10 my-auto flex flex-col max-h-[92dvh]"
         >
           {/* Top Admin Header Bar */}
-          <div className="px-4 sm:px-6 py-4 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between gap-3">
+          <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 shrink-0 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
                 <Lock className="w-4 h-4" />
@@ -804,11 +823,11 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                     Nirapod Kroy Master Console
                   </h2>
                   <span className="hidden sm:inline-block px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-emerald-400 border border-emerald-500/30">
-                    HIDDEN ROOT
+                    PROTECTED ROOT
                   </span>
                 </div>
                 <p className="text-[11px] text-zinc-400 truncate">
-                  Shortcut: <code className="text-zinc-300 font-bold">Ctrl/Cmd + Alt + Shift + T</code>
+                  Master Security Access — Authorized Personnel Only
                 </p>
               </div>
             </div>
@@ -835,70 +854,92 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
 
           {!isAdminLoggedIn ? (
             /* 1. SECRET ADMIN LOGIN FORM */
-            <div className="p-8 sm:p-12 max-w-md mx-auto w-full text-center">
-              <div className="w-16 h-16 rounded-3xl bg-zinc-800 border border-zinc-700 flex items-center justify-center mx-auto text-amber-400 mb-4 shadow-inner">
-                <KeyRound className="w-8 h-8" />
+            <div className="flex-1 overflow-y-auto overscroll-contain p-6 sm:p-8 max-w-md mx-auto w-full text-center">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-zinc-800 border border-zinc-700 flex items-center justify-center mx-auto text-amber-400 mb-3 shadow-inner">
+                <KeyRound className="w-7 h-7 sm:w-8 sm:h-8" />
               </div>
-              <h3 className="text-xl font-bold text-white font-display">
-                Authorized Credentials Required
+              <h3 className="text-lg sm:text-xl font-bold text-white font-display">
+                এডমিন প্যানেলে লগইন করুন
               </h3>
               <p className="text-xs text-zinc-400 mt-1 mb-6">
-                Enter backend root admin credentials to access inventory and private Google Sheets integration.
+                আপনার এডমিন ইমেইল ও পাসওয়ার্ড প্রদান করে কনসোল আনলক করুন।
               </p>
 
               <form onSubmit={handleAdminLogin} className="space-y-4 text-left">
                 <div>
                   <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                    Admin Email Address
+                    ইমেইল অ্যাড্রেস (Admin Email)
                   </label>
                   <input
                     type="email"
                     required
+                    placeholder="admin@example.com"
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    autoComplete="off"
                   />
-                  <p className="text-[11px] text-zinc-500 mt-1">Default: mtarifprodhan@gmail.com</p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                    Secure Password
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Enter admin password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-zinc-300">
+                      পাসওয়ার্ড (Password)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminPassword(!showAdminPassword)}
+                      className="text-[11px] text-zinc-400 hover:text-emerald-400 flex items-center gap-1 cursor-pointer"
+                    >
+                      {showAdminPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      <span>{showAdminPassword ? "লুকান" : "দেখান"}</span>
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showAdminPassword ? "text" : "password"}
+                      required
+                      placeholder="••••••••"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="w-full px-3.5 py-2.5 pr-10 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminPassword(!showAdminPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-1 cursor-pointer"
+                      title={showAdminPassword ? "Hide password" : "Show password"}
+                    >
+                      {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="pt-2">
                   <button
                     type="submit"
                     disabled={isLoggingIn}
-                    className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600/50 text-white font-bold text-sm shadow-md transition-all active:scale-[0.98]"
+                    className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600/50 text-white font-bold text-sm shadow-md transition-all active:scale-[0.98] cursor-pointer"
                   >
                     {isLoggingIn ? (
                       <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
                     ) : (
-                      "Unlock Admin Console"
+                      "লগইন করুন (Unlock Console)"
                     )}
                   </button>
                 </div>
               </form>
 
               <div className="mt-6 pt-4 border-t border-zinc-800 text-[11px] text-zinc-500">
-                <span>Credentials strictly verified server-side. Public UI button remains 100% hidden.</span>
+                <span>সিকিউর সার্ভার-সাইড ভেরিফিকেশন। অননুমোদিত প্রবেশ সম্পূর্ণ নিষিদ্ধ।</span>
               </div>
             </div>
           ) : (
             /* 2. AUTHENTICATED ADMIN DASHBOARD */
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               {/* Tab Navigation */}
-              <div className="px-4 sm:px-6 py-2.5 bg-zinc-950/60 border-b border-zinc-800 flex items-center justify-between gap-4 overflow-x-auto no-scrollbar">
+              <div className="shrink-0 px-4 sm:px-6 py-2.5 bg-zinc-950/60 border-b border-zinc-800 flex items-center justify-between gap-4 overflow-x-auto no-scrollbar">
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setActiveTab("dashboard")}
@@ -956,7 +997,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
               </div>
 
               {/* Tab Contents */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
                 {/* TAB 1: DASHBOARD OVERVIEW */}
                 {activeTab === "dashboard" && (
                   <div className="space-y-6">
@@ -1152,7 +1193,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-zinc-700 overflow-hidden bg-zinc-800/40">
+                    {/* Desktop & Tablet Table View */}
+                    <div className="hidden md:block rounded-2xl border border-zinc-700 overflow-hidden bg-zinc-800/40">
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs">
                           <thead className="bg-zinc-950 text-zinc-400 uppercase font-semibold text-[11px] border-b border-zinc-700">
@@ -1237,7 +1279,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                                             ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30"
                                             : "bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700 hover:text-zinc-200"
                                         }`}
-                                        title={isActive ? "Click to hide from store" : "Click to publish on store"}
+                                        title={isActive ? "ক্লিক করলে ওয়েবসাইট থেকে লুকানো হবে (Click to Deactivate)" : "ক্লিক করলে ওয়েবসাইটে লাইভ হবে (Click to Activate)"}
                                       >
                                         <span
                                           className={`w-1.5 h-1.5 rounded-full ${
@@ -1296,6 +1338,100 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                           </tbody>
                         </table>
                       </div>
+                    </div>
+
+                    {/* Mobile Responsive Cards (Phone & Small Tablet Friendly) */}
+                    <div className="md:hidden space-y-3">
+                      {(adminProducts.length > 0 ? adminProducts : products)
+                        .filter((prod) => {
+                          const term = productSearchTerm.toLowerCase();
+                          const matchesSearch =
+                            !term ||
+                            prod.title.toLowerCase().includes(term) ||
+                            prod.category.toLowerCase().includes(term) ||
+                            (prod.affiliateSource && prod.affiliateSource.toLowerCase().includes(term));
+
+                          if (!matchesSearch) return false;
+                          if (productStatusFilter === "active") return prod.isActive !== false;
+                          if (productStatusFilter === "inactive") return prod.isActive === false;
+                          if (productStatusFilter === "affiliate") return Boolean(prod.isAffiliate);
+                          return true;
+                        })
+                        .map((prod) => {
+                          const isActive = prod.isActive !== false;
+                          return (
+                            <div
+                              key={prod.id}
+                              className={`p-3.5 rounded-2xl border transition-all ${
+                                isActive
+                                  ? "bg-zinc-800/80 border-zinc-700/80"
+                                  : "bg-zinc-900/90 border-zinc-800 opacity-80"
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <img
+                                  src={prod.imageUrl}
+                                  alt={prod.title}
+                                  className="w-16 h-16 rounded-xl object-cover bg-zinc-900 shrink-0 border border-zinc-700"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <h4 className="font-semibold text-white text-xs truncate">{prod.title}</h4>
+                                    {prod.isAffiliate && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                        Affiliate
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                    <span className="text-[12px] font-bold text-emerald-400">৳{prod.price.toLocaleString()}</span>
+                                    <span className="text-[10px] text-zinc-400 bg-zinc-700/50 px-1.5 py-0.5 rounded">{prod.category}</span>
+                                    <span className="text-[10px] text-zinc-400 font-mono">স্টক: {prod.stock}</span>
+                                  </div>
+
+                                  {/* Mobile Active / Inactive Switch & Action Buttons */}
+                                  <div className="mt-3 pt-2.5 border-t border-zinc-700/50 flex items-center justify-between gap-2 flex-wrap">
+                                    {/* Quick Active / Inactive Toggle */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleActive(prod.id, isActive)}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                                        isActive
+                                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                          : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                                      }`}
+                                    >
+                                      <span
+                                        className={`w-2 h-2 rounded-full ${
+                                          isActive ? "bg-emerald-400 animate-pulse" : "bg-zinc-500"
+                                        }`}
+                                      />
+                                      <span>{isActive ? "Active (লাইভ)" : "Inactive (লুকানো)"}</span>
+                                    </button>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        onClick={() => handleOpenEditProduct(prod)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200 text-[11px] font-medium transition-colors cursor-pointer"
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                        <span>Edit</span>
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteProduct(prod.id, prod.title)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-[11px] font-medium transition-colors cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                        <span>Delete</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
                   </div>
                 )}
@@ -1502,8 +1638,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
 
           {/* Sub-Modal: Add / Edit Product */}
           {isProductFormOpen && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-              <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="fixed inset-0 z-[60] flex flex-col items-center justify-start sm:justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-xs overflow-y-auto overscroll-contain">
+              <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-4 sm:p-6 max-w-lg w-full max-h-[92dvh] overflow-y-auto space-y-4 my-auto overscroll-contain">
                 <div className="flex justify-between items-center pb-2 border-b border-zinc-800">
                   <h3 className="font-bold text-base text-white">
                     {editingProduct ? "Edit Product" : "Add New Catalog Product"}
@@ -1520,6 +1656,52 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                 </div>
 
                 <form onSubmit={handleSaveProduct} className="space-y-3.5 text-xs">
+                  {/* PROMINENT ACTIVE / INACTIVE VISIBILITY SELECTOR */}
+                  <div
+                    className={`p-3.5 rounded-2xl border transition-all ${
+                      formIsActive
+                        ? "bg-emerald-950/40 border-emerald-500/50 shadow-xs"
+                        : "bg-zinc-800/80 border-zinc-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                              formIsActive ? "bg-emerald-400 shadow-sm shadow-emerald-400 animate-pulse" : "bg-zinc-500"
+                            }`}
+                          />
+                          <span className="font-bold text-xs text-white">
+                            {formIsActive
+                              ? "Active Status (ওয়েবসাইটে লাইভ প্রদর্শিত হবে)"
+                              : "Inactive Status (ওয়েবসাইট থেকে লুকানো থাকবে)"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-300 mt-1 leading-normal">
+                          {formIsActive
+                            ? "✅ সক্রিয়: কাস্টমাররা এই পণ্যটি সরাসরি দেখতে এবং এখনই অর্ডার করতে পারবেন।"
+                            : "🔒 নিষ্ক্রিয়: পণ্যটি স্টোর ক্যাটালগ থেকে সাময়িক লুকানো থাকবে, এডমিনে সংরক্ষিত থাকবে।"}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormIsActive(!formIsActive)}
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                          formIsActive ? "bg-emerald-500" : "bg-zinc-700"
+                        }`}
+                        title={formIsActive ? "Click to set Inactive" : "Click to set Active"}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            formIsActive ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block font-semibold text-zinc-300 mb-1">Product Title *</label>
                     <input
@@ -1566,20 +1748,20 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-semibold text-zinc-300 mb-1">Sale Price ($) *</label>
+                      <label className="block font-semibold text-zinc-300 mb-1">Sale Price (৳ BDT) *</label>
                       <input
                         type="number"
                         step="0.01"
                         required
                         value={formPrice}
                         onChange={(e) => setFormPrice(e.target.value)}
-                        placeholder="149.00"
+                        placeholder="350"
                         className="w-full px-3.5 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-zinc-300 mb-1">Regular Price ($)</label>
+                      <label className="block font-semibold text-zinc-300 mb-1">Regular Price (৳ BDT)</label>
                       <input
                         type="number"
                         step="0.01"

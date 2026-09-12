@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { CustomerUser } from "../types";
 import { useToast } from "./ToastContext";
+import {
+  safeGetLocalStorage,
+  safeSetLocalStorage,
+  safeRemoveLocalStorage,
+  safeGetSessionStorage,
+  safeSetSessionStorage
+} from "../utils/storage";
 
 interface AuthContextType {
   currentUser: CustomerUser | null;
@@ -31,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Customer state
   const [currentUser, setCurrentUser] = useState<CustomerUser | null>(() => {
     try {
-      const saved = localStorage.getItem("auracart_customer");
+      const saved = safeGetLocalStorage("auracart_customer");
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -39,7 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [customerToken, setCustomerToken] = useState<string | null>(() => {
-    return localStorage.getItem("auracart_customer_token");
+    return safeGetLocalStorage("auracart_customer_token");
   });
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -49,22 +56,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Secret Admin state
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(() => {
-    return sessionStorage.getItem("auracart_admin_token");
+    return safeGetSessionStorage("auracart_admin_token") || safeGetLocalStorage("auracart_admin_token");
   });
 
-  // Secret keyboard shortcut listener: Ctrl/Cmd + Alt/Option + Shift + T (Windows & Mac friendly)
+  // Admin keyboard shortcut listener:
+  // Supports:
+  // 1. Ctrl/Cmd + Alt + Shift + T (original)
+  // 2. Ctrl/Cmd + Alt + T (easier 3-key combo, avoids Chrome 'reopen tab' collision)
+  // 3. Ctrl/Cmd + Shift + A or Ctrl/Cmd + Alt + A (A for Admin)
+  // Works with English, Bengali (Avro/Bijoy), and physical keycodes
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isControlOrCmd = e.ctrlKey || e.metaKey;
-      if (isControlOrCmd && e.altKey && e.shiftKey && (e.key === "T" || e.key === "t")) {
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      const isAlt = e.altKey;
+      const isShift = e.shiftKey;
+
+      const code = e.code;
+      const key = e.key ? e.key.toLowerCase() : "";
+      const keyCode = e.keyCode || e.which;
+
+      const isT = code === "KeyT" || keyCode === 84 || key === "t" || key === "ট" || key === "ত";
+      const isA = code === "KeyA" || keyCode === 65 || key === "a" || key === "অ" || key === "া";
+
+      // Match either:
+      // (Ctrl+Alt+Shift + T) OR (Ctrl+Alt + T) OR (Ctrl+Shift + A) OR (Ctrl+Alt + A)
+      const matchesOriginal = isCtrlOrCmd && isAlt && isShift && isT;
+      const matchesCtrlAltT = isCtrlOrCmd && isAlt && isT;
+      const matchesAdminA = isCtrlOrCmd && (isShift || isAlt) && isA;
+
+      if (matchesOriginal || matchesCtrlAltT || matchesAdminA) {
         e.preventDefault();
+        e.stopPropagation();
         setIsAdminModalOpen(prev => !prev);
-        addToast("Secret Admin Console Activated", "info");
+        addToast("অ্যাডমিন প্যানেল সক্রিয় হয়েছে (Admin Console Activated)", "info");
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    // Use capture phase so browser or nested elements don't drop the event
+    window.addEventListener("keydown", handleKeyDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
   }, [addToast]);
 
   const loginCustomer = async (email: string, password: string): Promise<boolean> => {
@@ -83,8 +118,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setCurrentUser(data.user);
       setCustomerToken(data.token);
-      localStorage.setItem("auracart_customer", JSON.stringify(data.user));
-      localStorage.setItem("auracart_customer_token", data.token);
+      safeSetLocalStorage("auracart_customer", JSON.stringify(data.user));
+      safeSetLocalStorage("auracart_customer_token", data.token);
       addToast(`Welcome back, ${data.user.name}!`, "success");
       setIsAuthModalOpen(false);
       return true;
@@ -117,8 +152,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setCurrentUser(data.user);
       setCustomerToken(data.token);
-      localStorage.setItem("auracart_customer", JSON.stringify(data.user));
-      localStorage.setItem("auracart_customer_token", data.token);
+      safeSetLocalStorage("auracart_customer", JSON.stringify(data.user));
+      safeSetLocalStorage("auracart_customer_token", data.token);
       addToast(`Account created! Welcome, ${data.user.name}`, "success");
       setIsAuthModalOpen(false);
       return true;
@@ -132,13 +167,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logoutCustomer = useCallback(() => {
     setCurrentUser(null);
     setCustomerToken(null);
-    localStorage.removeItem("auracart_customer");
-    localStorage.removeItem("auracart_customer_token");
+    safeRemoveLocalStorage("auracart_customer");
+    safeRemoveLocalStorage("auracart_customer_token");
     setIsProfileModalOpen(false);
     addToast("Logged out successfully", "info");
   }, [addToast]);
 
-  const loginAdmin = async (password: string, email: string = "mtarifprodhan@gmail.com"): Promise<boolean> => {
+  const loginAdmin = async (password: string, email: string = ""): Promise<boolean> => {
     try {
       const res = await fetch("/api/admin/login", {
         method: "POST",
@@ -153,7 +188,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setAdminToken(data.token);
-      sessionStorage.setItem("auracart_admin_token", data.token);
+      safeSetSessionStorage("auracart_admin_token", data.token);
+      safeSetLocalStorage("auracart_admin_token", data.token);
       addToast("Admin console authenticated successfully", "success");
       return true;
     } catch (err) {
@@ -165,7 +201,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logoutAdmin = useCallback(() => {
     setAdminToken(null);
-    sessionStorage.removeItem("auracart_admin_token");
+    try {
+      sessionStorage.removeItem("auracart_admin_token");
+    } catch {}
+    safeRemoveLocalStorage("auracart_admin_token");
     setIsAdminModalOpen(false);
     addToast("Admin logged out", "info");
   }, [addToast]);

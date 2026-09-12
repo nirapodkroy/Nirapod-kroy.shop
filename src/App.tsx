@@ -5,6 +5,8 @@ import { CartProvider, useCart } from "./context/CartContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { Product } from "./types";
+import { DEFAULT_PRODUCTS } from "./data/defaultProducts";
+import { safeGetLocalStorage, safeSetLocalStorage } from "./utils/storage";
 import { Header } from "./components/Header";
 import { HeroSection } from "./components/HeroSection";
 import { ProductGrid } from "./components/ProductGrid";
@@ -30,9 +32,20 @@ const CATEGORIES = [
   "Books"
 ];
 
+const PRODUCTS_CACHE_KEY = "nirapod_products_cache";
+
 const StoreContent: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const cached = safeGetLocalStorage(PRODUCTS_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return DEFAULT_PRODUCTS;
+  });
+  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
@@ -42,20 +55,20 @@ const StoreContent: React.FC = () => {
 
   // Load products from API
   const fetchProducts = useCallback(async () => {
-    setIsLoading(true);
     try {
       const res = await fetch("/api/products");
       if (res.ok) {
         const data = await res.json();
-        setProducts(data.products || []);
+        const list = Array.isArray(data.products) && data.products.length > 0 ? data.products : DEFAULT_PRODUCTS;
+        setProducts(list);
+        safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(list));
       }
     } catch (err) {
-      console.error("Failed to load products:", err);
-      addToast("Failed to fetch latest catalog", "error");
+      console.warn("Could not reach /api/products, using local catalog:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [addToast]);
+  }, []);
 
   useEffect(() => {
     fetchProducts();

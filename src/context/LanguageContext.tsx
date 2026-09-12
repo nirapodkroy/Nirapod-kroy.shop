@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Language } from "../types";
+import { safeGetLocalStorage, safeSetLocalStorage } from "../utils/storage";
 
 interface LanguageContextType {
   language: Language;
@@ -223,14 +224,18 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
-    const saved = localStorage.getItem("nirapodkroy_language") as Language;
-    if (saved === "bn" || saved === "en") return saved;
+    try {
+      const saved = safeGetLocalStorage("nirapodkroy_language") as Language;
+      if (saved === "bn" || saved === "en") return saved;
+    } catch {}
     return "bn"; // Default to Bangla as requested
   });
 
   useEffect(() => {
-    localStorage.setItem("nirapodkroy_language", language);
-    document.documentElement.lang = language === "bn" ? "bn" : "en";
+    try {
+      safeSetLocalStorage("nirapodkroy_language", language);
+      document.documentElement.lang = language === "bn" ? "bn" : "en";
+    } catch {}
   }, [language]);
 
   const setLanguage = (lang: Language) => {

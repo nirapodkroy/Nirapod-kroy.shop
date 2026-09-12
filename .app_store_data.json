@@ -1,20 +1,6 @@
 {
   "products": [
     {
-      "id": "prod-groc-1",
-      "title": "খাঁটি ঘানি-ভাঙা সরিষার তেল (Pure Mustard Oil, 1L)",
-      "description": "১০০% খাঁটি কাঠের ঘানিতে ভাঙা দেশি সরিষার তেল। ঝাঁঝালো সুবাস, কেমিক্যাল ও ভেজালমুক্ত প্রাকৃতিক তেল।",
-      "price": 340,
-      "regularPrice": 380,
-      "category": "Groceries",
-      "stock": 45,
-      "imageUrl": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=800&q=80",
-      "rating": 4.9,
-      "ratingCount": 230,
-      "badge": "১০০% খাঁটি",
-      "featured": true
-    },
-    {
       "id": "prod-groc-2",
       "title": "সুন্দরবনের প্রাকৃতিক চাকের মধু (Sundarbans Honey, 500g)",
       "description": "সুন্দরবনের গভীর জঙ্গল থেকে সংগৃহীত প্রাকৃতিক চাকের কাঁচা মধু। কোনো ধরনের প্রক্রিয়াজাতকরণ ও চিনিমুক্ত।",
@@ -23,10 +9,15 @@
       "category": "Groceries",
       "stock": 30,
       "imageUrl": "https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&w=800&q=80",
-      "rating": 5.0,
+      "rating": 5,
       "ratingCount": 185,
       "badge": "প্রাকৃতিক",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1471943311424-646960669fbc?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-groc-3",
@@ -40,7 +31,11 @@
       "rating": 4.8,
       "ratingCount": 140,
       "badge": "সেরা মান",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-groc-4",
@@ -54,7 +49,11 @@
       "rating": 4.9,
       "ratingCount": 95,
       "badge": "দানাদার ঘি",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1631451095765-2c91616fc9e6?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1628088062854-d1870b4553da?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-groc-5",
@@ -68,7 +67,10 @@
       "rating": 4.9,
       "ratingCount": 110,
       "badge": "পুষ্টিকর",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-elec-1",
@@ -82,7 +84,12 @@
       "rating": 4.9,
       "ratingCount": 142,
       "badge": "Bestseller",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-elec-2",
@@ -96,7 +103,12 @@
       "rating": 4.8,
       "ratingCount": 98,
       "badge": "Hot Deal",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-elec-3",
@@ -110,7 +122,10 @@
       "rating": 4.8,
       "ratingCount": 165,
       "badge": "ফাস্ট চার্জ",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1609592426861-1e967a5b3a4f?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-elec-4",
@@ -124,7 +139,10 @@
       "rating": 4.9,
       "ratingCount": 84,
       "badge": "Staff Pick",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-elec-5",
@@ -138,7 +156,10 @@
       "rating": 4.9,
       "ratingCount": 53,
       "badge": "Top Rated",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-fash-1",
@@ -152,7 +173,11 @@
       "rating": 4.9,
       "ratingCount": 160,
       "badge": "সেরা পাঞ্জাবি",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-fash-2",
@@ -166,7 +191,11 @@
       "rating": 4.8,
       "ratingCount": 88,
       "badge": "ঐতিহ্যবাহী",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-fash-3",
@@ -180,7 +209,10 @@
       "rating": 4.7,
       "ratingCount": 112,
       "badge": "১০০% চামড়া",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-fash-4",
@@ -194,7 +226,10 @@
       "rating": 4.8,
       "ratingCount": 94,
       "badge": "ট্রেন্ডি",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-beau-1",
@@ -208,7 +243,10 @@
       "rating": 4.9,
       "ratingCount": 175,
       "badge": "অর্গানিক",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-beau-2",
@@ -222,7 +260,10 @@
       "rating": 4.8,
       "ratingCount": 120,
       "badge": "ভেষজ যত্ন",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1608248597359-548c26bc7d66?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-beau-3",
@@ -236,7 +277,10 @@
       "rating": 4.9,
       "ratingCount": 86,
       "badge": "SPF 50+",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-home-1",
@@ -250,7 +294,10 @@
       "rating": 4.9,
       "ratingCount": 65,
       "badge": "অয়েল-ফ্রি",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1584992236310-6edddc08acff?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-home-2",
@@ -264,7 +311,10 @@
       "rating": 4.8,
       "ratingCount": 92,
       "badge": "নন-স্টিক",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1583778176476-4a8b02a64c01?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-home-3",
@@ -278,7 +328,10 @@
       "rating": 4.7,
       "ratingCount": 110,
       "badge": "রিলাক্সিং",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-baby-1",
@@ -292,7 +345,10 @@
       "rating": 4.9,
       "ratingCount": 78,
       "badge": "নিরাপদ খেলনা",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1587654780291-39c9404d746b?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-baby-2",
@@ -306,7 +362,10 @@
       "rating": 4.8,
       "ratingCount": 62,
       "badge": "টিয়ার-ফ্রি",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-sprt-1",
@@ -320,7 +379,10 @@
       "rating": 4.8,
       "ratingCount": 74,
       "badge": "ইকো ম্যাট",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1592432678016-e910b452f9a2?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-sprt-2",
@@ -334,7 +396,10 @@
       "rating": 4.7,
       "ratingCount": 58,
       "badge": "হোম জিম",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1598289431512-b97b0917affc?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-book-1",
@@ -348,7 +413,10 @@
       "rating": 4.9,
       "ratingCount": 140,
       "badge": "বেস্টসেলার",
-      "featured": true
+      "featured": true,
+      "images": [
+        "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80"
+      ]
     },
     {
       "id": "prod-book-2",
@@ -362,7 +430,10 @@
       "rating": 4.8,
       "ratingCount": 65,
       "badge": "এক্সিকিউটিভ",
-      "featured": false
+      "featured": false,
+      "images": [
+        "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=800&q=80"
+      ]
     }
   ],
   "orders": [
@@ -457,5 +528,5 @@
       "createdAt": "2026-09-09T05:51:51.553Z"
     }
   ],
-  "webhookUrl": ""
+  "webhookUrl": "https://docs.google.com/spreadsheets/d/1G9RaUa5w_ok_OobuEjL6cxRsOi8yL9ZoHl3Qy_2F5-Q/edit?usp=sharing"
 }

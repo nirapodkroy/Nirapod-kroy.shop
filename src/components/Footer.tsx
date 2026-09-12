@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { Sparkles, ShieldCheck, Heart, CreditCard, Send, CheckCircle2, Lock } from "lucide-react";
+import { Sparkles, ShieldCheck, Heart, CreditCard, Send, CheckCircle2 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
-import { useAuth } from "../context/AuthContext";
 
 interface FooterProps {
   onCategorySelect: (cat: string) => void;
@@ -9,7 +8,6 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
   const { language, t, getCategoryName } = useLanguage();
-  const { setIsAdminModalOpen } = useAuth();
   const [subscribed, setSubscribed] = useState(false);
   const [emailInput, setEmailInput] = useState("");
 
@@ -204,19 +202,10 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
 
         {/* Bottom Bar: Copyright & Payment Methods */}
         <div className="mt-12 pt-6 border-t border-zinc-200/60 dark:border-zinc-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-          <div className="flex items-center gap-2 text-zinc-400 text-center sm:text-left">
+          <div className="text-zinc-400 text-center sm:text-left">
             <span>
               © {new Date().getFullYear()} Nirapod Kroy (নিরাপদ ক্রয়) — {t("copyright")}
             </span>
-            {/* Discreet Admin Launcher for Phone & Tablet touch users without keyboard */}
-            <button
-              onClick={() => setIsAdminModalOpen(true)}
-              className="p-1 text-zinc-300 dark:text-zinc-700 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors cursor-pointer rounded"
-              title="Admin Portal (or press Ctrl+Alt+Shift+T)"
-              aria-label="Admin Portal"
-            >
-              <Lock className="w-3 h-3 opacity-60 hover:opacity-100" />
-            </button>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-center">

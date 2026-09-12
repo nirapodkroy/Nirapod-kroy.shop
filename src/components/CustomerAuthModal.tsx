@@ -291,13 +291,15 @@ export const CustomerAuthModal: React.FC = () => {
               </form>
             )}
 
-            <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-center gap-1.5 text-[11px] text-zinc-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>
-                {language === "bn"
-                  ? "আপনার ব্যক্তিগত তথ্য নিরাপদ ও সংরক্ষিত থাকবে"
-                  : "Your personal info is encrypted and never sold"}
-              </span>
+            <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400">
+              <div className="flex items-center gap-1.5 mx-auto">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span>
+                  {language === "bn"
+                    ? "এনক্রিপ্টেড নিরাপদ সেশন"
+                    : "Encrypted secure session"}
+                </span>
+              </div>
             </div>
           </div>
         </motion.div>

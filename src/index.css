@@ -65,6 +65,13 @@ button, a, input, select, textarea, [role="button"] {
   scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
 }
 
+/* Touch device smooth momentum scrolling */
+.overflow-y-auto,
+.overflow-x-auto,
+[data-scrollable="true"] {
+  -webkit-overflow-scrolling: touch;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

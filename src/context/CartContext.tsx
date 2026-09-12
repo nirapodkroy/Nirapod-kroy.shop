@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Product, CartItem } from "../types";
 import { useToast } from "./ToastContext";
+import { safeGetLocalStorage, safeSetLocalStorage } from "../utils/storage";
 
 interface CartContextType {
   items: CartItem[];
@@ -22,7 +23,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
-      const saved = localStorage.getItem("auracart_cart");
+      const saved = safeGetLocalStorage("auracart_cart");
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -33,11 +34,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { addToast } = useToast();
 
   useEffect(() => {
-    try {
-      localStorage.setItem("auracart_cart", JSON.stringify(items));
-    } catch (e) {
-      console.error("Failed to save cart to localStorage", e);
-    }
+    safeSetLocalStorage("auracart_cart", JSON.stringify(items));
   }, [items]);
 
   const addItem = (product: Product, quantity: number = 1) => {
