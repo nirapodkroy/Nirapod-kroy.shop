@@ -49,6 +49,9 @@
     <meta name="apple-mobile-web-app-title" content="Nirapod Kroy" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="msapplication-TileColor" content="#10b981" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <!-- Favicon & Brand Icons -->
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
@@ -75,18 +78,19 @@
           var root = document.getElementById('root');
           if (root && root.firstElementChild) return;
           loaded = true;
+          var ver = Date.now().toString(36);
           if (!document.getElementById('nirapod-css-fallback')) {
             var link = document.createElement('link');
             link.id = 'nirapod-css-fallback';
             link.rel = 'stylesheet';
             link.crossOrigin = 'anonymous';
-            link.href = './assets/index.css';
+            link.href = './assets/index.css?v=' + ver;
             document.head.appendChild(link);
           }
           var script = document.createElement('script');
           script.type = 'module';
           script.crossOrigin = 'anonymous';
-          script.src = './assets/index.js';
+          script.src = './assets/index.js?v=' + ver;
           document.body.appendChild(script);
         }
 
