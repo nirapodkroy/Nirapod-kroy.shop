@@ -62,6 +62,38 @@
   <body class="bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-200 antialiased selection:bg-emerald-500 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      (function() {
+        var loaded = false;
+        function loadFallback() {
+          if (loaded) return;
+          var root = document.getElementById('root');
+          if (root && root.firstElementChild) return;
+          loaded = true;
+          if (!document.getElementById('nirapod-css-fallback')) {
+            var link = document.createElement('link');
+            link.id = 'nirapod-css-fallback';
+            link.rel = 'stylesheet';
+            link.crossOrigin = 'anonymous';
+            link.href = './assets/index.css';
+            document.head.appendChild(link);
+          }
+          var script = document.createElement('script');
+          script.type = 'module';
+          script.crossOrigin = 'anonymous';
+          script.src = './assets/index.js';
+          document.body.appendChild(script);
+        }
+
+        window.addEventListener('error', function(e) {
+          if (e && ((e.filename && e.filename.indexOf('main.tsx') !== -1) || (e.target && e.target.src && e.target.src.indexOf('main.tsx') !== -1))) {
+            loadFallback();
+          }
+        }, true);
+
+        setTimeout(loadFallback, 300);
+      })();
+    </script>
   </body>
 </html>
 
