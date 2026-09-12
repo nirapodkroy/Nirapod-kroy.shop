@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="50%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <linearGradient id="bagGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#022c22" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background Squircle -->
+  <rect x="24" y="24" width="464" height="464" rx="120" fill="url(#bgGrad)" />
+  
+  <!-- Subtle Inner Border Accent -->
+  <rect x="36" y="36" width="440" height="440" rx="108" fill="none" stroke="url(#goldGrad)" stroke-width="8" opacity="0.5" />
+
+  <g filter="url(#shadow)">
+    <!-- Bag Handle -->
+    <path d="M206 180 V150 C206 122 228 100 256 100 C284 100 306 122 306 150 V180" 
+          fill="none" stroke="url(#goldGrad)" stroke-width="28" stroke-linecap="round"/>
+
+    <!-- Bag Main Body -->
+    <path d="M150 180 H362 L382 370 C385 392 368 410 346 410 H166 C144 410 127 392 130 370 L150 180 Z" 
+          fill="url(#bagGrad)"/>
+
+    <!-- Security Shield in Center -->
+    <path d="M256 225 C295 235 318 252 318 288 C318 332 278 360 256 372 C234 360 194 332 194 288 C194 252 217 235 256 225 Z" 
+          fill="#059669"/>
+    
+    <!-- Bold White Checkmark -->
+    <path d="M230 295 L248 314 L284 274" 
+          fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

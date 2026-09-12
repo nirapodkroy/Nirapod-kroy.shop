@@ -24,7 +24,7 @@ try {
     fs.cpSync(distAssets, assets, { recursive: true, force: true });
   }
 
-  // 4. Ensure CNAME is everywhere
+  // 4. Ensure CNAME and favicon are everywhere
   const cnameContent = 'www.nirapodkroy.shop\n';
   fs.writeFileSync(path.join(root, 'CNAME'), cnameContent);
   if (fs.existsSync(path.join(root, 'public'))) {
@@ -37,7 +37,19 @@ try {
     fs.writeFileSync(path.join(docs, 'CNAME'), cnameContent);
   }
 
-  console.log('[Postbuild] Successfully synced dist, docs, assets, 404.html, and CNAME!');
+  // 5. Sync favicon.svg
+  const faviconPath = path.join(root, 'public', 'favicon.svg');
+  if (fs.existsSync(faviconPath)) {
+    fs.copyFileSync(faviconPath, path.join(root, 'favicon.svg'));
+    if (fs.existsSync(dist)) {
+      fs.copyFileSync(faviconPath, path.join(dist, 'favicon.svg'));
+    }
+    if (fs.existsSync(docs)) {
+      fs.copyFileSync(faviconPath, path.join(docs, 'favicon.svg'));
+    }
+  }
+
+  console.log('[Postbuild] Successfully synced dist, docs, assets, 404.html, CNAME, and favicon!');
 } catch (err) {
   console.error('[Postbuild Error]', err);
 }
