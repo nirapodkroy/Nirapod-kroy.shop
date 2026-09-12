@@ -49,7 +49,38 @@ try {
     }
   }
 
-  console.log('[Postbuild] Successfully synced dist, docs, assets, 404.html, CNAME, and favicon!');
+  // 6. Ensure products.json is synced across public, dist, docs, and assets
+  let productsJsonStr = null;
+  const storeDataFile = path.join(root, '.app_store_data.json');
+  const publicProductsFile = path.join(root, 'public', 'products.json');
+  if (fs.existsSync(storeDataFile)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(storeDataFile, 'utf-8'));
+      if (data.products && Array.isArray(data.products)) {
+        productsJsonStr = JSON.stringify(data.products, null, 2);
+      }
+    } catch {}
+  }
+  if (!productsJsonStr && fs.existsSync(publicProductsFile)) {
+    productsJsonStr = fs.readFileSync(publicProductsFile, 'utf-8');
+  }
+
+  if (productsJsonStr) {
+    if (fs.existsSync(path.join(root, 'public'))) {
+      fs.writeFileSync(path.join(root, 'public', 'products.json'), productsJsonStr);
+    }
+    if (fs.existsSync(dist)) {
+      fs.writeFileSync(path.join(dist, 'products.json'), productsJsonStr);
+    }
+    if (fs.existsSync(docs)) {
+      fs.writeFileSync(path.join(docs, 'products.json'), productsJsonStr);
+    }
+    if (fs.existsSync(assets)) {
+      fs.writeFileSync(path.join(assets, 'products.json'), productsJsonStr);
+    }
+  }
+
+  console.log('[Postbuild] Successfully synced dist, docs, assets, 404.html, CNAME, favicon, and products.json!');
 } catch (err) {
   console.error('[Postbuild Error]', err);
 }
