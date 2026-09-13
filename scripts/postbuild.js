@@ -56,19 +56,28 @@ try {
   }
 
   // 6. Ensure products.json is synced across public, dist, docs, and assets
+  // public/products.json is the PRIMARY source of truth for GitHub Pages & deploys
   let productsJsonStr = null;
-  const storeDataFile = path.join(root, '.app_store_data.json');
   const publicProductsFile = path.join(root, 'public', 'products.json');
-  if (fs.existsSync(storeDataFile)) {
+  const storeDataFile = path.join(root, '.app_store_data.json');
+
+  if (fs.existsSync(publicProductsFile)) {
+    try {
+      const raw = fs.readFileSync(publicProductsFile, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        productsJsonStr = raw;
+      }
+    } catch {}
+  }
+
+  if (!productsJsonStr && fs.existsSync(storeDataFile)) {
     try {
       const data = JSON.parse(fs.readFileSync(storeDataFile, 'utf-8'));
       if (data.products && Array.isArray(data.products)) {
         productsJsonStr = JSON.stringify(data.products, null, 2);
       }
     } catch {}
-  }
-  if (!productsJsonStr && fs.existsSync(publicProductsFile)) {
-    productsJsonStr = fs.readFileSync(publicProductsFile, 'utf-8');
   }
 
   if (productsJsonStr) {
@@ -83,6 +92,14 @@ try {
     }
     if (fs.existsSync(assets)) {
       fs.writeFileSync(path.join(assets, 'products.json'), productsJsonStr);
+    }
+    // Also keep .app_store_data.json in sync with public/products.json
+    if (fs.existsSync(storeDataFile)) {
+      try {
+        const currentStore = JSON.parse(fs.readFileSync(storeDataFile, 'utf-8'));
+        currentStore.products = JSON.parse(productsJsonStr);
+        fs.writeFileSync(storeDataFile, JSON.stringify(currentStore, null, 2));
+      } catch {}
     }
   }
 

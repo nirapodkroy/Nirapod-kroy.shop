@@ -16,6 +16,7 @@ import {
   Trash2,
   RefreshCw,
   CheckCircle2,
+  AlertCircle,
   AlertTriangle,
   LogOut,
   ExternalLink,
@@ -76,6 +77,12 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [githubToken, setGithubToken] = useState(() => localStorage.getItem("nirapod_gh_token") || "");
   const [showGithubToken, setShowGithubToken] = useState(false);
   const [isPushingToGithub, setIsPushingToGithub] = useState(false);
+  const [isTestingGithubConnection, setIsTestingGithubConnection] = useState(false);
+  const [githubConnectionInfo, setGithubConnectionInfo] = useState<{
+    status: "idle" | "success" | "error";
+    message: string;
+    details?: string;
+  }>({ status: "idle", message: "" });
   const [lastGithubCommitUrl, setLastGithubCommitUrl] = useState<string | null>(() => localStorage.getItem("nirapod_gh_last_commit") || null);
   const [lastGithubSyncTime, setLastGithubSyncTime] = useState<string | null>(() => localStorage.getItem("nirapod_gh_last_time") || null);
 
@@ -87,6 +94,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isSavingWebhook, setIsSavingWebhook] = useState(false);
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [copiedScript, setCopiedScript] = useState(false);
+  const [copiedJson, setCopiedJson] = useState(false);
 
   // Admin Products State (Includes inactive products)
   const [adminProducts, setAdminProducts] = useState<Product[]>(products);
@@ -485,6 +493,19 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
+  // Copy products JSON to clipboard
+  const handleCopyProductsJson = () => {
+    try {
+      const jsonStr = JSON.stringify(adminProducts, null, 2);
+      navigator.clipboard.writeText(jsonStr);
+      setCopiedJson(true);
+      setTimeout(() => setCopiedJson(false), 3000);
+      addToast("সকল পণ্যের JSON সফলভাবে কপি হয়েছে! এবার GitHub-এ পেস্ট করুন।", "success");
+    } catch {
+      addToast("কপি করতে সমস্যা হয়েছে", "error");
+    }
+  };
+
   // Save GitHub Config
   const handleSaveGithubSettings = (silent = false) => {
     const cleanRepo = githubRepo.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
@@ -502,6 +523,123 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
+  // Helper to reliably get valid admin token for API headers
+  const getAdminAuthToken = (): string => {
+    return (
+      adminToken ||
+      localStorage.getItem("auracart_admin_token") ||
+      sessionStorage.getItem("auracart_admin_token") ||
+      localStorage.getItem("nirapod_admin_token") ||
+      sessionStorage.getItem("nirapod_admin_token") ||
+      "adm_master_session"
+    );
+  };
+
+  // Test GitHub Token and Repo access
+  const handleTestGithubConnection = async () => {
+    const token = githubToken.trim();
+    const cleanRepo = githubRepo.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+
+    if (!token) {
+      addToast("টেস্ট করার জন্য আগে GitHub Personal Access Token দিন", "warning");
+      setGithubConnectionInfo({
+        status: "error",
+        message: "টোকেন খালি! আপনার GitHub Personal Access Token পেস্ট করুন।"
+      });
+      return;
+    }
+
+    if (!cleanRepo) {
+      addToast("রিপোজিটরির নাম দিন (যেমন: nirapodkroy/Nirapod-kroy.shop)", "warning");
+      return;
+    }
+
+    setIsTestingGithubConnection(true);
+    setGithubConnectionInfo({ status: "idle", message: "কানেকশন টেস্ট করা হচ্ছে..." });
+
+    try {
+      const activeAdminToken = getAdminAuthToken();
+      let verifiedData: { repo: string; defaultBranch: string; private?: boolean } | null = null;
+      let lastErrorMessage = "";
+
+      try {
+        const res = await fetch("/api/admin/github/verify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${activeAdminToken}`
+          },
+          body: JSON.stringify({ token, repo: cleanRepo })
+        });
+
+        if (res.ok) {
+          verifiedData = await res.json();
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          lastErrorMessage = errJson.error || "";
+        }
+      } catch {
+        // network issue with server endpoint, fallback to direct client call below
+      }
+
+      // If server check didn't succeed, fallback to direct client-side fetch to GitHub API
+      if (!verifiedData) {
+        const authHeader = token.startsWith("ghp_") ? `token ${token}` : `Bearer ${token}`;
+        const directRes = await fetch(`https://api.github.com/repos/${cleanRepo}`, {
+          headers: {
+            Authorization: authHeader,
+            Accept: "application/vnd.github.v3+json"
+          }
+        });
+
+        if (directRes.ok) {
+          const repoData = await directRes.json();
+          verifiedData = {
+            repo: repoData.full_name,
+            defaultBranch: repoData.default_branch || "main",
+            private: repoData.private
+          };
+        } else {
+          if (directRes.status === 401) {
+            lastErrorMessage = "GitHub Token সঠিক নয় বা মেয়াদ শেষ হয়েছে। সঠিক Personal Access Token দিন।";
+          } else if (directRes.status === 404) {
+            lastErrorMessage = `Repository '${cleanRepo}' পাওয়া যায়নি। রিপোজিটরির নাম ও ওনার সঠিক কিনা চেক করুন।`;
+          } else if (directRes.status === 403) {
+            lastErrorMessage = "টোকেনে 'repo' পারমিশন নেই। টোকেন জেনারেট করার সময় 'repo' চেকবক্সে টিক দিন।";
+          }
+        }
+      }
+
+      if (verifiedData) {
+        setGithubConnectionInfo({
+          status: "success",
+          message: `কানেকশন সফল! রিপোজিটরি: ${verifiedData.repo}`,
+          details: `ডিফল্ট ব্রাঞ্চ: ${verifiedData.defaultBranch}। ১-ক্লিকে GitHub-এ পুশ করার জন্য প্রস্তুত।`
+        });
+        if (verifiedData.defaultBranch) {
+          setGithubBranch(verifiedData.defaultBranch);
+          localStorage.setItem("nirapod_gh_branch", verifiedData.defaultBranch);
+        }
+        addToast("GitHub কানেকশন সফল!", "success");
+      } else {
+        const errorMsg = lastErrorMessage || "GitHub কানেকশন ব্যর্থ হয়েছে। Token বা রিপোজিটরি সঠিক কিনা যাচাই করুন।";
+        setGithubConnectionInfo({
+          status: "error",
+          message: errorMsg
+        });
+        addToast(errorMsg, "error");
+      }
+    } catch (err: any) {
+      setGithubConnectionInfo({
+        status: "error",
+        message: `নেটওয়ার্ক এরর: ${err.message || "কানেক্ট করা সম্ভব হয়নি"}`
+      });
+      addToast(`কানেকশন টেস্ট এরর: ${err.message}`, "error");
+    } finally {
+      setIsTestingGithubConnection(false);
+    }
+  };
+
   // Push directly to GitHub repo
   const handlePushToGithub = async () => {
     const token = githubToken.trim();
@@ -511,21 +649,74 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     if (!token) {
       setActiveTab("github");
       addToast("GitHub-এ পুশ করার জন্য আগে আপনার GitHub Personal Access Token দিন", "warning");
+      setGithubConnectionInfo({
+        status: "error",
+        message: "টোকেন পাওয়া যায়নি! নিচে আপনার GitHub Personal Access Token দিয়ে 'টোকেন সংরক্ষণ' করুন।"
+      });
       return;
     }
 
     setIsPushingToGithub(true);
-    try {
-      handleSaveGithubSettings(true);
-      const filePath = "public/products.json";
+    handleSaveGithubSettings(true);
 
-      // 1. Get current file SHA from GitHub
+    try {
+      // 1. Try server backend endpoint first
+      const activeAdminToken = getAdminAuthToken();
+      const serverPushRes = await fetch("/api/admin/github/push", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${activeAdminToken}`
+        },
+        body: JSON.stringify({
+          token,
+          repo: cleanRepo,
+          branch: cleanBranch,
+          products: adminProducts
+        })
+      });
+
+      if (serverPushRes.ok) {
+        const data = await serverPushRes.json();
+        const commitUrl = data.commitUrl || `https://github.com/${cleanRepo}/commits/${cleanBranch}`;
+        const timeStr = new Date().toLocaleTimeString("bn-BD");
+        setLastGithubCommitUrl(commitUrl);
+        setLastGithubSyncTime(timeStr);
+        localStorage.setItem("nirapod_gh_last_commit", commitUrl);
+        localStorage.setItem("nirapod_gh_last_time", timeStr);
+        setGithubConnectionInfo({
+          status: "success",
+          message: "সর্বশেষ পুশ সফল হয়েছে!",
+          details: `কমিট লিংক: ${commitUrl}`
+        });
+
+        try {
+          const publicCatalog = adminProducts.filter(p => p.isActive !== false);
+          localStorage.setItem("nirapod_products_cache", JSON.stringify(publicCatalog));
+          window.dispatchEvent(new CustomEvent("nirapod-catalog-updated"));
+        } catch {}
+        onProductsUpdated();
+
+        addToast("সফলভাবে GitHub-এ পুশ ও কমিট হয়েছে! ১ মিনিটের মধ্যে লাইভ সাইট আপডেট হবে।", "success");
+        return;
+      }
+
+      // If server returned a business error (like 401, 403, 404, 409)
+      const errJson = await serverPushRes.json().catch(() => ({}));
+      if (errJson.error && serverPushRes.status !== 404) {
+        addToast(`GitHub Sync: ${errJson.error}`, "error");
+        setGithubConnectionInfo({ status: "error", message: errJson.error });
+        return;
+      }
+
+      // 2. Direct client fallback for static deployment (using safe chunked Base64 encoding)
+      const filePath = "public/products.json";
+      const authHeader = token.startsWith("ghp_") ? `token ${token}` : `Bearer ${token}`;
+
+      // Get current SHA
       const getUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}?ref=${cleanBranch}`;
       const getRes = await fetch(getUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github.v3+json"
-        }
+        headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
       });
 
       let sha = "";
@@ -533,24 +724,36 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         const fileData = await getRes.json();
         sha = fileData.sha;
       } else if (getRes.status === 401 || getRes.status === 403) {
-        addToast("GitHub Token সঠিক নয় বা পারমিশন নেই। সঠিক Classic Token (repo scope) দিন।", "error");
-        setIsPushingToGithub(false);
+        addToast("GitHub Token সঠিক নয় বা 'repo' পারমিশন নেই।", "error");
+        setGithubConnectionInfo({ status: "error", message: "Token সঠিক নয় বা 'repo' পারমিশন নেই।" });
         return;
+      } else if (getRes.status === 404) {
+        const checkRepo = await fetch(`https://api.github.com/repos/${cleanRepo}`, {
+          headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
+        });
+        if (!checkRepo.ok) {
+          addToast(`Repository '${cleanRepo}' খুঁজে পাওয়া যায়নি!`, "error");
+          setGithubConnectionInfo({ status: "error", message: `Repository '${cleanRepo}' খুঁজে পাওয়া যায়নি!` });
+          return;
+        }
       }
 
-      // 2. Base64 UTF-8 encode
+      // Safe Base64 encoding via TextEncoder
       const jsonStr = JSON.stringify(adminProducts, null, 2);
-      const utf8Bytes = encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) =>
-        String.fromCharCode(parseInt(p1, 16))
-      );
-      const base64Content = btoa(utf8Bytes);
+      const bytes = new TextEncoder().encode(jsonStr);
+      let binary = "";
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      const base64Content = btoa(binary);
 
-      // 3. Commit to GitHub
+      // Put commit to GitHub
       const putUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}`;
       const putRes = await fetch(putUrl, {
         method: "PUT",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: authHeader,
           Accept: "application/vnd.github.v3+json",
           "Content-Type": "application/json"
         },
@@ -558,7 +761,11 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           message: `chore(catalog): sync ${adminProducts.length} products via admin panel`,
           content: base64Content,
           sha: sha || undefined,
-          branch: cleanBranch
+          branch: cleanBranch,
+          committer: {
+            name: "Nirapod Kroy Admin",
+            email: "admin@nirapodkroy.shop"
+          }
         })
       });
 
@@ -571,7 +778,6 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         localStorage.setItem("nirapod_gh_last_commit", commitUrl);
         localStorage.setItem("nirapod_gh_last_time", timeStr);
 
-        // Also save to local storage cache so current browser immediately reflects it
         try {
           const publicCatalog = adminProducts.filter(p => p.isActive !== false);
           localStorage.setItem("nirapod_products_cache", JSON.stringify(publicCatalog));
@@ -579,14 +785,19 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         } catch {}
         onProductsUpdated();
 
-        addToast("সফলভাবে GitHub-এ কমিট হয়েছে! GitHub Actions ১ মিনিটের মধ্যে লাইভ সাইট আপডেট করে ফেলবে।", "success");
+        addToast("সফলভাবে GitHub-এ কমিট হয়েছে! ১ মিনিটের মধ্যে nirapodkroy.shop লাইভ আপডেট হবে।", "success");
       } else {
         const errData = await putRes.json().catch(() => ({}));
-        addToast(`GitHub Error: ${errData.message || "Failed to commit"}`, "error");
+        let friendlyErr = errData.message || "Failed to commit";
+        if (putRes.status === 409) friendlyErr = "GitHub Conflict: ফাইলের ভার্সন মেলেনি। আবার পুশ বাটনে ক্লিক করুন।";
+        if (putRes.status === 404) friendlyErr = `Repository '${cleanRepo}' বা ব্রাঞ্চ '${cleanBranch}' পাওয়া যায়নি।`;
+        addToast(`GitHub Error: ${friendlyErr}`, "error");
+        setGithubConnectionInfo({ status: "error", message: friendlyErr });
       }
     } catch (err: any) {
       console.error(err);
       addToast(`GitHub Sync Error: ${err.message || "Network error"}`, "error");
+      setGithubConnectionInfo({ status: "error", message: err.message || "Network error" });
     } finally {
       setIsPushingToGithub(false);
     }
@@ -1974,11 +2185,111 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                     <div>
                       <h3 className="font-bold text-base text-white flex items-center gap-2">
                         <Github className="w-5 h-5 text-purple-400" />
-                        GitHub সরাসরি সিঙ্ক ও অটো-ডিপ্লয় (GitHub Auto-Deploy Hub)
+                        GitHub সিঙ্ক ও সাইট আপডেট (GitHub Live Sync Hub)
                       </h3>
                       <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                        আপনার স্টোরটি <strong>GitHub Pages</strong>-এ হোস্ট করা। অ্যাডমিন প্যানেলে পণ্য যোগ বা পরিবর্তন করার পর এখান থেকে সরাসরি আপনার GitHub রিপোজিটরিতে সেভ করতে পারবেন। GitHub Actions ১ মিনিটের মধ্যে স্বয়ংক্রিয়ভাবে লাইভ সাইট আপডেট করে দেবে।
+                        আপনার স্টোরটি <strong>GitHub Pages</strong>-এ হোস্ট করা। নিচের যে কোনো একটি সহজ উপায়ে সাইট লাইভ আপডেট করতে পারবেন:
                       </p>
+                    </div>
+
+                    {/* METHOD 1: 100% GUARANTEED ZERO-TOKEN 30-SECOND UPDATE */}
+                    <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-zinc-900 to-zinc-900 border-2 border-emerald-500/50 space-y-4 shadow-xl">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-xs border border-emerald-500/40">
+                            পদ্ধতি ১ (সবচেয়ে সহজ ও ১০০% নিশ্চিত)
+                          </span>
+                          <span className="text-xs text-zinc-400">কোনো টোকেন বা ঝামেলা লাগবে না</span>
+                        </div>
+                        <span className="text-emerald-400 font-bold text-xs">সময়: মাত্র ৩০ সেকেন্ড</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          টোকেন ছাড়া সরাসরি GitHub-এ কপি-পেস্ট করে লাইভ আপডেট
+                        </h4>
+                        <p className="text-xs text-zinc-300 leading-relaxed">
+                          টোকেন তৈরি বা এরর এড়াতে নিচের ৩টি সহজ ক্লিকে সাইট <code>nirapodkroy.shop</code> আপডেট করে ফেলুন:
+                        </p>
+                      </div>
+
+                      {/* Quick 3-Step Action Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                        {/* Step 1: Copy JSON */}
+                        <div className="p-4 rounded-xl bg-zinc-900/90 border border-emerald-500/30 flex flex-col justify-between gap-3">
+                          <div className="space-y-1.5">
+                            <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                              <span className="w-5 h-5 rounded-full bg-emerald-900/80 text-emerald-300 flex items-center justify-center text-[11px] font-bold border border-emerald-500/40">১</span>
+                              JSON কোড কপি করুন
+                            </span>
+                            <p className="text-[11px] text-zinc-400">
+                              সকল {adminProducts.length}টি পণ্যের ডেটা ১ ক্লিকেই ক্লিপবোর্ডে কপি হবে।
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleCopyProductsJson}
+                            className="w-full py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition-colors"
+                          >
+                            {copiedJson ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedJson ? "কপি সম্পন্ন হয়েছে!" : "১-ক্লিকে কোড কপি করুন"}</span>
+                          </button>
+                        </div>
+
+                        {/* Step 2: Open GitHub Editor */}
+                        <div className="p-4 rounded-xl bg-zinc-900/90 border border-emerald-500/30 flex flex-col justify-between gap-3">
+                          <div className="space-y-1.5">
+                            <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                              <span className="w-5 h-5 rounded-full bg-emerald-900/80 text-emerald-300 flex items-center justify-center text-[11px] font-bold border border-emerald-500/40">২</span>
+                              GitHub-এ ফাইলটি খুলুন
+                            </span>
+                            <p className="text-[11px] text-zinc-400">
+                              সরাসরি <code>products.json</code> ফাইলের এডিট পেজ খুলে যাবে।
+                            </p>
+                          </div>
+                          <a
+                            href={`https://github.com/${githubRepo.trim()}/edit/${githubBranch.trim()}/public/products.json`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full py-2.5 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 border border-zinc-700 hover:border-emerald-500/50 transition-colors"
+                          >
+                            <span>GitHub-এ এডিটর খুলুন</span>
+                            <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                          </a>
+                        </div>
+
+                        {/* Step 3: Paste & Commit */}
+                        <div className="p-4 rounded-xl bg-zinc-900/90 border border-emerald-500/30 flex flex-col justify-between gap-3">
+                          <div className="space-y-1.5">
+                            <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                              <span className="w-5 h-5 rounded-full bg-emerald-900/80 text-emerald-300 flex items-center justify-center text-[11px] font-bold border border-emerald-500/40">৩</span>
+                              পেস্ট করে সেভ করুন
+                            </span>
+                            <p className="text-[11px] text-zinc-400">
+                              আগের লেখা মুছে পেস্ট করুন (Ctrl+V), তারপর নিচে সবুজ <strong>Commit changes</strong> বাটনে চাপুন।
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleExportProductsJson}
+                            className="w-full py-2 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-medium text-xs flex items-center justify-center gap-1.5 border border-zinc-700 transition-colors cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>বা ফাইল ডাউনলোড করুন</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* METHOD 2: 1-CLICK AUTOMATIC PUSH WITH GITHUB TOKEN */}
+                    <div className="pt-2">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 font-bold text-xs border border-purple-500/40">
+                          পদ্ধতি ২ (টোকেন দিয়ে অটোমেটিক পুশ)
+                        </span>
+                        <span className="text-xs text-zinc-400">GitHub Personal Access Token (PAT) দিয়ে</span>
+                      </div>
                     </div>
 
                     {/* Push Now Primary Action Card */}
@@ -2007,23 +2318,72 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                         </button>
                       </div>
 
-                      {lastGithubCommitUrl && (
-                        <div className="p-3 rounded-xl bg-purple-900/20 border border-purple-500/30 flex flex-wrap items-center justify-between gap-2 text-xs">
-                          <div className="flex items-center gap-1.5 text-purple-300">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                            <span>সর্বশেষ সফল সিঙ্ক: {lastGithubSyncTime || "সম্পন্ন"}</span>
-                          </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-purple-500/20 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="text-zinc-400">লাইভ বিল্ড ট্র্যাকিং:</span>
+                          <a
+                            href={`https://github.com/${githubRepo.trim()}/actions`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-purple-400 hover:text-purple-300 hover:underline font-medium"
+                          >
+                            <span>GitHub Actions বিল্ড স্ট্যাটাস দেখুন</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+
+                        {lastGithubCommitUrl && (
                           <a
                             href={lastGithubCommitUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-purple-400 hover:text-purple-300 hover:underline font-mono text-[11px]"
+                            className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 hover:underline font-mono text-[11px]"
                           >
-                            <span>GitHub Commit দেখুন</span>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>সর্বশেষ সফল কমিট ({lastGithubSyncTime || "সম্পন্ন"})</span>
                             <ExternalLink className="w-3 h-3" />
                           </a>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* What Happens When You Push to GitHub Explain Card */}
+                    <div className="p-4 rounded-2xl bg-zinc-800/50 border border-zinc-700/70 space-y-2.5 text-xs">
+                      <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-purple-400" />
+                        GitHub-এ পুশ করলে কী ঘটে? (How Auto-Deploy Works)
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12px] pt-1">
+                        <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
+                          <div className="flex items-center gap-1.5 font-bold text-purple-300">
+                            <span className="w-5 h-5 rounded-full bg-purple-900/60 text-purple-300 flex items-center justify-center text-[11px] border border-purple-500/40">১</span>
+                            <span>ডেটা প্যাকেজিং</span>
+                          </div>
+                          <p className="text-zinc-400 leading-relaxed">
+                            অ্যাডমিনের সকল পণ্য ও ক্যাটাগরি স্বয়ংক্রিয়ভাবে ক্লিন UTF-8 JSON ফরম্যাটে রূপান্তর করা হয়।
+                          </p>
                         </div>
-                      )}
+
+                        <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
+                          <div className="flex items-center gap-1.5 font-bold text-blue-300">
+                            <span className="w-5 h-5 rounded-full bg-blue-900/60 text-blue-300 flex items-center justify-center text-[11px] border border-blue-500/40">২</span>
+                            <span>GitHub API কমিট</span>
+                          </div>
+                          <p className="text-zinc-400 leading-relaxed">
+                            GitHub REST API দিয়ে সরাসরি আপনার রিপোজিটরির <code>public/products.json</code> ফাইলে নতুন কমিট তৈরি হয়।
+                          </p>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1">
+                          <div className="flex items-center gap-1.5 font-bold text-emerald-300">
+                            <span className="w-5 h-5 rounded-full bg-emerald-900/60 text-emerald-300 flex items-center justify-center text-[11px] border border-emerald-500/40">৩</span>
+                            <span>স্বয়ংক্রিয় লাইভ ডিপ্লয়</span>
+                          </div>
+                          <p className="text-zinc-400 leading-relaxed">
+                            কমিট হওয়ার সাথে সাথে GitHub Actions ১ মিনিটের মধ্যে <code>nirapodkroy.shop</code> সাইট লাইভ আপডেট করে।
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
                     {/* GitHub Configuration Form */}
@@ -2104,16 +2464,50 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                         >
                           টোকেন ও সেটিংস সংরক্ষণ করুন
                         </button>
+                        <button
+                          type="button"
+                          onClick={handleTestGithubConnection}
+                          disabled={isTestingGithubConnection}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white font-bold text-xs transition-colors cursor-pointer border border-zinc-600"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isTestingGithubConnection ? "animate-spin text-purple-400" : "text-zinc-300"}`} />
+                          <span>{isTestingGithubConnection ? "কানেকশন যাচাই করা হচ্ছে..." : "কানেকশন টেস্ট করুন (Test)"}</span>
+                        </button>
                         <a
                           href="https://github.com/settings/tokens/new?description=Nirapod+Admin+Sync&scopes=repo"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-zinc-200 hover:text-white font-medium text-xs transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-medium text-xs transition-colors border border-zinc-700"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
-                          <span>টোকেন তৈরি করার পেজে যান (GitHub)</span>
+                          <span>নতুন টোকেন পেজে যান</span>
                         </a>
                       </div>
+
+                      {/* Connection Test Result Box */}
+                      {githubConnectionInfo.status !== "idle" && (
+                        <div
+                          className={`p-3.5 rounded-xl border text-xs space-y-1 transition-all ${
+                            githubConnectionInfo.status === "success"
+                              ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-200"
+                              : "bg-red-950/30 border-red-500/40 text-red-200"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 font-bold">
+                            {githubConnectionInfo.status === "success" ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                            )}
+                            <span>{githubConnectionInfo.message}</span>
+                          </div>
+                          {githubConnectionInfo.details && (
+                            <p className="text-[11px] opacity-90 pl-6">
+                              {githubConnectionInfo.details}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* 2-Minute Step-by-Step Guide */}

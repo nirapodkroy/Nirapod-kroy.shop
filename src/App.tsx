@@ -78,13 +78,8 @@ const StoreContent: React.FC = () => {
           if (staticRes.ok) {
             const list = await staticRes.json();
             if (Array.isArray(list) && list.length > 0) {
-              // If user has locally added/edited products, preserve them so their changes are not lost
-              if (hasLocalEdits && localList && localList.length > 0) {
-                setProducts(localList);
-              } else {
-                setProducts(list);
-                safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(list));
-              }
+              setProducts(list);
+              safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(list));
               setIsLoading(false);
               return;
             }

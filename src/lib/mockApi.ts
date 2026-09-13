@@ -629,6 +629,118 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     return createJsonResponse({ success: true, message: "টেস্ট ওয়েবহুক রিকোয়েস্ট পাঠানো হয়েছে!" });
   }
 
+  if (path === "/api/admin/github/verify" && method === "POST") {
+    try {
+      const { token, repo } = body;
+      if (!token || !repo) return createJsonResponse({ error: "টোকেন ও রিপোজিটরি নাম প্রয়োজন" }, 400);
+      const cleanRepo = String(repo).trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+      const cleanToken = String(token).trim();
+      const authHeader = cleanToken.startsWith("ghp_") ? `token ${cleanToken}` : `Bearer ${cleanToken}`;
+
+      const ghRes = await fetch(`https://api.github.com/repos/${cleanRepo}`, {
+        headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
+      });
+
+      if (!ghRes.ok) {
+        if (ghRes.status === 401) return createJsonResponse({ error: "GitHub Token সঠিক নয় বা মেয়াদ শেষ হয়েছে。" }, 401);
+        if (ghRes.status === 404) return createJsonResponse({ error: `Repository '${cleanRepo}' খুঁজে পাওয়া যায়নি。` }, 404);
+        if (ghRes.status === 403) return createJsonResponse({ error: "টোকেনে 'repo' পারমিশন নেই।" }, 403);
+        const errData = await ghRes.json().catch(() => ({}));
+        return createJsonResponse({ error: errData.message || "কানেকশন ব্যর্থ" }, ghRes.status);
+      }
+
+      const repoData = await ghRes.json();
+      return createJsonResponse({
+        success: true,
+        repo: repoData.full_name,
+        defaultBranch: repoData.default_branch || "main",
+        private: repoData.private
+      });
+    } catch (e: any) {
+      return createJsonResponse({ error: e.message || "ভেরিফিকেশন ব্যর্থ" }, 500);
+    }
+  }
+
+  if (path === "/api/admin/github/push" && method === "POST") {
+    try {
+      const { token, repo, branch, products } = body;
+      if (!token || !repo) return createJsonResponse({ error: "টোকেন ও রিপোজিটরি নাম প্রয়োজন" }, 400);
+      const cleanRepo = String(repo).trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+      const cleanBranch = (branch && String(branch).trim()) || "main";
+      const cleanToken = String(token).trim();
+      const targetProducts = Array.isArray(products) && products.length > 0 ? products : getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
+
+      // Save to local cache as well
+      setSafeStorage(PRODUCTS_KEY, targetProducts);
+
+      const authHeader = cleanToken.startsWith("ghp_") ? `token ${cleanToken}` : `Bearer ${cleanToken}`;
+      const filePath = "public/products.json";
+
+      // 1. Get SHA
+      const getUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}?ref=${cleanBranch}`;
+      const getRes = await fetch(getUrl, {
+        headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
+      });
+
+      let sha = "";
+      if (getRes.ok) {
+        const fileData = await getRes.json();
+        sha = fileData.sha;
+      } else if (getRes.status === 401 || getRes.status === 403) {
+        return createJsonResponse({ error: "GitHub Token সঠিক নয় বা পারমিশন নেই ('repo' scope প্রয়োজন)।" }, getRes.status);
+      }
+
+      // 2. Safe Base64 encode
+      const jsonStr = JSON.stringify(targetProducts, null, 2);
+      const bytes = new TextEncoder().encode(jsonStr);
+      let binary = "";
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      const base64Content = btoa(binary);
+
+      // 3. PUT commit
+      const putUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}`;
+      const putRes = await fetch(putUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: authHeader,
+          Accept: "application/vnd.github.v3+json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: `chore(catalog): sync ${targetProducts.length} products via admin panel`,
+          content: base64Content,
+          sha: sha || undefined,
+          branch: cleanBranch,
+          committer: {
+            name: "Nirapod Kroy Admin",
+            email: "admin@nirapodkroy.shop"
+          }
+        })
+      });
+
+      if (putRes.ok) {
+        const putData = await putRes.json();
+        const commitUrl = putData.commit?.html_url || `https://github.com/${cleanRepo}/commits/${cleanBranch}`;
+        return createJsonResponse({
+          success: true,
+          commitUrl,
+          message: "সফলভাবে GitHub-এ কমিট হয়েছে! GitHub Actions ১ মিনিটের মধ্যে লাইভ সাইট আপডেট করে ফেলবে।"
+        });
+      } else {
+        const errData = await putRes.json().catch(() => ({}));
+        let friendlyError = errData.message || "Failed to commit";
+        if (putRes.status === 409) friendlyError = "GitHub Conflict: ফাইলের ভার্সন মেলেনি। অনুগ্রহ করে আবার পুশ করুন।";
+        if (putRes.status === 404) friendlyError = `Repository '${cleanRepo}' বা ব্রাঞ্চ '${cleanBranch}' পাওয়া যায়নি।`;
+        return createJsonResponse({ error: friendlyError, raw: errData }, putRes.status);
+      }
+    } catch (e: any) {
+      return createJsonResponse({ error: e.message || "পুশ ব্যর্থ হয়েছে" }, 500);
+    }
+  }
+
   return createJsonResponse({ error: "Endpoint not found" }, 404);
 }
 

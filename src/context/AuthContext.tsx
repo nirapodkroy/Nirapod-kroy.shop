@@ -57,7 +57,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Secret Admin state
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(() => {
-    return safeGetSessionStorage("auracart_admin_token") || safeGetLocalStorage("auracart_admin_token");
+    return (
+      safeGetSessionStorage("auracart_admin_token") ||
+      safeGetLocalStorage("auracart_admin_token") ||
+      safeGetLocalStorage("nirapod_admin_token") ||
+      safeGetSessionStorage("nirapod_admin_token")
+    );
   });
 
   // Admin keyboard shortcut listener:
@@ -288,6 +293,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAdminToken(data.token);
       safeSetSessionStorage("auracart_admin_token", data.token);
       safeSetLocalStorage("auracart_admin_token", data.token);
+      safeSetLocalStorage("nirapod_admin_token", data.token);
+      safeSetSessionStorage("nirapod_admin_token", data.token);
       addToast("Admin console authenticated successfully", "success");
       return true;
     } catch (err) {
@@ -298,6 +305,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAdminToken(token);
         safeSetSessionStorage("auracart_admin_token", token);
         safeSetLocalStorage("auracart_admin_token", token);
+        safeSetLocalStorage("nirapod_admin_token", token);
+        safeSetSessionStorage("nirapod_admin_token", token);
         addToast("Admin console authenticated successfully", "success");
         return true;
       }
@@ -310,8 +319,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAdminToken(null);
     try {
       sessionStorage.removeItem("auracart_admin_token");
+      sessionStorage.removeItem("nirapod_admin_token");
     } catch {}
     safeRemoveLocalStorage("auracart_admin_token");
+    safeRemoveLocalStorage("nirapod_admin_token");
     setIsAdminModalOpen(false);
     addToast("Admin logged out", "info");
   }, [addToast]);

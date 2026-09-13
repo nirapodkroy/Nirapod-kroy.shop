@@ -16,13 +16,13 @@ const DOMAIN = `https://${customDomain}`;
 
 let products = [];
 try {
-  const storeData = path.join(root, '.app_store_data.json');
   const pubProducts = path.join(publicDir, 'products.json');
-  if (fs.existsSync(storeData)) {
+  const storeData = path.join(root, '.app_store_data.json');
+  if (fs.existsSync(pubProducts)) {
+    products = JSON.parse(fs.readFileSync(pubProducts, 'utf-8'));
+  } else if (fs.existsSync(storeData)) {
     const parsed = JSON.parse(fs.readFileSync(storeData, 'utf-8'));
     products = parsed.products || [];
-  } else if (fs.existsSync(pubProducts)) {
-    products = JSON.parse(fs.readFileSync(pubProducts, 'utf-8'));
   }
 } catch (e) {
   console.error('Failed to load products for sitemap:', e);

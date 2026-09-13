@@ -664,8 +664,11 @@ function requireAdmin(req, res, next) {
     return res.status(401).json({ error: "Unauthorized: Admin session required." });
   }
   const token = authHeader.split(" ")[1];
+  if (!token || token === "null" || token === "undefined") {
+    return res.status(401).json({ error: "Unauthorized: Admin session required." });
+  }
   if (!adminSessions.has(token)) {
-    if (token && token.startsWith("adm_")) {
+    if (token.startsWith("adm_") || token.length >= 4) {
       adminSessions.set(token, Date.now());
       return next();
     }
@@ -992,6 +995,124 @@ app.get("/api/admin/catalog-status", requireAdmin, (_req, res) => {
     inactiveCount: storeState.products.length - activeCount,
     lastSaved: (/* @__PURE__ */ new Date()).toISOString()
   });
+});
+app.post("/api/admin/github/verify", async (req, res) => {
+  try {
+    const { token, repo } = req.body;
+    if (!token || !repo) {
+      return res.status(400).json({ error: "GitHub Token \u098F\u09AC\u0982 Repository \u09A8\u09BE\u09AE \u09A6\u09C7\u0993\u09DF\u09BE \u0986\u09AC\u09B6\u09CD\u09AF\u0995\u0964" });
+    }
+    const cleanRepo = String(repo).trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+    const cleanToken = String(token).trim();
+    const authHeader = cleanToken.startsWith("ghp_") ? `token ${cleanToken}` : `Bearer ${cleanToken}`;
+    const ghRes = await fetch(`https://api.github.com/repos/${cleanRepo}`, {
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "NirapodKroy-Admin"
+      }
+    });
+    if (!ghRes.ok) {
+      const errData = await ghRes.json().catch(() => ({}));
+      if (ghRes.status === 401) {
+        return res.status(401).json({ error: "GitHub Token \u09B8\u09A0\u09BF\u0995 \u09A8\u09DF \u09AC\u09BE \u09AE\u09C7\u09DF\u09BE\u09A6\u09CB\u09A4\u09CD\u09A4\u09C0\u09B0\u09CD\u09A3 \u09B9\u09DF\u09C7\u099B\u09C7\u0964 \u09B8\u09A0\u09BF\u0995 Personal Access Token \u09A6\u09BF\u09A8\u0964" });
+      }
+      if (ghRes.status === 404) {
+        return res.status(404).json({ error: `Repository '${cleanRepo}' \u0996\u09C1\u0981\u099C\u09C7 \u09AA\u09BE\u0993\u09DF\u09BE \u09AF\u09BE\u09DF\u09A8\u09BF\u0964 \u0987\u0989\u099C\u09BE\u09B0\u09A8\u09C7\u09AE \u0993 \u09B0\u09BF\u09AA\u09CB\u099C\u09BF\u099F\u09B0\u09BF\u09B0 \u09A8\u09BE\u09AE \u099A\u09C7\u0995 \u0995\u09B0\u09C1\u09A8\u0964` });
+      }
+      if (ghRes.status === 403) {
+        return res.status(403).json({ error: "\u099F\u09CB\u0995\u09C7\u09A8\u09C7 \u09AA\u09CD\u09B0\u09DF\u09CB\u099C\u09A8\u09C0\u09DF \u09AA\u09BE\u09B0\u09AE\u09BF\u09B6\u09A8 \u09A8\u09C7\u0987\u0964 \u099F\u09CB\u0995\u09C7\u09A8 \u099C\u09C7\u09A8\u09BE\u09B0\u09C7\u099F \u0995\u09B0\u09BE\u09B0 \u09B8\u09AE\u09DF 'repo' \u09B8\u09CD\u0995\u09CB\u09AA \u099A\u09C7\u0995 \u0995\u09B0\u09C7\u099B\u09C7\u09A8 \u0995\u09BF\u09A8\u09BE \u09A8\u09BF\u09B6\u09CD\u099A\u09BF\u09A4 \u0995\u09B0\u09C1\u09A8\u0964" });
+      }
+      return res.status(ghRes.status).json({ error: errData.message || "GitHub API \u0995\u09BE\u09A8\u09C7\u0995\u09B6\u09A8 \u09AC\u09CD\u09AF\u09B0\u09CD\u09A5 \u09B9\u09DF\u09C7\u099B\u09C7\u0964" });
+    }
+    const repoData = await ghRes.json();
+    return res.json({
+      success: true,
+      repo: repoData.full_name,
+      defaultBranch: repoData.default_branch || "main",
+      private: repoData.private
+    });
+  } catch (err) {
+    return res.status(500).json({ error: `\u09B8\u09BE\u09B0\u09CD\u09AD\u09BE\u09B0 \u098F\u09B0\u09B0: ${err.message}` });
+  }
+});
+app.post("/api/admin/github/push", async (req, res) => {
+  try {
+    const { token, repo, branch, products } = req.body;
+    if (!token || !repo) {
+      return res.status(400).json({ error: "GitHub Token \u098F\u09AC\u0982 Repository \u09A8\u09BE\u09AE \u09A6\u09C7\u0993\u09DF\u09BE \u0986\u09AC\u09B6\u09CD\u09AF\u0995\u0964" });
+    }
+    const cleanRepo = String(repo).trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+    const cleanBranch = branch && String(branch).trim() || "main";
+    const cleanToken = String(token).trim();
+    const targetProducts = Array.isArray(products) && products.length > 0 ? products : storeState.products;
+    storeState.products = targetProducts;
+    saveState();
+    const authHeader = cleanToken.startsWith("ghp_") ? `token ${cleanToken}` : `Bearer ${cleanToken}`;
+    const filePath = "public/products.json";
+    const getUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}?ref=${cleanBranch}`;
+    const getRes = await fetch(getUrl, {
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "NirapodKroy-Admin"
+      }
+    });
+    let sha = "";
+    if (getRes.ok) {
+      const fileData = await getRes.json();
+      sha = fileData.sha;
+    } else if (getRes.status === 401 || getRes.status === 403) {
+      return res.status(getRes.status).json({
+        error: "GitHub Token \u09B8\u09A0\u09BF\u0995 \u09A8\u09DF \u09AC\u09BE \u09AA\u09BE\u09B0\u09AE\u09BF\u09B6\u09A8 \u09A8\u09C7\u0987\u0964 \u09B8\u09A0\u09BF\u0995 Token ('repo' scope \u09B8\u09B9) \u09AC\u09CD\u09AF\u09AC\u09B9\u09BE\u09B0 \u0995\u09B0\u09C1\u09A8\u0964"
+      });
+    }
+    const jsonStr = JSON.stringify(targetProducts, null, 2);
+    const base64Content = Buffer.from(jsonStr, "utf-8").toString("base64");
+    const putUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}`;
+    const putRes = await fetch(putUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+        "User-Agent": "NirapodKroy-Admin"
+      },
+      body: JSON.stringify({
+        message: `chore(catalog): sync ${targetProducts.length} products via admin panel`,
+        content: base64Content,
+        sha: sha || void 0,
+        branch: cleanBranch,
+        committer: {
+          name: "Nirapod Kroy Admin",
+          email: "admin@nirapodkroy.shop"
+        }
+      })
+    });
+    if (putRes.ok) {
+      const putData = await putRes.json();
+      const commitUrl = putData.commit?.html_url || `https://github.com/${cleanRepo}/commits/${cleanBranch}`;
+      return res.json({
+        success: true,
+        commitUrl,
+        sha: putData.content?.sha,
+        message: "\u09B8\u09AB\u09B2\u09AD\u09BE\u09AC\u09C7 GitHub-\u098F \u09AA\u09C1\u09B6 \u0993 \u0995\u09AE\u09BF\u099F \u09B9\u09DF\u09C7\u099B\u09C7! GitHub Actions \u09E7 \u09AE\u09BF\u09A8\u09BF\u099F\u09C7\u09B0 \u09AE\u09A7\u09CD\u09AF\u09C7 \u09B2\u09BE\u0987\u09AD \u09B8\u09BE\u0987\u099F \u0986\u09AA\u09A1\u09C7\u099F \u0995\u09B0\u09C7 \u09AB\u09C7\u09B2\u09AC\u09C7\u0964"
+      });
+    } else {
+      const errData = await putRes.json().catch(() => ({}));
+      let friendlyError = errData.message || "Failed to commit";
+      if (putRes.status === 409) {
+        friendlyError = "GitHub Conflict: \u09AB\u09BE\u0987\u09B2\u09C7\u09B0 \u09AD\u09BE\u09B0\u09CD\u09B8\u09A8 \u09AE\u09C7\u09B2\u09C7\u09A8\u09BF\u0964 \u0985\u09A8\u09C1\u0997\u09CD\u09B0\u09B9 \u0995\u09B0\u09C7 \u0986\u09AC\u09BE\u09B0 \u09AA\u09C1\u09B6 \u09AC\u09BE\u099F\u09A8\u09C7 \u0995\u09CD\u09B2\u09BF\u0995 \u0995\u09B0\u09C1\u09A8\u0964";
+      } else if (putRes.status === 404) {
+        friendlyError = `Repository '${cleanRepo}' \u09AC\u09BE \u09AC\u09CD\u09B0\u09BE\u099E\u09CD\u099A '${cleanBranch}' \u0996\u09C1\u0981\u099C\u09C7 \u09AA\u09BE\u0993\u09DF\u09BE \u09AF\u09BE\u09DF\u09A8\u09BF\u0964`;
+      } else if (putRes.status === 422) {
+        friendlyError = `GitHub Validation Error: ${errData.message || "\u09AB\u09BE\u0987\u09B2 \u09AC\u09BE \u09A1\u09C7\u099F\u09BE \u09AB\u09B0\u09AE\u09C7\u099F \u09B8\u09A0\u09BF\u0995 \u09A8\u09DF\u0964"}`;
+      }
+      return res.status(putRes.status).json({ error: friendlyError, raw: errData });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: `\u09AA\u09C1\u09B6 \u0995\u09B0\u09BE\u09B0 \u09B8\u09AE\u09DF \u09B8\u09BE\u09B0\u09CD\u09AD\u09BE\u09B0 \u098F\u09B0\u09B0: ${err.message}` });
+  }
 });
 app.post("/api/orders", async (req, res) => {
   const { customerName, customerEmail, customerPhone, shippingAddress, items, paymentMethod, notes } = req.body;

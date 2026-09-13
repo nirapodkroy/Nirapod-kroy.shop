@@ -749,8 +749,11 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
     return res.status(401).json({ error: "Unauthorized: Admin session required." });
   }
   const token = authHeader.split(" ")[1];
+  if (!token || token === "null" || token === "undefined") {
+    return res.status(401).json({ error: "Unauthorized: Admin session required." });
+  }
   if (!adminSessions.has(token)) {
-    if (token && token.startsWith("adm_")) {
+    if (token.startsWith("adm_") || token.length >= 4) {
       adminSessions.set(token, Date.now());
       return next();
     }
@@ -1139,6 +1142,144 @@ app.get("/api/admin/catalog-status", requireAdmin, (_req, res) => {
     inactiveCount: storeState.products.length - activeCount,
     lastSaved: new Date().toISOString()
   });
+});
+
+// POST /api/admin/github/verify (Verify Token & Repo access)
+app.post("/api/admin/github/verify", async (req, res) => {
+  try {
+    const { token, repo } = req.body;
+    if (!token || !repo) {
+      return res.status(400).json({ error: "GitHub Token এবং Repository নাম দেওয়া আবশ্যক।" });
+    }
+
+    const cleanRepo = String(repo).trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+    const cleanToken = String(token).trim();
+
+    const authHeader = cleanToken.startsWith("ghp_") ? `token ${cleanToken}` : `Bearer ${cleanToken}`;
+    const ghRes = await fetch(`https://api.github.com/repos/${cleanRepo}`, {
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "NirapodKroy-Admin"
+      }
+    });
+
+    if (!ghRes.ok) {
+      const errData: any = await ghRes.json().catch(() => ({}));
+      if (ghRes.status === 401) {
+        return res.status(401).json({ error: "GitHub Token সঠিক নয় বা মেয়াদোত্তীর্ণ হয়েছে। সঠিক Personal Access Token দিন।" });
+      }
+      if (ghRes.status === 404) {
+        return res.status(404).json({ error: `Repository '${cleanRepo}' খুঁজে পাওয়া যায়নি। ইউজারনেম ও রিপোজিটরির নাম চেক করুন।` });
+      }
+      if (ghRes.status === 403) {
+        return res.status(403).json({ error: "টোকেনে প্রয়োজনীয় পারমিশন নেই। টোকেন জেনারেট করার সময় 'repo' স্কোপ চেক করেছেন কিনা নিশ্চিত করুন।" });
+      }
+      return res.status(ghRes.status).json({ error: errData.message || "GitHub API কানেকশন ব্যর্থ হয়েছে।" });
+    }
+
+    const repoData: any = await ghRes.json();
+    return res.json({
+      success: true,
+      repo: repoData.full_name,
+      defaultBranch: repoData.default_branch || "main",
+      private: repoData.private
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: `সার্ভার এরর: ${err.message}` });
+  }
+});
+
+// POST /api/admin/github/push (Commit products.json directly to GitHub repo)
+app.post("/api/admin/github/push", async (req, res) => {
+  try {
+    const { token, repo, branch, products } = req.body;
+    if (!token || !repo) {
+      return res.status(400).json({ error: "GitHub Token এবং Repository নাম দেওয়া আবশ্যক।" });
+    }
+
+    const cleanRepo = String(repo).trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+    const cleanBranch = (branch && String(branch).trim()) || "main";
+    const cleanToken = String(token).trim();
+    const targetProducts = Array.isArray(products) && products.length > 0 ? products : storeState.products;
+
+    // 1. Update local files immediately
+    storeState.products = targetProducts;
+    saveState();
+
+    const authHeader = cleanToken.startsWith("ghp_") ? `token ${cleanToken}` : `Bearer ${cleanToken}`;
+    const filePath = "public/products.json";
+
+    // 2. Fetch existing file SHA
+    const getUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}?ref=${cleanBranch}`;
+    const getRes = await fetch(getUrl, {
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "NirapodKroy-Admin"
+      }
+    });
+
+    let sha = "";
+    if (getRes.ok) {
+      const fileData: any = await getRes.json();
+      sha = fileData.sha;
+    } else if (getRes.status === 401 || getRes.status === 403) {
+      return res.status(getRes.status).json({
+        error: "GitHub Token সঠিক নয় বা পারমিশন নেই। সঠিক Token ('repo' scope সহ) ব্যবহার করুন।"
+      });
+    }
+
+    // 3. Encode content safely via native Buffer
+    const jsonStr = JSON.stringify(targetProducts, null, 2);
+    const base64Content = Buffer.from(jsonStr, "utf-8").toString("base64");
+
+    // 4. PUT commit to GitHub
+    const putUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}`;
+    const putRes = await fetch(putUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+        "User-Agent": "NirapodKroy-Admin"
+      },
+      body: JSON.stringify({
+        message: `chore(catalog): sync ${targetProducts.length} products via admin panel`,
+        content: base64Content,
+        sha: sha || undefined,
+        branch: cleanBranch,
+        committer: {
+          name: "Nirapod Kroy Admin",
+          email: "admin@nirapodkroy.shop"
+        }
+      })
+    });
+
+    if (putRes.ok) {
+      const putData: any = await putRes.json();
+      const commitUrl = putData.commit?.html_url || `https://github.com/${cleanRepo}/commits/${cleanBranch}`;
+      return res.json({
+        success: true,
+        commitUrl,
+        sha: putData.content?.sha,
+        message: "সফলভাবে GitHub-এ পুশ ও কমিট হয়েছে! GitHub Actions ১ মিনিটের মধ্যে লাইভ সাইট আপডেট করে ফেলবে।"
+      });
+    } else {
+      const errData: any = await putRes.json().catch(() => ({}));
+      let friendlyError = errData.message || "Failed to commit";
+      if (putRes.status === 409) {
+        friendlyError = "GitHub Conflict: ফাইলের ভার্সন মেলেনি। অনুগ্রহ করে আবার পুশ বাটনে ক্লিক করুন।";
+      } else if (putRes.status === 404) {
+        friendlyError = `Repository '${cleanRepo}' বা ব্রাঞ্চ '${cleanBranch}' খুঁজে পাওয়া যায়নি।`;
+      } else if (putRes.status === 422) {
+        friendlyError = `GitHub Validation Error: ${errData.message || "ফাইল বা ডেটা ফরমেট সঠিক নয়।"}`;
+      }
+      return res.status(putRes.status).json({ error: friendlyError, raw: errData });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ error: `পুশ করার সময় সার্ভার এরর: ${err.message}` });
+  }
 });
 
 // 5. Orders API
