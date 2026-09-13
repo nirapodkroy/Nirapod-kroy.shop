@@ -470,6 +470,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     };
     products.unshift(newProduct);
     setSafeStorage(PRODUCTS_KEY, products);
+    setSafeStorage("nirapod_products_modified", String(Date.now()));
     return createJsonResponse({ success: true, product: newProduct }, 201);
   }
 
@@ -482,6 +483,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       if (prod) {
         prod.isActive = prod.isActive === false ? true : false;
         setSafeStorage(PRODUCTS_KEY, products);
+        setSafeStorage("nirapod_products_modified", String(Date.now()));
         return createJsonResponse({ success: true, product: prod, isActive: prod.isActive });
       }
       return createJsonResponse({ error: "পণ্য পাওয়া যায়নি" }, 404);
@@ -490,6 +492,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     if (method === "DELETE") {
       const updated = products.filter(p => p.id !== id);
       setSafeStorage(PRODUCTS_KEY, updated);
+      setSafeStorage("nirapod_products_modified", String(Date.now()));
       return createJsonResponse({ success: true, message: "পণ্য সফলভাবে মুছে ফেলা হয়েছে", remainingCount: updated.length });
     }
 
@@ -498,6 +501,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       if (idx !== -1) {
         products[idx] = { ...products[idx], ...body };
         setSafeStorage(PRODUCTS_KEY, products);
+        setSafeStorage("nirapod_products_modified", String(Date.now()));
         return createJsonResponse({ success: true, product: products[idx] });
       }
       return createJsonResponse({ error: "পণ্য পাওয়া যায়নি" }, 404);
@@ -514,6 +518,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       ? body.products
       : getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
     setSafeStorage(PRODUCTS_KEY, products);
+    setSafeStorage("nirapod_products_modified", String(Date.now()));
     const activeCount = products.filter((p: any) => p.isActive !== false).length;
     return createJsonResponse({
       success: true,
