@@ -773,6 +773,32 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+// Explicit SEO Routes
+app.get("/sitemap.xml", (_req, res) => {
+  const publicSitemap = path.join(process.cwd(), "public", "sitemap.xml");
+  const distSitemap = path.join(process.cwd(), "dist", "sitemap.xml");
+  const rootSitemap = path.join(process.cwd(), "sitemap.xml");
+  const targetPath = [publicSitemap, distSitemap, rootSitemap].find(p => fs.existsSync(p));
+  if (targetPath) {
+    res.header("Content-Type", "application/xml; charset=utf-8");
+    return res.sendFile(targetPath);
+  }
+  res.status(404).send("Sitemap not found");
+});
+
+app.get("/robots.txt", (_req, res) => {
+  const publicRobots = path.join(process.cwd(), "public", "robots.txt");
+  const distRobots = path.join(process.cwd(), "dist", "robots.txt");
+  const rootRobots = path.join(process.cwd(), "robots.txt");
+  const targetPath = [publicRobots, distRobots, rootRobots].find(p => fs.existsSync(p));
+  if (targetPath) {
+    res.header("Content-Type", "text/plain; charset=utf-8");
+    return res.sendFile(targetPath);
+  }
+  res.header("Content-Type", "text/plain; charset=utf-8");
+  res.send("User-agent: *\nAllow: /\n\nSitemap: https://www.nirapodkroy.shop/sitemap.xml\n");
+});
+
 // 2. Secret Admin Login
 // POST /api/admin/login
 app.post("/api/admin/login", (req, res) => {

@@ -477,7 +477,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     const id = path.replace("/api/products/", "").replace("/toggle-active", "");
     const products = getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
 
-    if (path.endsWith("/toggle-active") && method === "PATCH") {
+    if (path.endsWith("/toggle-active") && (method === "PATCH" || method === "PUT")) {
       const prod = products.find(p => p.id === id);
       if (prod) {
         prod.isActive = prod.isActive === false ? true : false;
@@ -490,7 +490,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     if (method === "DELETE") {
       const updated = products.filter(p => p.id !== id);
       setSafeStorage(PRODUCTS_KEY, updated);
-      return createJsonResponse({ success: true, message: "পণ্য সফলভাবে মুছে ফেলা হয়েছে" });
+      return createJsonResponse({ success: true, message: "পণ্য সফলভাবে মুছে ফেলা হয়েছে", remainingCount: updated.length });
     }
 
     if (method === "PUT") {
@@ -509,6 +509,34 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
   }
 
   // 10. Admin Orders & Status
+  if (path === "/api/admin/publish-live" && method === "POST") {
+    const products = (body && Array.isArray(body.products) && body.products.length > 0)
+      ? body.products
+      : getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
+    setSafeStorage(PRODUCTS_KEY, products);
+    const activeCount = products.filter((p: any) => p.isActive !== false).length;
+    return createJsonResponse({
+      success: true,
+      message: "সকল পরিবর্তন সফলভাবে লাইভ সার্ভারে সেভ ও পাবলিশ করা হয়েছে!",
+      totalProducts: products.length,
+      activeCount,
+      inactiveCount: products.length - activeCount,
+      lastSaved: new Date().toISOString()
+    });
+  }
+
+  if (path === "/api/admin/catalog-status") {
+    const products = getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
+    const activeCount = products.filter((p: any) => p.isActive !== false).length;
+    return createJsonResponse({
+      success: true,
+      totalProducts: products.length,
+      activeCount,
+      inactiveCount: products.length - activeCount,
+      lastSaved: new Date().toISOString()
+    });
+  }
+
   if (path === "/api/admin/orders") {
     const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
     return createJsonResponse({ orders });

@@ -80,7 +80,18 @@ try {
     }
   }
 
-  console.log('[Postbuild] Successfully synced dist, docs, assets, 404.html, CNAME, favicon, and products.json!');
+  // 7. Sync sitemap.xml and robots.txt
+  ['sitemap.xml', 'robots.txt'].forEach(file => {
+    const srcFile = path.join(root, 'public', file);
+    if (fs.existsSync(srcFile)) {
+      if (fs.existsSync(dist)) fs.copyFileSync(srcFile, path.join(dist, file));
+      if (fs.existsSync(docs)) fs.copyFileSync(srcFile, path.join(docs, file));
+      if (fs.existsSync(assets)) fs.copyFileSync(srcFile, path.join(assets, file));
+      fs.copyFileSync(srcFile, path.join(root, file));
+    }
+  });
+
+  console.log('[Postbuild] Successfully synced dist, docs, assets, 404.html, CNAME, favicon, products.json, and sitemap.xml!');
 } catch (err) {
   console.error('[Postbuild Error]', err);
 }
