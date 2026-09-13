@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Sparkles, ShieldCheck, Heart, CreditCard, Send, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Heart, CreditCard, Send, CheckCircle2, PhoneCall } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 
 interface FooterProps {
@@ -22,7 +22,7 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
   };
 
   return (
-    <footer className="border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
+    <footer id="about-us-section" className="border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
       {/* Newsletter / Value Bar */}
       <div className="border-b border-zinc-200/80 dark:border-zinc-800/80 py-8 sm:py-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -177,14 +177,26 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
               </li>
               <li>
                 <a
+                  id="footer-helpline-link"
+                  href="tel:01786681134"
+                  className="hover:text-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5"
+                >
+                  <span className="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-[11px]">
+                    <PhoneCall className="w-3.5 h-3.5" />
+                  </span>
+                  <span>হেল্পলাইন: 01786681134</span>
+                </a>
+              </li>
+              <li>
+                <a
                   id="footer-whatsapp-link"
-                  href="https://wa.me/expttarif"
+                  href="https://wa.me/8801786681134"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-emerald-500 text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5"
                 >
                   <span className="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-[11px]">wa</span>
-                  <span>WhatsApp (@expttarif)</span>
+                  <span>WhatsApp: 01786681134</span>
                 </a>
               </li>
               <li className="pt-1 text-zinc-500 dark:text-zinc-400">

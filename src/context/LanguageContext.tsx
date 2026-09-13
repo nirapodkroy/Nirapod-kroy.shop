@@ -257,16 +257,27 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const getCategoryName = (cat: string): string => {
-    if (cat === "All") return language === "bn" ? "সব পণ্য (All)" : "All Products";
-    if (cat === "Groceries") return language === "bn" ? "মুদি ও খাদ্য (Groceries)" : "Groceries & Food";
-    if (cat === "Electronics") return language === "bn" ? "ইলেকট্রনিক্স (Electronics)" : "Electronics & Gadgets";
-    if (cat === "Fashion") return language === "bn" ? "পোশাক ও ফ্যাশন (Fashion)" : "Fashion & Apparel";
-    if (cat === "Health & Beauty") return language === "bn" ? "রূপচর্চা ও স্বাস্থ্য (Beauty)" : "Health & Beauty";
-    if (cat === "Home & Kitchen") return language === "bn" ? "গৃহস্থালি ও কিচেন (Home)" : "Home & Kitchen";
-    if (cat === "Baby & Kids") return language === "bn" ? "শিশু ও খেলনা (Kids)" : "Baby & Kids";
-    if (cat === "Sports") return language === "bn" ? "খেলাধুলা ও ফিটনেস (Sports)" : "Sports & Fitness";
-    if (cat === "Books") return language === "bn" ? "বই ও স্টেশনারি (Books)" : "Books & Stationery";
-    if (cat === "Accessories") return language === "bn" ? "অন্যান্য (Accessories)" : "Accessories";
+    const c = cat.toLowerCase().trim();
+    if (c === "all") return language === "bn" ? "সব পণ্য (Home)" : "All Products";
+    if (c === "groceries") return language === "bn" ? "মুদি ও খাদ্য" : "Groceries & Food";
+    if (c === "honey") return language === "bn" ? "মধু ও সুইটনার" : "Honey";
+    if (c === "oil & ghee" || c === "oil" || c === "ghee") return language === "bn" ? "তেল ও ঘি" : "Oil & Ghee";
+    if (c === "dates") return language === "bn" ? "প্রিমিয়াম খেজুর" : "Dates";
+    if (c === "spices") return language === "bn" ? "খাঁটি মশলা" : "Spices";
+    if (c === "nuts & seeds" || c === "nuts") return language === "bn" ? "বাদাম ও বীজ" : "Nuts & Seeds";
+    if (c === "beverage" || c === "tea" || c === "coffee") return language === "bn" ? "চা ও পানীয়" : "Beverage";
+    if (c === "rice") return language === "bn" ? "প্রিমিয়াম চাল" : "Rice";
+    if (c === "flours & lentils" || c === "flour" || c === "lentils") return language === "bn" ? "আটা ও ডাল" : "Flours & Lentils";
+    if (c === "pickle") return language === "bn" ? "আচার" : "Pickle";
+    if (c === "certified") return language === "bn" ? "সার্টিফাইড পণ্য" : "Certified";
+    if (c === "electronics") return language === "bn" ? "ইলেকট্রনিক্স (Electronics)" : "Electronics & Gadgets";
+    if (c === "fashion") return language === "bn" ? "পোশাক ও ফ্যাশন" : "Fashion & Apparel";
+    if (c === "health & beauty") return language === "bn" ? "রূপচর্চা ও স্বাস্থ্য" : "Health & Beauty";
+    if (c === "home & kitchen") return language === "bn" ? "গৃহস্থালি ও কিচেন" : "Home & Kitchen";
+    if (c === "baby & kids" || c === "baby") return language === "bn" ? "শিশু ও খেলনা" : "Baby & Kids";
+    if (c === "sports") return language === "bn" ? "খেলাধুলা ও ফিটনেস" : "Sports & Fitness";
+    if (c === "books") return language === "bn" ? "বই ও স্টেশনারি" : "Books & Stationery";
+    if (c === "accessories") return language === "bn" ? "অন্যান্য (Accessories)" : "Accessories";
     return cat;
   };
 

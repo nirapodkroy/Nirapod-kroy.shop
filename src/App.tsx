@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider, useToast } from "./context/ToastContext";
 import { CartProvider, useCart } from "./context/CartContext";
@@ -15,24 +15,35 @@ import { CartDrawer } from "./components/CartDrawer";
 import { CheckoutModal } from "./components/CheckoutModal";
 import { CustomerAuthModal } from "./components/CustomerAuthModal";
 import { CustomerProfileModal } from "./components/CustomerProfileModal";
+import { TrackOrderModal } from "./components/TrackOrderModal";
+import { WishlistDrawer } from "./components/WishlistDrawer";
 import { FloatingWhatsApp } from "./components/FloatingWhatsApp";
 import { SecretAdminModal } from "./components/SecretAdminModal";
 import { Footer } from "./components/Footer";
 import { ToastContainer } from "./components/ToastContainer";
 
-const CATEGORIES = [
+const BASE_CATEGORIES = [
   "All",
+  "Honey",
+  "Oil & Ghee",
+  "Dates",
+  "Spices",
+  "Nuts & Seeds",
+  "Beverage",
+  "Rice",
+  "Flours & Lentils",
   "Groceries",
+  "Baby & Kids",
+  "Sports",
   "Electronics",
   "Fashion",
   "Health & Beauty",
   "Home & Kitchen",
-  "Baby & Kids",
-  "Sports",
   "Books"
 ];
 
 const PRODUCTS_CACHE_KEY = "nirapod_products_cache";
+const WISHLIST_CACHE_KEY = "nirapod_wishlist_ids";
 
 const StoreContent: React.FC = () => {
   const [products, setProducts] = useState<Product[]>(() => {
@@ -45,13 +56,39 @@ const StoreContent: React.FC = () => {
     } catch {}
     return DEFAULT_PRODUCTS;
   });
+
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
+  // Modals & Drawers
+  const [isTrackOrderOpen, setIsTrackOrderOpen] = useState(false);
+  const [isWishlistOpen, setIsWishlistOpen] = useState(false);
+
+  // Wishlist persistence
+  const [wishlistIds, setWishlistIds] = useState<string[]>(() => {
+    try {
+      const saved = safeGetLocalStorage(WISHLIST_CACHE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const { isCheckoutOpen, setIsCheckoutOpen } = useCart();
   const { addToast } = useToast();
+
+  // Dynamically include categories present in the active products
+  const dynamicCategories = useMemo(() => {
+    const set = new Set(BASE_CATEGORIES);
+    products.forEach((p) => {
+      if (p.category && p.category.trim()) {
+        set.add(p.category.trim());
+      }
+    });
+    return Array.from(set);
+  }, [products]);
 
   // Load products from static products.json, API, or local storage cache
   const fetchProducts = useCallback(async () => {
@@ -67,8 +104,6 @@ const StoreContent: React.FC = () => {
           }
         }
       } catch {}
-
-      const hasLocalEdits = Boolean(safeGetLocalStorage("nirapod_products_modified"));
 
       // 1. In static hosting (GitHub Pages), fetch live products.json with cache buster
       const isStatic = !window.location.port && !window.location.hostname.includes("run.app");
@@ -112,6 +147,33 @@ const StoreContent: React.FC = () => {
     fetchProducts();
   }, [fetchProducts]);
 
+  // Toggle item in Wishlist
+  const handleToggleWishlist = (product: Product) => {
+    setWishlistIds((prev) => {
+      const exists = prev.includes(product.id);
+      const next = exists ? prev.filter((id) => id !== product.id) : [...prev, product.id];
+      safeSetLocalStorage(WISHLIST_CACHE_KEY, JSON.stringify(next));
+      if (exists) {
+        addToast(`"${product.title}" পছন্দের তালিকা থেকে সরানো হয়েছে`, "info");
+      } else {
+        addToast(`"${product.title}" পছন্দের তালিকায় যুক্ত করা হয়েছে!`, "success");
+      }
+      return next;
+    });
+  };
+
+  const handleRemoveFromWishlist = (productId: string) => {
+    setWishlistIds((prev) => {
+      const next = prev.filter((id) => id !== productId);
+      safeSetLocalStorage(WISHLIST_CACHE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const wishlistProducts = useMemo(() => {
+    return products.filter((p) => wishlistIds.includes(p.id));
+  }, [products, wishlistIds]);
+
   const handleExploreClick = () => {
     const catalogEl = document.getElementById("catalog-section");
     if (catalogEl) {
@@ -128,22 +190,31 @@ const StoreContent: React.FC = () => {
     }
   };
 
+  // When user clicks ANY product on the home page:
+  // Open quick view details modal directly with all images and order options
+  const handleProductClick = (product: Product) => {
+    setQuickViewProduct(product);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-emerald-500 selection:text-white transition-colors duration-200">
       {/* Toast Notification Layer */}
       <ToastContainer />
 
-      {/* Main Header */}
+      {/* Main Nirapod Kroy Header */}
       <Header
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         selectedCategory={selectedCategory}
         setSelectedCategory={setSelectedCategory}
-        categories={CATEGORIES}
+        categories={dynamicCategories}
+        onOpenTrackOrder={() => setIsTrackOrderOpen(true)}
+        onOpenWishlist={() => setIsWishlistOpen(true)}
+        wishlistCount={wishlistIds.length}
       />
 
       <main className="flex-1">
-        {/* Sliding Hero Banner */}
+        {/* Hero Carousel */}
         <HeroSection onExploreClick={handleExploreClick} onDealsClick={handleDealsClick} />
 
         {/* Product Catalog Grid */}
@@ -152,18 +223,23 @@ const StoreContent: React.FC = () => {
           isLoading={isLoading}
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
-          categories={CATEGORIES}
+          categories={dynamicCategories}
           searchQuery={searchQuery}
           onQuickView={(prod) => setQuickViewProduct(prod)}
           onRefreshProducts={fetchProducts}
+          onProductClick={handleProductClick}
+          wishlistIds={wishlistIds}
+          onToggleWishlist={handleToggleWishlist}
         />
       </main>
 
       {/* Footer */}
-      <Footer onCategorySelect={(cat) => {
-        setSelectedCategory(cat);
-        handleExploreClick();
-      }} />
+      <Footer
+        onCategorySelect={(cat) => {
+          setSelectedCategory(cat);
+          handleExploreClick();
+        }}
+      />
 
       {/* Persistent Floating WhatsApp Support Button */}
       <FloatingWhatsApp />
@@ -177,6 +253,24 @@ const StoreContent: React.FC = () => {
         onClose={() => setIsCheckoutOpen(false)}
         onOrderSuccess={() => {
           fetchProducts(); // Refresh inventory counts
+        }}
+      />
+
+      {/* Track Order Modal */}
+      <TrackOrderModal
+        isOpen={isTrackOrderOpen}
+        onClose={() => setIsTrackOrderOpen(false)}
+      />
+
+      {/* Wishlist Drawer */}
+      <WishlistDrawer
+        isOpen={isWishlistOpen}
+        onClose={() => setIsWishlistOpen(false)}
+        wishlistProducts={wishlistProducts}
+        onRemoveFromWishlist={handleRemoveFromWishlist}
+        onNavigateToCategory={(cat) => {
+          setSelectedCategory(cat);
+          handleExploreClick();
         }}
       />
 

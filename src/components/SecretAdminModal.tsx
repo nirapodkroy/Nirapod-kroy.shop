@@ -34,7 +34,6 @@ import {
   EyeOff,
   Globe,
   Search,
-  Sparkles,
   Images,
   CloudUpload,
   Download,
@@ -2350,7 +2349,6 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                     {/* What Happens When You Push to GitHub Explain Card */}
                     <div className="p-4 rounded-2xl bg-zinc-800/50 border border-zinc-700/70 space-y-2.5 text-xs">
                       <h4 className="font-bold text-sm text-white flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-purple-400" />
                         GitHub-এ পুশ করলে কী ঘটে? (How Auto-Deploy Works)
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12px] pt-1">

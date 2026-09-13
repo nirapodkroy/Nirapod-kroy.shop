@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ArrowRight, Sparkles, ShieldCheck, Truck, Clock, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, ShieldCheck, Truck, Clock, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../context/LanguageContext";
 
@@ -113,9 +113,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onExploreClick, onDeal
           <div className="relative z-10 max-w-2xl px-6 sm:px-12 py-12 flex flex-col justify-center">
             <div className="flex flex-wrap items-center gap-2.5 mb-4">
               <span
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border backdrop-blur-md ${slide.badgeColor}`}
+                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border backdrop-blur-md ${slide.badgeColor}`}
               >
-                <Sparkles className="w-3.5 h-3.5" />
                 {slide.badge[language]}
               </span>
               <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
