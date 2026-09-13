@@ -19,25 +19,6 @@
     "isAffiliate": false
   },
   {
-    "id": "prod-groc-2",
-    "title": "সুন্দরবনের প্রাকৃতিক চাকের মধু (Sundarbans Honey, 500g)",
-    "description": "সুন্দরবনের গভীর জঙ্গল থেকে সংগৃহীত প্রাকৃতিক চাকের কাঁচা মধু। কোনো ধরনের প্রক্রিয়াজাতকরণ ও চিনিমুক্ত।",
-    "price": 580,
-    "regularPrice": 650,
-    "category": "Groceries",
-    "stock": 30,
-    "imageUrl": "https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&w=800&q=80",
-    "rating": 5,
-    "ratingCount": 185,
-    "badge": "প্রাকৃতিক",
-    "featured": true,
-    "images": [
-      "https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?auto=format&fit=crop&w=800&q=80",
-      "https://images.unsplash.com/photo-1471943311424-646960669fbc?auto=format&fit=crop&w=800&q=80"
-    ]
-  },
-  {
     "id": "prod-groc-3",
     "title": "প্রিমিয়াম চিনিগুঁড়া সুগন্ধি পোলাও চাল (Chinigura Rice, 5kg)",
     "description": "দিনাজপুরের বিখ্যাত চিকন ও সুবাসিত চিনিগুঁড়া চাল। বিরিয়ানি, পোলাও ও পায়েস রান্নার জন্য আদর্শ।",
