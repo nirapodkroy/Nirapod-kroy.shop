@@ -25,7 +25,13 @@ try {
   }
 
   // 4. Ensure CNAME and favicon are everywhere
-  const cnameContent = 'www.nirapodkroy.shop\n';
+  let cnameContent = 'nirapodkroy.shop\n';
+  if (fs.existsSync(path.join(root, 'CNAME'))) {
+    const existing = fs.readFileSync(path.join(root, 'CNAME'), 'utf-8').trim();
+    if (existing) {
+      cnameContent = existing + '\n';
+    }
+  }
   fs.writeFileSync(path.join(root, 'CNAME'), cnameContent);
   if (fs.existsSync(path.join(root, 'public'))) {
     fs.writeFileSync(path.join(root, 'public', 'CNAME'), cnameContent);

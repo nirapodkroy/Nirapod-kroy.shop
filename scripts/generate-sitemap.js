@@ -1,9 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 
-const DOMAIN = 'https://www.nirapodkroy.shop';
 const root = process.cwd();
 const publicDir = path.join(root, 'public');
+
+let customDomain = 'nirapodkroy.shop';
+try {
+  if (fs.existsSync(path.join(root, 'CNAME'))) {
+    const raw = fs.readFileSync(path.join(root, 'CNAME'), 'utf-8').trim();
+    if (raw) customDomain = raw;
+  }
+} catch {}
+
+const DOMAIN = `https://${customDomain}`;
 
 let products = [];
 try {
