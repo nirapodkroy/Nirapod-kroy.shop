@@ -149,7 +149,7 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
     await fetch(target, {
       method: "POST",
       mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload)
     });
     return true;
@@ -189,7 +189,7 @@ async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPassword?
     await fetch(target, {
       method: "POST",
       mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload)
     });
     return true;
@@ -412,6 +412,31 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     orders.unshift(newOrder);
     setSafeStorage(ORDERS_KEY, orders);
 
+    // Auto-record customer in mockApi store
+    const customers = getSafeStorage<StoredCustomer[]>(CUSTOMERS_KEY, DEFAULT_CUSTOMERS);
+    const normalizedEmail = String(customerEmail).trim().toLowerCase();
+    let existingCust = customers.find(c => c.email.toLowerCase() === normalizedEmail);
+    if (!existingCust) {
+      existingCust = {
+        id: "cust-" + Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
+        name: String(customerName).trim(),
+        email: normalizedEmail,
+        passwordHash: "auto-order",
+        phone: customerPhone ? String(customerPhone).trim() : undefined,
+        address: shippingAddress ? String(shippingAddress).trim() : undefined,
+        createdAt: new Date().toISOString()
+      };
+      customers.push(existingCust);
+      setSafeStorage(CUSTOMERS_KEY, customers);
+      syncCustomerToGoogleSheets(existingCust, "(Order Customer)").catch(() => {});
+    } else {
+      let modified = false;
+      if (!existingCust.phone && customerPhone) { existingCust.phone = String(customerPhone).trim(); modified = true; }
+      if (!existingCust.address && shippingAddress) { existingCust.address = String(shippingAddress).trim(); modified = true; }
+      if (!existingCust.name && customerName) { existingCust.name = String(customerName).trim(); modified = true; }
+      if (modified) setSafeStorage(CUSTOMERS_KEY, customers);
+    }
+
     // Background Google Sheets dispatch
     syncOrderToGoogleSheets(newOrder).then(synced => {
       if (synced) {
@@ -615,6 +640,59 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       return createJsonResponse({ success: true, message: `অর্ডার ${order.id} সফলভাবে গুগল শিটে সিঙ্ক হয়েছে!` });
     }
     return createJsonResponse({ error: "অর্ডার পাওয়া যায়নি" }, 404);
+  }
+
+  // DELETE /api/admin/orders/:id (Delete order in admin panel only, Google Sheet remains untouched)
+  if (path.startsWith("/api/admin/orders/") && method === "DELETE") {
+    const id = path.replace("/api/admin/orders/", "");
+    const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
+    const remaining = orders.filter(o => o.id !== id);
+    if (remaining.length === orders.length) {
+      return createJsonResponse({ error: "অর্ডার পাওয়া যায়নি" }, 404);
+    }
+    setSafeStorage(ORDERS_KEY, remaining);
+    return createJsonResponse({
+      success: true,
+      message: `অর্ডার ${id} অ্যাডমিন প্যানেল থেকে সফলভাবে মুছে ফেলা হয়েছে (গুগল শিটের রেকর্ড অক্ষত রয়েছে)।`,
+      remainingOrders: remaining.length
+    });
+  }
+
+  // Admin Customers List (/api/admin/customers)
+  if (path === "/api/admin/customers" && method === "GET") {
+    const customers = getSafeStorage<StoredCustomer[]>(CUSTOMERS_KEY, DEFAULT_CUSTOMERS);
+    const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
+    const list = customers.map(c => {
+      const custOrders = orders.filter(o => o.customerEmail.toLowerCase() === c.email.toLowerCase());
+      const totalSpent = custOrders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+      return {
+        id: c.id,
+        name: c.name,
+        email: c.email,
+        phone: c.phone || "N/A",
+        address: c.address || "N/A",
+        createdAt: c.createdAt,
+        orderCount: custOrders.length,
+        totalSpent
+      };
+    });
+    return createJsonResponse({ customers: list, total: list.length });
+  }
+
+  // DELETE /api/admin/customers/:id (Delete customer in admin panel only, Google Sheet remains untouched)
+  if (path.startsWith("/api/admin/customers/") && method === "DELETE") {
+    const id = path.replace("/api/admin/customers/", "");
+    const customers = getSafeStorage<StoredCustomer[]>(CUSTOMERS_KEY, DEFAULT_CUSTOMERS);
+    const remaining = customers.filter(c => c.id !== id);
+    if (remaining.length === customers.length) {
+      return createJsonResponse({ error: "কাস্টমার পাওয়া যায়নি" }, 404);
+    }
+    setSafeStorage(CUSTOMERS_KEY, remaining);
+    return createJsonResponse({
+      success: true,
+      message: "কাস্টমার ডেটা সফলভাবে অ্যাডমিন প্যানেল থেকে মুছে ফেলা হয়েছে (গুগল শিটের রেকর্ড অক্ষত রয়েছে)।",
+      remainingCustomers: remaining.length
+    });
   }
 
   // 11. Admin Stats & Settings

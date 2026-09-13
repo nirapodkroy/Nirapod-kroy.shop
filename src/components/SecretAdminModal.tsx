@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { Product, Order, AdminStats } from "../types";
+import { Product, Order, AdminStats, AdminCustomer } from "../types";
 import { handleLocalApi } from "../lib/mockApi";
 import {
   X,
@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Package,
   ShoppingCart,
+  Users,
   FileSpreadsheet,
   Plus,
   Edit2,
@@ -68,7 +69,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Admin View Tabs
-  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "orders" | "sheets" | "github">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "orders" | "customers" | "sheets" | "github">("dashboard");
 
   // GitHub Auto-Sync State
   const [githubRepo, setGithubRepo] = useState(() => localStorage.getItem("nirapod_gh_repo") || "nirapodkroy/Nirapod-kroy.shop");
@@ -89,6 +90,11 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [customers, setCustomers] = useState<AdminCustomer[]>([]);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
+  const [orderToDelete, setOrderToDelete] = useState<{ id: string; customerName: string; total: number } | null>(null);
+  const [customerToDelete, setCustomerToDelete] = useState<{ id: string; name: string; email: string } | null>(null);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [isSavingWebhook, setIsSavingWebhook] = useState(false);
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
@@ -414,6 +420,16 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         setOrders(ordersData.orders || []);
       }
 
+      // 2.1 Customers
+      setIsLoadingCustomers(true);
+      const custRes = await safeAdminFetch("/api/admin/customers", {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (custRes.ok) {
+        const custData = await custRes.json();
+        setCustomers(custData.customers || []);
+      }
+
       // 3. Settings
       const settingsRes = await safeAdminFetch("/api/admin/settings", {
         headers: { Authorization: `Bearer ${adminToken}` }
@@ -437,6 +453,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       console.error("Failed to load admin data:", err);
     } finally {
       setIsLoadingOrders(false);
+      setIsLoadingCustomers(false);
     }
   };
 
@@ -1144,6 +1161,64 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
+  // Delete Order (Admin panel only, retains Google Sheets data)
+  const handleDeleteOrder = (order: Order) => {
+    setOrderToDelete({ id: order.id, customerName: order.customerName, total: order.totalPrice });
+  };
+
+  const confirmDeleteOrder = async () => {
+    if (!orderToDelete) return;
+    const { id } = orderToDelete;
+    setOrderToDelete(null);
+
+    // Optimistically update order list
+    const remainingOrders = orders.filter(o => o.id !== id);
+    setOrders(remainingOrders);
+    addToast(`অর্ডার #${id} অ্যাডমিন প্যানেল থেকে মুছে ফেলা হয়েছে (গুগল শিটের রেকর্ড অক্ষত রাখা হয়েছে)।`, "info");
+
+    try {
+      const res = await safeAdminFetch(`/api/admin/orders/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        fetchAdminData();
+      }
+    } catch (err) {
+      console.error(err);
+      fetchAdminData();
+    }
+  };
+
+  // Delete Customer (Admin panel only, retains Google Sheets data)
+  const handleDeleteCustomer = (cust: AdminCustomer) => {
+    setCustomerToDelete({ id: cust.id, name: cust.name, email: cust.email });
+  };
+
+  const confirmDeleteCustomer = async () => {
+    if (!customerToDelete) return;
+    const { id, name } = customerToDelete;
+    setCustomerToDelete(null);
+
+    // Optimistically update customer list
+    const remainingCustomers = customers.filter(c => c.id !== id);
+    setCustomers(remainingCustomers);
+    addToast(`কাস্টমার "${name}" অ্যাডমিন প্যানেল থেকে মুছে ফেলা হয়েছে (গুগল শিটের রেকর্ড অক্ষত রাখা হয়েছে)।`, "info");
+
+    try {
+      const res = await safeAdminFetch(`/api/admin/customers/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        fetchAdminData();
+      }
+    } catch (err) {
+      console.error(err);
+      fetchAdminData();
+    }
+  };
+
   // Save Webhook URL
   const handleSaveWebhook = async () => {
     setIsSavingWebhook(true);
@@ -1421,6 +1496,17 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                   >
                     <ShoppingCart className="w-4 h-4" />
                     <span>Orders ({orders.length})</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("customers")}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      activeTab === "customers"
+                        ? "bg-zinc-800 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <Users className="w-4 h-4 text-sky-400" />
+                    <span>Customers ({customers.length})</span>
                   </button>
                   <button
                     onClick={() => setActiveTab("sheets")}
@@ -2065,6 +2151,16 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                                   <FileSpreadsheet className="w-3.5 h-3.5" />
                                   <span>{order.syncedToGoogleSheet ? "Synced" : "Sync Now"}</span>
                                 </button>
+
+                                {/* Delete Order Button (Admin panel only, retains Google Sheets data) */}
+                                <button
+                                  onClick={() => handleDeleteOrder(order)}
+                                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all cursor-pointer"
+                                  title="অর্ডার ডিলিট করুন (গুগল শিটের রেকর্ড অক্ষত থাকবে)"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Delete</span>
+                                </button>
                               </div>
                             </div>
 
@@ -2107,6 +2203,119 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 3.5: CUSTOMERS MANAGEMENT */}
+                {activeTab === "customers" && (
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold text-base text-white flex items-center gap-2">
+                          <Users className="w-5 h-5 text-sky-400" />
+                          <span>Customer Database (অর্ডারকারী ও নিবন্ধিত গ্রাহক)</span>
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                          ওয়েবসাইট থেকে যেকোনো গ্রাহক অর্ডার করলে বা অ্যাকাউন্ট খুললে স্বয়ংক্রিয়ভাবে এখানে যুক্ত হবে।
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs font-bold">
+                          মোট গ্রাহক: {customers.length} জন
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="গ্রাহকের নাম, ইমেইল অথবা মোবাইল নম্বর দিয়ে খুঁজুন..."
+                        value={customerSearchTerm}
+                        onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      />
+                    </div>
+
+                    {isLoadingCustomers ? (
+                      <div className="p-8 text-center text-zinc-400">Loading customers...</div>
+                    ) : customers.length === 0 ? (
+                      <div className="p-8 text-center bg-zinc-800/40 rounded-2xl border border-zinc-700 text-zinc-400">
+                        এখনও কোনো কাস্টমার ডেটা সংরক্ষিত নেই। অর্ডার আসলেই গ্রাহক ডেটা এখানে ও গুগল শিটে জমা হবে।
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {customers
+                          .filter((c) => {
+                            if (!customerSearchTerm.trim()) return true;
+                            const term = customerSearchTerm.toLowerCase();
+                            return (
+                              c.name?.toLowerCase().includes(term) ||
+                              c.email?.toLowerCase().includes(term) ||
+                              (c.phone && c.phone.toLowerCase().includes(term)) ||
+                              (c.address && c.address.toLowerCase().includes(term))
+                            );
+                          })
+                          .map((cust) => (
+                            <div
+                              key={cust.id}
+                              className="p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700/70 space-y-3 hover:border-zinc-600 transition-colors"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400 font-bold text-sm">
+                                    {cust.name ? cust.name.charAt(0).toUpperCase() : "C"}
+                                  </div>
+                                  <div>
+                                    <h4 className="font-bold text-sm text-white">{cust.name}</h4>
+                                    <p className="text-[11px] text-zinc-400 font-mono">
+                                      যুক্ত হয়েছেন: {new Date(cust.createdAt).toLocaleDateString("bn-BD")}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+                                    অর্ডার: {cust.orderCount || 0} টি
+                                  </span>
+                                  <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-300 text-xs font-bold">
+                                    মোট খরচ: ${(cust.totalSpent || 0).toFixed(2)}
+                                  </span>
+
+                                  {/* Delete Customer Button (Admin panel only, retains Google Sheets data) */}
+                                  <button
+                                    onClick={() => handleDeleteCustomer(cust)}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all cursor-pointer"
+                                    title="কাস্টমার ডেটা ডিলিট করুন (গুগল শিটের রেকর্ড অক্ষত থাকবে)"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Delete</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Customer Contact & Address Details */}
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 rounded-xl bg-zinc-900/70 text-xs">
+                                <div>
+                                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">ইমেইল ঠিকানা</span>
+                                  <span className="font-medium text-white">{cust.email}</span>
+                                </div>
+
+                                <div>
+                                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">মোবাইল নম্বর</span>
+                                  <span className="font-medium text-zinc-200">{cust.phone || "N/A"}</span>
+                                </div>
+
+                                <div>
+                                  <span className="text-zinc-500 block text-[10px] uppercase font-bold">ডেলিভারি ঠিকানা</span>
+                                  <p className="font-medium text-zinc-200 leading-snug">{cust.address || "N/A"}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                       </div>
                     )}
                   </div>
@@ -3302,6 +3511,93 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                     className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer transition-all active:scale-95"
                   >
                     Instant Delete (মুছে ফেলুন)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Order Confirmation Modal (Deletes from Admin Panel only, retains Google Sheets) */}
+          {orderToDelete && (
+            <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+              <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl animate-in fade-in zoom-in duration-150">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 shrink-0">
+                    <Trash2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-white">অর্ডারটি ডিলিট করবেন?</h4>
+                    <p className="text-[11px] text-zinc-400">Delete Order #{orderToDelete.id}</p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-800/60 border border-zinc-700 text-xs text-zinc-300">
+                  <p className="text-zinc-400 text-[11px]">গ্রাহক:</p>
+                  <p className="font-bold text-white text-sm mt-0.5">{orderToDelete.customerName}</p>
+                  <p className="text-[11px] text-emerald-400 font-bold mt-1">অর্ডার মূল্য: ${orderToDelete.total.toFixed(2)}</p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs leading-relaxed">
+                  ✓ <strong>গুগল শিট সুরক্ষিত থাকবে:</strong> এই অর্ডারটি আপনার অ্যাডমিন প্যানেল থেকে মুছে যাবে, কিন্তু গুগল শিটের সমস্ত রেকর্ড অপরিবর্তিত ও সুরক্ষিত থাকবে।
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setOrderToDelete(null)}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    Cancel (বাতিল)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDeleteOrder}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer transition-all active:scale-95"
+                  >
+                    Delete Order
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Customer Confirmation Modal (Deletes from Admin Panel only, retains Google Sheets) */}
+          {customerToDelete && (
+            <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+              <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl animate-in fade-in zoom-in duration-150">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 shrink-0">
+                    <Trash2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-white">কাস্টমার ডেটা ডিলিট করবেন?</h4>
+                    <p className="text-[11px] text-zinc-400">Delete Customer: {customerToDelete.name}</p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-800/60 border border-zinc-700 text-xs text-zinc-300">
+                  <p className="text-zinc-400 text-[11px]">ইমেইল:</p>
+                  <p className="font-bold text-white text-sm mt-0.5">{customerToDelete.email}</p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs leading-relaxed">
+                  ✓ <strong>গুগল শিট সুরক্ষিত থাকবে:</strong> এই কাস্টমার প্রোফাইলটি অ্যাডমিন প্যানেল থেকে মুছে যাবে, কিন্তু গুগল শিটের সমস্ত রেকর্ড অক্ষত থাকবে।
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setCustomerToDelete(null)}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    Cancel (বাতিল)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDeleteCustomer}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer transition-all active:scale-95"
+                  >
+                    Delete Customer
                   </button>
                 </div>
               </div>

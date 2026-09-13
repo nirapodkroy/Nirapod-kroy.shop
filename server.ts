@@ -727,15 +727,17 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl: string): Promis
     console.log(`[Google Sheets] Dispatching order ${order.id} to ${targetUrl}`);
     const res = await fetch(targetUrl, {
       method: "POST",
+      redirect: "follow",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "text/plain;charset=utf-8",
         "User-Agent": "NirapodKroy-Ecommerce/1.0"
       },
       body: JSON.stringify(payload)
     });
 
-    console.log(`[Google Sheets] Webhook response status: ${res.status}`);
-    return res.ok || res.status === 302 || res.status === 200;
+    const responseText = await res.text().catch(() => "");
+    console.log(`[Google Sheets] Webhook response status: ${res.status}, body: ${responseText.slice(0, 100)}`);
+    return res.ok || responseText.includes('"status":"success"') || res.status === 302 || res.status === 200;
   } catch (err) {
     console.error(`[Google Sheets] Failed to post order ${order.id} to webhook:`, err);
     return false;
@@ -772,15 +774,18 @@ async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: stri
     };
 
     console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${targetUrl}`);
-    await fetch(targetUrl, {
+    const res = await fetch(targetUrl, {
       method: "POST",
+      redirect: "follow",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "text/plain;charset=utf-8",
         "User-Agent": "NirapodKroy-Ecommerce/1.0"
       },
       body: JSON.stringify(payload)
     });
-    return true;
+    const responseText = await res.text().catch(() => "");
+    console.log(`[Google Sheets Customer Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
+    return res.ok || responseText.includes('"status":"success"');
   } catch (err) {
     console.warn(`[Google Sheets Customer Sync Error]:`, err);
     return false;
@@ -1384,6 +1389,32 @@ app.post("/api/orders", async (req, res) => {
   };
 
   storeState.orders.unshift(newOrder);
+
+  // Auto-record or update customer in storeState.customers
+  const normalizedEmail = customerEmail.trim().toLowerCase();
+  let existingCust = storeState.customers.find(c => c.email.toLowerCase() === normalizedEmail);
+  if (!existingCust) {
+    existingCust = {
+      id: "cust-" + Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
+      name: customerName.trim(),
+      email: normalizedEmail,
+      passwordHash: "auto-order-" + Math.random().toString(36).substring(2, 8),
+      phone: customerPhone ? customerPhone.trim() : undefined,
+      address: shippingAddress ? shippingAddress.trim() : undefined,
+      createdAt: new Date().toISOString()
+    };
+    storeState.customers.push(existingCust);
+    // Also sync new customer profile to Google Sheets
+    syncCustomerToGoogleSheets(existingCust, "(Order Customer)").catch(err => {
+      console.warn("[Google Sheets] Background auto-customer sync warning:", err);
+    });
+  } else {
+    // Update phone/address if previously missing
+    if (!existingCust.phone && customerPhone) existingCust.phone = customerPhone.trim();
+    if (!existingCust.address && shippingAddress) existingCust.address = shippingAddress.trim();
+    if (!existingCust.name && customerName) existingCust.name = customerName.trim();
+  }
+
   saveState();
 
   // Trigger Google Sheet Webhook in background
@@ -1494,6 +1525,66 @@ app.post("/api/admin/orders/:id/sync", requireAdmin, async (req, res) => {
   res.status(400).json({
     success: false,
     message: "Failed to dispatch to Google Sheets webhook. Please verify your Webhook URL in Admin Settings."
+  });
+});
+
+// DELETE /api/admin/orders/:id (Admin only - Deletes from store database, leaves Google Sheets intact)
+app.delete("/api/admin/orders/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const initialLength = storeState.orders.length;
+  storeState.orders = storeState.orders.filter(o => o.id !== id);
+
+  if (storeState.orders.length === initialLength) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+
+  saveState();
+  // Note: Per design, we intentionally DO NOT delete from Google Sheets so Sheets remains an append-only audit trail
+  res.json({
+    success: true,
+    message: `অর্ডার ${id} সফলভাবে অ্যাডমিন প্যানেল থেকে মুছে ফেলা হয়েছে (গুগল শিট রেকর্ড অক্ষত রাখা হয়েছে)।`,
+    remainingOrders: storeState.orders.length
+  });
+});
+
+// GET /api/admin/customers (Admin only)
+app.get("/api/admin/customers", requireAdmin, (_req, res) => {
+  const safeCustomers = storeState.customers.map(c => {
+    // Count associated orders
+    const customerOrders = storeState.orders.filter(o => o.customerEmail.toLowerCase() === c.email.toLowerCase());
+    const totalSpent = customerOrders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+
+    return {
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      phone: c.phone || "N/A",
+      address: c.address || "N/A",
+      createdAt: c.createdAt,
+      orderCount: customerOrders.length,
+      totalSpent
+    };
+  });
+
+  res.json({ customers: safeCustomers, total: safeCustomers.length });
+});
+
+// DELETE /api/admin/customers/:id (Admin only - Deletes from store database, leaves Google Sheets intact)
+app.delete("/api/admin/customers/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const initialLength = storeState.customers.length;
+  storeState.customers = storeState.customers.filter(c => c.id !== id);
+
+  if (storeState.customers.length === initialLength) {
+    return res.status(404).json({ error: "Customer not found" });
+  }
+
+  saveState();
+  // Note: We deliberately do NOT touch Google Sheets
+  res.json({
+    success: true,
+    message: "কাস্টমার সফলভাবে অ্যাডমিন প্যানেল থেকে মুছে ফেলা হয়েছে (গুগল শিট রেকর্ড অক্ষত রয়েছে)।",
+    remainingCustomers: storeState.customers.length
   });
 });
 

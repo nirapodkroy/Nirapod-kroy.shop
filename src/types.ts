@@ -33,6 +33,11 @@ export interface CustomerUser {
   createdAt: string;
 }
 
+export interface AdminCustomer extends CustomerUser {
+  orderCount?: number;
+  totalSpent?: number;
+}
+
 export interface OrderItem {
   productId: string;
   title: string;
