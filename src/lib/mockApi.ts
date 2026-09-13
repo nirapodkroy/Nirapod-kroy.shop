@@ -159,6 +159,46 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
   }
 }
 
+async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPassword?: string): Promise<boolean> {
+  const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
+  const target = settings.webhookUrl?.trim();
+  if (!target || !target.startsWith("http")) return false;
+
+  const payload = {
+    action: "customer_registration",
+    type: "customer",
+    customerId: customer.id,
+    name: customer.name,
+    phone: customer.phone || "N/A",
+    email: customer.email,
+    address: customer.address || "N/A",
+    password: rawPassword || customer.passwordHash || "",
+    registeredAt: new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+    sheetRow: [
+      customer.id,
+      new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+      customer.name,
+      customer.phone || "N/A",
+      customer.email,
+      customer.address || "N/A",
+      rawPassword || customer.passwordHash || ""
+    ]
+  };
+
+  try {
+    await fetch(target, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    return true;
+  } catch (err) {
+    console.warn("[Google Sheets Customer Sync Error]:", err);
+    return false;
+  }
+}
+
 function createJsonResponse(data: any, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -216,6 +256,11 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
 
     customers.push(newCustomer);
     setSafeStorage(CUSTOMERS_KEY, customers);
+
+    // Auto-sync customer to Google Sheets
+    syncCustomerToGoogleSheets(newCustomer, password).catch(err => {
+      console.warn("Client fallback customer sync error:", err);
+    });
 
     const token = "usr_" + Math.random().toString(36).substring(2) + Date.now().toString(36);
     return createJsonResponse({

@@ -1197,21 +1197,39 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
 
   const sampleAppsScriptCode = `function doPost(e) {
   try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = JSON.parse(e.postData.contents);
     
-    // Auto-create headers if sheet is blank
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow([
-        "Order ID", "Date/Time", "Customer Name", "Customer Email", 
-        "Customer Phone", "Shipping Address", "Ordered Items", 
-        "Total Price", "Payment Method", "Status"
-      ]);
-      sheet.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#e6f4ea");
-    }
-    
-    if (data.sheetRow) {
-      sheet.appendRow(data.sheetRow);
+    // 1. গ্রাহক রেজিস্ট্রেশন (Customer Registration: Name, Phone, Email, Address, Password)
+    if (data.action === "customer_registration" || data.type === "customer") {
+      var customerSheet = ss.getSheetByName("Customers") || ss.getSheetByName("গ্রাহক_নিবন্ধন");
+      if (!customerSheet) {
+        customerSheet = ss.insertSheet("Customers");
+      }
+      if (customerSheet.getLastRow() === 0) {
+        customerSheet.appendRow([
+          "Customer ID", "Registration Date", "Name", "Phone", "Email", "Address", "Password"
+        ]);
+        customerSheet.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#d1e7dd");
+      }
+      if (data.sheetRow) {
+        customerSheet.appendRow(data.sheetRow);
+      }
+    } 
+    // 2. নতুন অর্ডার (New Customer Orders)
+    else {
+      var orderSheet = ss.getSheetByName("Orders") || ss.getSheetByName("অর্ডার") || ss.getActiveSheet();
+      if (orderSheet.getLastRow() === 0) {
+        orderSheet.appendRow([
+          "Order ID", "Date/Time", "Customer Name", "Customer Email", 
+          "Customer Phone", "Shipping Address", "Ordered Items", 
+          "Total Price", "Payment Method", "Status"
+        ]);
+        orderSheet.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#e6f4ea");
+      }
+      if (data.sheetRow) {
+        orderSheet.appendRow(data.sheetRow);
+      }
     }
     
     return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
@@ -2100,10 +2118,10 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                     <div>
                       <h3 className="font-bold text-base text-white flex items-center gap-2">
                         <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-                        Google Sheets Webhook Configuration
+                        Google Sheets অটো সিঙ্ক (Orders & Customer Registrations)
                       </h3>
                       <p className="text-xs text-zinc-400 mt-1">
-                        When customer orders are confirmed, the backend immediately sends the complete order row to this Google Apps Script Webhook.
+                        গ্রাহক নিবন্ধন (নাম, মোবাইল নম্বর, ইমেইল, ঠিকানা ও পাসওয়ার্ড) অথবা নতুন অর্ডার হলে তা স্বয়ংক্রিয়ভাবে আপনার গুগল শিটের সংশ্লিষ্ট ট্যাবে (Customers ও Orders) যুক্ত হবে।
                       </p>
                     </div>
 

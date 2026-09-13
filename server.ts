@@ -742,6 +742,51 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl: string): Promis
   }
 }
 
+// Helper: dispatch customer registration to Google Sheets webhook
+async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: string): Promise<boolean> {
+  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return false;
+  }
+
+  try {
+    const payload = {
+      action: "customer_registration",
+      type: "customer",
+      customerId: customer.id,
+      name: customer.name,
+      phone: customer.phone || "N/A",
+      email: customer.email,
+      address: customer.address || "N/A",
+      password: rawPassword || customer.passwordHash || "",
+      registeredAt: new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+      sheetRow: [
+        customer.id,
+        new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+        customer.name,
+        customer.phone || "N/A",
+        customer.email,
+        customer.address || "N/A",
+        rawPassword || customer.passwordHash || ""
+      ]
+    };
+
+    console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${targetUrl}`);
+    await fetch(targetUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "NirapodKroy-Ecommerce/1.0"
+      },
+      body: JSON.stringify(payload)
+    });
+    return true;
+  } catch (err) {
+    console.warn(`[Google Sheets Customer Sync Error]:`, err);
+    return false;
+  }
+}
+
 // Middleware: Admin Auth Check
 function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
@@ -882,6 +927,11 @@ app.post("/api/auth/register", (req, res) => {
 
   storeState.customers.push(newCustomer);
   saveState();
+
+  // Auto-sync customer registration to Google Sheets webhook
+  syncCustomerToGoogleSheets(newCustomer, password).catch(err => {
+    console.warn("[Google Sheets] Background customer sync warning:", err);
+  });
 
   const token = "usr_" + Math.random().toString(36).substring(2) + Date.now().toString(36);
   res.status(201).json({
