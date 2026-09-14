@@ -3,12 +3,14 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider, useToast } from "./context/ToastContext";
 import { CartProvider, useCart } from "./context/CartContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { LanguageProvider } from "./context/LanguageContext";
+import { LanguageProvider, useLanguage } from "./context/LanguageContext";
 import { Product } from "./types";
 import { DEFAULT_PRODUCTS } from "./data/defaultProducts";
 import { safeGetLocalStorage, safeSetLocalStorage } from "./utils/storage";
+import { getCategoryFromUrl, updateCategoryUrl } from "./utils/categoryRouting";
 import { Header } from "./components/Header";
 import { HeroSection } from "./components/HeroSection";
+import { CategoryPageBanner } from "./components/CategoryPageBanner";
 import { ProductGrid } from "./components/ProductGrid";
 import { ProductDetailModal } from "./components/ProductDetailModal";
 import { CartDrawer } from "./components/CartDrawer";
@@ -57,9 +59,13 @@ const StoreContent: React.FC = () => {
     return DEFAULT_PRODUCTS;
   });
 
+  const { language, getCategoryName } = useLanguage();
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  // Category state initialized directly from URL path, query (?category=), or hash
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => {
+    return getCategoryFromUrl(BASE_CATEGORIES) || "All";
+  });
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
   // Modals & Drawers
@@ -89,6 +95,49 @@ const StoreContent: React.FC = () => {
     });
     return Array.from(set);
   }, [products]);
+
+  // Handle URL change when selecting a category (updates browser address bar)
+  const handleSelectCategory = useCallback((cat: string, replace = false) => {
+    const targetCat = cat || "All";
+    setSelectedCategory(targetCat);
+    updateCategoryUrl(targetCat, replace);
+
+    // Scroll smoothly to top of page when changing category
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, []);
+
+  // Listen for browser Back/Forward navigation (popstate)
+  useEffect(() => {
+    const handlePopState = () => {
+      const catFromUrl = getCategoryFromUrl(dynamicCategories);
+      setSelectedCategory(catFromUrl || "All");
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [dynamicCategories]);
+
+  // Synchronize category if matching dynamic categories loaded from API/cache
+  useEffect(() => {
+    const catFromUrl = getCategoryFromUrl(dynamicCategories);
+    if (catFromUrl && catFromUrl !== selectedCategory) {
+      setSelectedCategory(catFromUrl);
+    }
+  }, [dynamicCategories]);
+
+  // Dynamically update document title to reflect category page
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (selectedCategory && selectedCategory !== "All") {
+        const catName = getCategoryName(selectedCategory);
+        document.title = `${catName} - নিরাপদ ক্রয় | Nirapod Kroy`;
+      } else {
+        document.title = "Nirapod Kroy | নিরাপদ ক্রয় - সব ধরনের বিশ্বস্ত পণ্য";
+      }
+    }
+  }, [selectedCategory, language, getCategoryName]);
 
   // Load products from static products.json, API, or local storage cache
   const fetchProducts = useCallback(async () => {
@@ -175,6 +224,7 @@ const StoreContent: React.FC = () => {
   }, [products, wishlistIds]);
 
   const handleExploreClick = () => {
+    handleSelectCategory("All");
     const catalogEl = document.getElementById("catalog-section");
     if (catalogEl) {
       catalogEl.scrollIntoView({ behavior: "smooth" });
@@ -182,7 +232,7 @@ const StoreContent: React.FC = () => {
   };
 
   const handleDealsClick = () => {
-    setSelectedCategory("All");
+    handleSelectCategory("All");
     setSearchQuery("");
     const catalogEl = document.getElementById("catalog-section");
     if (catalogEl) {
@@ -206,7 +256,7 @@ const StoreContent: React.FC = () => {
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         selectedCategory={selectedCategory}
-        setSelectedCategory={setSelectedCategory}
+        setSelectedCategory={handleSelectCategory}
         categories={dynamicCategories}
         onOpenTrackOrder={() => setIsTrackOrderOpen(true)}
         onOpenWishlist={() => setIsWishlistOpen(true)}
@@ -214,15 +264,26 @@ const StoreContent: React.FC = () => {
       />
 
       <main className="flex-1">
-        {/* Hero Carousel */}
-        <HeroSection onExploreClick={handleExploreClick} onDealsClick={handleDealsClick} />
+        {selectedCategory === "All" ? (
+          /* Full Hero Carousel shown on Home Page */
+          <HeroSection onExploreClick={handleExploreClick} onDealsClick={handleDealsClick} />
+        ) : (
+          /* Dedicated Category Page Banner with Breadcrumb, Title, Total Count & Share Link */
+          <CategoryPageBanner
+            category={selectedCategory}
+            totalProducts={products.filter((p) => p.category.toLowerCase() === selectedCategory.toLowerCase()).length}
+            onBackToHome={() => handleSelectCategory("All")}
+            onSelectCategory={handleSelectCategory}
+            categories={dynamicCategories}
+          />
+        )}
 
         {/* Product Catalog Grid */}
         <ProductGrid
           products={products}
           isLoading={isLoading}
           selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
+          setSelectedCategory={handleSelectCategory}
           categories={dynamicCategories}
           searchQuery={searchQuery}
           onQuickView={(prod) => setQuickViewProduct(prod)}
@@ -236,8 +297,10 @@ const StoreContent: React.FC = () => {
       {/* Footer */}
       <Footer
         onCategorySelect={(cat) => {
-          setSelectedCategory(cat);
-          handleExploreClick();
+          handleSelectCategory(cat);
+          if (cat === "All") {
+            handleExploreClick();
+          }
         }}
       />
 
@@ -269,8 +332,7 @@ const StoreContent: React.FC = () => {
         wishlistProducts={wishlistProducts}
         onRemoveFromWishlist={handleRemoveFromWishlist}
         onNavigateToCategory={(cat) => {
-          setSelectedCategory(cat);
-          handleExploreClick();
+          handleSelectCategory(cat);
         }}
       />
 

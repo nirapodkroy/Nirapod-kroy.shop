@@ -8,7 +8,7 @@ const SETTINGS_KEY = "nirapod_admin_settings";
 const ADMIN_TOKEN_KEY = "nirapod_admin_token";
 export const SUBSCRIBERS_KEY = "nirapod_subscribers";
 
-export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbwYakz5JjsuG3qKKPgwmbKUS7xQYXzWe0uV4rJMHU6OcNyN5zA4ulzt9B2R9SLdUXg/exec";
+export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4/exec";
 
 interface StoredCustomer extends CustomerUser {
   passwordHash: string;

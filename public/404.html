@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Redirecting - Nirapod Kroy</title>
+    <script type="text/javascript">
+      // SPA redirect for GitHub Pages custom domain / subpath
+      // Preserves the path, query, and hash
+      var path = window.location.pathname;
+      var search = window.location.search;
+      var hash = window.location.hash;
+      
+      // Remove leading slash for redirect param
+      var cleanPath = path.replace(/^\//, '');
+      var redirectUrl = '/' + (cleanPath ? '?p=' + encodeURIComponent(cleanPath) : '');
+      if (search) {
+        redirectUrl += (cleanPath ? '&' : '?') + search.substring(1);
+      }
+      if (hash) {
+        redirectUrl += hash;
+      }
+      
+      window.location.replace(redirectUrl);
+    </script>
+  </head>
+  <body>
+    <p>Redirecting to Nirapod Kroy...</p>
+  </body>
+</html>
