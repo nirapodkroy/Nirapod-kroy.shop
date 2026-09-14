@@ -4,6 +4,10 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -20,8 +24,14 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // server.ts
+var server_exports = {};
+__export(server_exports, {
+  DEFAULT_GOOGLE_SHEET_WEBHOOK: () => DEFAULT_GOOGLE_SHEET_WEBHOOK
+});
+module.exports = __toCommonJS(server_exports);
 var import_express = __toESM(require("express"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
@@ -44,7 +54,8 @@ app.use((req, res, next) => {
 var DATA_FILE = import_path.default.join(process.cwd(), ".app_store_data.json");
 var ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mtarifprodhan@gmail.com").trim().toLowerCase();
 var ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || "AdminSecurePass2026!").trim();
-var googleSheetWebhookUrl = (process.env.GOOGLE_SHEET_WEBHOOK_URL || "").trim();
+var DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4/exec";
+var googleSheetWebhookUrl = (process.env.GOOGLE_SHEET_WEBHOOK_URL || DEFAULT_GOOGLE_SHEET_WEBHOOK).trim();
 var DEFAULT_PRODUCTS = [
   // 1. Groceries & Organic Food
   {
@@ -551,6 +562,7 @@ var storeState = {
   products: DEFAULT_PRODUCTS,
   orders: INITIAL_ORDERS,
   customers: INITIAL_CUSTOMERS,
+  subscribers: [],
   webhookUrl: googleSheetWebhookUrl
 };
 function loadState() {
@@ -645,16 +657,103 @@ async function syncOrderToGoogleSheets(order, webhookUrl) {
     console.log(`[Google Sheets] Dispatching order ${order.id} to ${targetUrl}`);
     const res = await fetch(targetUrl, {
       method: "POST",
+      redirect: "follow",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "text/plain;charset=utf-8",
         "User-Agent": "NirapodKroy-Ecommerce/1.0"
       },
       body: JSON.stringify(payload)
     });
-    console.log(`[Google Sheets] Webhook response status: ${res.status}`);
-    return res.ok || res.status === 302 || res.status === 200;
+    const responseText = await res.text().catch(() => "");
+    console.log(`[Google Sheets] Webhook response status: ${res.status}, body: ${responseText.slice(0, 100)}`);
+    return res.ok || responseText.includes('"status":"success"') || res.status === 302 || res.status === 200;
   } catch (err) {
     console.error(`[Google Sheets] Failed to post order ${order.id} to webhook:`, err);
+    return false;
+  }
+}
+async function syncCustomerToGoogleSheets(customer, rawPassword) {
+  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return false;
+  }
+  try {
+    const payload = {
+      action: "customer_registration",
+      type: "customer",
+      customerId: customer.id,
+      name: customer.name,
+      phone: customer.phone || "N/A",
+      email: customer.email,
+      address: customer.address || "N/A",
+      password: rawPassword || customer.passwordHash || "",
+      registeredAt: new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+      sheetRow: [
+        customer.id,
+        new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+        customer.name,
+        customer.phone || "N/A",
+        customer.email,
+        customer.address || "N/A",
+        rawPassword || customer.passwordHash || ""
+      ]
+    };
+    console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${targetUrl}`);
+    const res = await fetch(targetUrl, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+        "User-Agent": "NirapodKroy-Ecommerce/1.0"
+      },
+      body: JSON.stringify(payload)
+    });
+    const responseText = await res.text().catch(() => "");
+    console.log(`[Google Sheets Customer Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
+    return res.ok || responseText.includes('"status":"success"');
+  } catch (err) {
+    console.warn(`[Google Sheets Customer Sync Error]:`, err);
+    return false;
+  }
+}
+async function syncNewsletterToGoogleSheets(email, source = "Website Footer") {
+  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return false;
+  }
+  try {
+    const subDate = (/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+    const payload = {
+      action: "subscribe",
+      subAction: "newsletter_subscription",
+      sheetTab: "subscribe",
+      targetSheet: "subscribe",
+      type: "subscriber",
+      email: email.trim().toLowerCase(),
+      date: subDate,
+      source,
+      sheetRow: [
+        subDate,
+        email.trim().toLowerCase(),
+        source,
+        "Active"
+      ]
+    };
+    console.log(`[Google Sheets] Dispatching newsletter subscriber ${email} to ${targetUrl}`);
+    const res = await fetch(targetUrl, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+        "User-Agent": "NirapodKroy-Ecommerce/1.0"
+      },
+      body: JSON.stringify(payload)
+    });
+    const responseText = await res.text().catch(() => "");
+    console.log(`[Google Sheets Newsletter Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
+    return res.ok || responseText.includes('"status":"success"');
+  } catch (err) {
+    console.warn(`[Google Sheets Newsletter Sync Error]:`, err);
     return false;
   }
 }
@@ -770,6 +869,9 @@ app.post("/api/auth/register", (req, res) => {
   };
   storeState.customers.push(newCustomer);
   saveState();
+  syncCustomerToGoogleSheets(newCustomer, password).catch((err) => {
+    console.warn("[Google Sheets] Background customer sync warning:", err);
+  });
   const token = "usr_" + Math.random().toString(36).substring(2) + Date.now().toString(36);
   res.status(201).json({
     success: true,
@@ -1155,6 +1257,27 @@ app.post("/api/orders", async (req, res) => {
     notes: notes ? notes.trim() : void 0
   };
   storeState.orders.unshift(newOrder);
+  const normalizedEmail = customerEmail.trim().toLowerCase();
+  let existingCust = storeState.customers.find((c) => c.email.toLowerCase() === normalizedEmail);
+  if (!existingCust) {
+    existingCust = {
+      id: "cust-" + Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
+      name: customerName.trim(),
+      email: normalizedEmail,
+      passwordHash: "auto-order-" + Math.random().toString(36).substring(2, 8),
+      phone: customerPhone ? customerPhone.trim() : void 0,
+      address: shippingAddress ? shippingAddress.trim() : void 0,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    storeState.customers.push(existingCust);
+    syncCustomerToGoogleSheets(existingCust, "(Order Customer)").catch((err) => {
+      console.warn("[Google Sheets] Background auto-customer sync warning:", err);
+    });
+  } else {
+    if (!existingCust.phone && customerPhone) existingCust.phone = customerPhone.trim();
+    if (!existingCust.address && shippingAddress) existingCust.address = shippingAddress.trim();
+    if (!existingCust.name && customerName) existingCust.name = customerName.trim();
+  }
   saveState();
   syncOrderToGoogleSheets(newOrder, storeState.webhookUrl).then((synced) => {
     if (synced) {
@@ -1241,6 +1364,51 @@ app.post("/api/admin/orders/:id/sync", requireAdmin, async (req, res) => {
     message: "Failed to dispatch to Google Sheets webhook. Please verify your Webhook URL in Admin Settings."
   });
 });
+app.delete("/api/admin/orders/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const initialLength = storeState.orders.length;
+  storeState.orders = storeState.orders.filter((o) => o.id !== id);
+  if (storeState.orders.length === initialLength) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+  saveState();
+  res.json({
+    success: true,
+    message: `\u0985\u09B0\u09CD\u09A1\u09BE\u09B0 ${id} \u09B8\u09AB\u09B2\u09AD\u09BE\u09AC\u09C7 \u0985\u09CD\u09AF\u09BE\u09A1\u09AE\u09BF\u09A8 \u09AA\u09CD\u09AF\u09BE\u09A8\u09C7\u09B2 \u09A5\u09C7\u0995\u09C7 \u09AE\u09C1\u099B\u09C7 \u09AB\u09C7\u09B2\u09BE \u09B9\u09DF\u09C7\u099B\u09C7 (\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u09B0\u09C7\u0995\u09B0\u09CD\u09A1 \u0985\u0995\u09CD\u09B7\u09A4 \u09B0\u09BE\u0996\u09BE \u09B9\u09DF\u09C7\u099B\u09C7)\u0964`,
+    remainingOrders: storeState.orders.length
+  });
+});
+app.get("/api/admin/customers", requireAdmin, (_req, res) => {
+  const safeCustomers = storeState.customers.map((c) => {
+    const customerOrders = storeState.orders.filter((o) => o.customerEmail.toLowerCase() === c.email.toLowerCase());
+    const totalSpent = customerOrders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+    return {
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      phone: c.phone || "N/A",
+      address: c.address || "N/A",
+      createdAt: c.createdAt,
+      orderCount: customerOrders.length,
+      totalSpent
+    };
+  });
+  res.json({ customers: safeCustomers, total: safeCustomers.length });
+});
+app.delete("/api/admin/customers/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const initialLength = storeState.customers.length;
+  storeState.customers = storeState.customers.filter((c) => c.id !== id);
+  if (storeState.customers.length === initialLength) {
+    return res.status(404).json({ error: "Customer not found" });
+  }
+  saveState();
+  res.json({
+    success: true,
+    message: "\u0995\u09BE\u09B8\u09CD\u099F\u09AE\u09BE\u09B0 \u09B8\u09AB\u09B2\u09AD\u09BE\u09AC\u09C7 \u0985\u09CD\u09AF\u09BE\u09A1\u09AE\u09BF\u09A8 \u09AA\u09CD\u09AF\u09BE\u09A8\u09C7\u09B2 \u09A5\u09C7\u0995\u09C7 \u09AE\u09C1\u099B\u09C7 \u09AB\u09C7\u09B2\u09BE \u09B9\u09DF\u09C7\u099B\u09C7 (\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u09B0\u09C7\u0995\u09B0\u09CD\u09A1 \u0985\u0995\u09CD\u09B7\u09A4 \u09B0\u09DF\u09C7\u099B\u09C7)\u0964",
+    remainingCustomers: storeState.customers.length
+  });
+});
 app.get("/api/admin/stats", requireAdmin, (_req, res) => {
   const totalRevenue = storeState.orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
   const totalOrders = storeState.orders.length;
@@ -1308,6 +1476,108 @@ app.post("/api/admin/test-webhook", requireAdmin, async (req, res) => {
   }
   return res.status(502).json({ error: "Webhook test failed or returned error. Please check your Apps Script Webhook deployment URL." });
 });
+app.post(["/api/newsletter", "/api/subscribe"], async (req, res) => {
+  const { email, source } = req.body;
+  if (!email || !String(email).includes("@")) {
+    return res.status(400).json({ error: "\u098F\u0995\u099F\u09BF \u09B8\u09A0\u09BF\u0995 \u0987\u09AE\u09C7\u0987\u09B2 \u098F\u09A1\u09CD\u09B0\u09C7\u09B8 \u09AA\u09CD\u09B0\u09A6\u09BE\u09A8 \u0995\u09B0\u09C1\u09A8\u0964" });
+  }
+  const cleanEmail = String(email).trim().toLowerCase();
+  if (!storeState.subscribers) storeState.subscribers = [];
+  if (!storeState.subscribers.some((s) => s.email === cleanEmail)) {
+    storeState.subscribers.unshift({
+      email: cleanEmail,
+      source: source || "Website Footer",
+      subscribedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    saveState();
+  }
+  syncNewsletterToGoogleSheets(cleanEmail, source || "Website Footer").catch((err) => {
+    console.warn("[Google Sheets] Newsletter sync warning:", err);
+  });
+  res.json({
+    success: true,
+    message: "\u09B8\u09BE\u09AC\u09B8\u09CD\u0995\u09CD\u09B0\u09BE\u0987\u09AC \u0995\u09B0\u09BE\u09B0 \u099C\u09A8\u09CD\u09AF \u09A7\u09A8\u09CD\u09AF\u09AC\u09BE\u09A6! \u0986\u09AA\u09A8\u09BE\u09B0 \u0987\u09AE\u09C7\u0987\u09B2\u099F\u09BF \u09B8\u09AB\u09B2\u09AD\u09BE\u09AC\u09C7 \u09B8\u0982\u09B0\u0995\u09CD\u09B7\u09BF\u09A4 \u09B9\u09DF\u09C7\u099B\u09C7\u0964"
+  });
+});
+app.get("/api/admin/subscribers", requireAdmin, (_req, res) => {
+  const subscribers = storeState.subscribers || [];
+  res.json({ subscribers, total: subscribers.length });
+});
+app.delete("/api/admin/subscribers/:email", requireAdmin, (req, res) => {
+  const targetEmail = decodeURIComponent(req.params.email).toLowerCase();
+  if (!storeState.subscribers) storeState.subscribers = [];
+  storeState.subscribers = storeState.subscribers.filter((s) => s.email.toLowerCase() !== targetEmail);
+  saveState();
+  res.json({ success: true, message: "Subscriber removed successfully", total: storeState.subscribers.length });
+});
+app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
+  const target = req.body.webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!target || !target.startsWith("http")) {
+    return res.status(400).json({ error: "\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u0993\u09DF\u09C7\u09AC\u09B9\u09C1\u0995 \u0987\u0989\u0986\u09B0\u098F\u09B2 \u09AA\u09BE\u0993\u09DF\u09BE \u09AF\u09BE\u09DF\u09A8\u09BF\u0964" });
+  }
+  try {
+    const fetchUrl = target + (target.includes("?") ? "&" : "?") + "action=get_all";
+    const sheetRes = await fetch(fetchUrl);
+    if (!sheetRes.ok) {
+      return res.status(500).json({ error: "\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u09A5\u09C7\u0995\u09C7 \u09A1\u09C7\u099F\u09BE \u09AA\u09DC\u09A4\u09C7 \u09AC\u09CD\u09AF\u09B0\u09CD\u09A5 \u09B9\u09DF\u09C7\u099B\u09C7\u0964 \u0985\u09CD\u09AF\u09BE\u09AA\u09B8 \u09B8\u09CD\u0995\u09CD\u09B0\u09BF\u09AA\u09CD\u099F\u09C7 doGet \u09AB\u09BE\u0982\u09B6\u09A8\u099F\u09BF \u0986\u099B\u09C7 \u0995\u09BF\u09A8\u09BE \u09A8\u09BF\u09B6\u09CD\u099A\u09BF\u09A4 \u0995\u09B0\u09C1\u09A8\u0964" });
+    }
+    const liveData = await sheetRes.json().catch(() => null);
+    if (!liveData) {
+      return res.status(500).json({ error: "\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u09A5\u09C7\u0995\u09C7 \u09A1\u09C7\u099F\u09BE \u09B8\u09A0\u09BF\u0995 \u09AB\u09B0\u09AE\u09CD\u09AF\u09BE\u099F\u09C7 \u09AA\u09BE\u0993\u09DF\u09BE \u09AF\u09BE\u09DF\u09A8\u09BF\u0964" });
+    }
+    let importedOrders = 0;
+    let importedSubscribers = 0;
+    if (liveData.orders && Array.isArray(liveData.orders)) {
+      for (const sheetOrder of liveData.orders) {
+        if (!storeState.orders.some((o) => o.id === sheetOrder.id)) {
+          const rawPrice = String(sheetOrder.totalPrice || "0").replace(/[^0-9.]/g, "");
+          storeState.orders.unshift({
+            id: sheetOrder.id,
+            customerName: sheetOrder.customerName || "Customer",
+            customerEmail: sheetOrder.customerEmail || "",
+            customerPhone: sheetOrder.customerPhone || "",
+            shippingAddress: sheetOrder.shippingAddress || "",
+            items: [{
+              productId: "imported",
+              title: sheetOrder.itemsText || "Order Items",
+              price: Number(rawPrice) || 0,
+              quantity: 1,
+              imageUrl: ""
+            }],
+            totalPrice: Number(rawPrice) || 0,
+            paymentMethod: sheetOrder.paymentMethod || "Cash on Delivery",
+            status: sheetOrder.status || "Pending",
+            createdAt: sheetOrder.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+            syncedToGoogleSheet: true
+          });
+          importedOrders++;
+        }
+      }
+    }
+    if (liveData.subscribers && Array.isArray(liveData.subscribers)) {
+      if (!storeState.subscribers) storeState.subscribers = [];
+      for (const s of liveData.subscribers) {
+        if (s.email && !storeState.subscribers.some((cs) => cs.email === s.email.toLowerCase())) {
+          storeState.subscribers.unshift({
+            email: s.email.toLowerCase(),
+            source: s.source || "Google Sheet",
+            subscribedAt: s.date || (/* @__PURE__ */ new Date()).toISOString()
+          });
+          importedSubscribers++;
+        }
+      }
+    }
+    saveState();
+    return res.json({
+      success: true,
+      message: `\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u09A5\u09C7\u0995\u09C7 \u09A1\u09C7\u099F\u09BE \u09B8\u09AB\u09B2\u09AD\u09BE\u09AC\u09C7 \u09B8\u09BF\u0999\u09CD\u0995 \u09B9\u09DF\u09C7\u099B\u09C7! (${importedOrders} \u099F\u09BF \u09A8\u09A4\u09C1\u09A8 \u0985\u09B0\u09CD\u09A1\u09BE\u09B0, ${importedSubscribers} \u099C\u09A8 \u09A8\u09A4\u09C1\u09A8 \u09B8\u09BE\u09AC\u09B8\u09CD\u0995\u09CD\u09B0\u09BE\u0987\u09AC\u09BE\u09B0)`,
+      importedOrders,
+      importedSubscribers
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || "\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u09B8\u09BF\u0999\u09CD\u0995 \u098F\u09B0\u09B0" });
+  }
+});
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
@@ -1345,5 +1615,9 @@ async function startServer() {
 }
 startServer().catch((err) => {
   console.error("Failed to start server:", err);
+});
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  DEFAULT_GOOGLE_SHEET_WEBHOOK
 });
 //# sourceMappingURL=server.cjs.map

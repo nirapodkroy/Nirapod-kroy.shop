@@ -7,24 +7,39 @@ const docs = path.join(root, 'docs');
 const assets = path.join(root, 'assets');
 
 try {
-  // 1. Ensure 404.html in dist and root for GitHub Pages client-side routing
-  if (fs.existsSync(path.join(dist, 'index.html'))) {
-    fs.copyFileSync(path.join(dist, 'index.html'), path.join(dist, '404.html'));
-    fs.copyFileSync(path.join(dist, 'index.html'), path.join(root, '404.html'));
+  // 1. Ensure <base href="/" /> is present in dist/index.html
+  let indexHtmlContent = '';
+  const distIndexFile = path.join(dist, 'index.html');
+  if (fs.existsSync(distIndexFile)) {
+    indexHtmlContent = fs.readFileSync(distIndexFile, 'utf-8');
+    if (!indexHtmlContent.includes('<base href="/"')) {
+      indexHtmlContent = indexHtmlContent.replace('<head>', '<head>\n    <base href="/" />');
+      fs.writeFileSync(distIndexFile, indexHtmlContent);
+    }
+
+    // 2. Sync index.html to root and docs
+    fs.writeFileSync(path.join(root, 'index.html'), indexHtmlContent);
+    if (!fs.existsSync(docs)) fs.mkdirSync(docs, { recursive: true });
+    fs.writeFileSync(path.join(docs, 'index.html'), indexHtmlContent);
+
+    // 3. Sync 404.html in dist, docs, and root for GitHub Pages client-side routing
+    fs.writeFileSync(path.join(dist, '404.html'), indexHtmlContent);
+    fs.writeFileSync(path.join(docs, '404.html'), indexHtmlContent);
+    fs.writeFileSync(path.join(root, '404.html'), indexHtmlContent);
   }
 
-  // 2. Sync dist to docs (for users with Pages set to /docs folder)
+  // 4. Sync dist to docs (for users with Pages set to /docs folder)
   if (fs.existsSync(dist)) {
     fs.cpSync(dist, docs, { recursive: true, force: true });
   }
 
-  // 3. Copy dist/assets to root assets directory (for users with Pages set to / root)
+  // 5. Copy dist/assets to root assets directory (for users with Pages set to / root)
   const distAssets = path.join(dist, 'assets');
   if (fs.existsSync(distAssets)) {
     fs.cpSync(distAssets, assets, { recursive: true, force: true });
   }
 
-  // 4. Ensure CNAME and favicon are everywhere
+  // 6. Ensure CNAME and favicon are everywhere
   let cnameContent = 'nirapodkroy.shop\n';
   if (fs.existsSync(path.join(root, 'CNAME'))) {
     const existing = fs.readFileSync(path.join(root, 'CNAME'), 'utf-8').trim();
@@ -43,7 +58,7 @@ try {
     fs.writeFileSync(path.join(docs, 'CNAME'), cnameContent);
   }
 
-  // 5. Sync favicon.svg
+  // 7. Sync favicon.svg
   const faviconPath = path.join(root, 'public', 'favicon.svg');
   if (fs.existsSync(faviconPath)) {
     fs.copyFileSync(faviconPath, path.join(root, 'favicon.svg'));
@@ -55,7 +70,7 @@ try {
     }
   }
 
-  // 6. Ensure products.json is synced across public, dist, docs, and assets
+  // 8. Ensure products.json is synced across public, dist, docs, and assets
   // public/products.json is the PRIMARY source of truth for GitHub Pages & deploys
   let productsJsonStr = null;
   const publicProductsFile = path.join(root, 'public', 'products.json');
@@ -103,7 +118,7 @@ try {
     }
   }
 
-  // 7. Sync sitemap.xml and robots.txt
+  // 9. Sync sitemap.xml and robots.txt
   ['sitemap.xml', 'robots.txt'].forEach(file => {
     const srcFile = path.join(root, 'public', file);
     if (fs.existsSync(srcFile)) {
@@ -113,6 +128,65 @@ try {
       fs.copyFileSync(srcFile, path.join(root, file));
     }
   });
+
+  // 10. Generate physical static HTML directories for ALL Category Pages
+  // This guarantees that direct visits like https://nirapodkroy.shop/baby-and-kids return HTTP 200 on GitHub Pages
+  if (indexHtmlContent) {
+    const categoriesToGenerate = [
+      { slug: 'baby-and-kids', bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
+      { slug: 'baby-kids', bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
+      { slug: 'kids', bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
+      { slug: 'baby', bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
+      { slug: 'shishu', bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
+      { slug: 'honey', bn: 'মধু ও সুইটনার', en: 'Honey' },
+      { slug: 'modhu', bn: 'মধু ও সুইটনার', en: 'Honey' },
+      { slug: 'oil-and-ghee', bn: 'তেল ও ঘি', en: 'Oil & Ghee' },
+      { slug: 'oil-ghee', bn: 'তেল ও ঘি', en: 'Oil & Ghee' },
+      { slug: 'dates', bn: 'প্রিমিয়াম খেজুর', en: 'Dates' },
+      { slug: 'khejur', bn: 'প্রিমিয়াম খেজুর', en: 'Dates' },
+      { slug: 'spices', bn: 'খাঁটি মশলা', en: 'Spices' },
+      { slug: 'moshla', bn: 'খাঁটি মশলা', en: 'Spices' },
+      { slug: 'nuts-and-seeds', bn: 'বাদাম ও বীজ', en: 'Nuts & Seeds' },
+      { slug: 'badam', bn: 'বাদাম ও বীজ', en: 'Nuts & Seeds' },
+      { slug: 'beverage', bn: 'চা ও পানীয়', en: 'Beverage' },
+      { slug: 'tea', bn: 'চা ও পানীয়', en: 'Beverage' },
+      { slug: 'rice', bn: 'প্রিমিয়াম চাল', en: 'Rice' },
+      { slug: 'chal', bn: 'প্রিমিয়াম চাল', en: 'Rice' },
+      { slug: 'flours-and-lentils', bn: 'আটা ও ডাল', en: 'Flours & Lentils' },
+      { slug: 'groceries', bn: 'মুদি ও খাদ্য', en: 'Groceries' },
+      { slug: 'sports', bn: 'খেলাধুলা', en: 'Sports' },
+      { slug: 'electronics', bn: 'ইলেকট্রনিক্স', en: 'Electronics' },
+      { slug: 'fashion', bn: 'ফ্যাশন ও পোশাক', en: 'Fashion' },
+      { slug: 'health-and-beauty', bn: 'সৌন্দর্য ও স্বাস্থ্য', en: 'Health & Beauty' },
+      { slug: 'home-and-kitchen', bn: 'গৃহস্থালি ও রান্নাঘর', en: 'Home & Kitchen' },
+      { slug: 'books', bn: 'বই ও সাহিত্য', en: 'Books' }
+    ];
+
+    const targets = [dist, docs, root];
+
+    categoriesToGenerate.forEach(item => {
+      // Customize title and meta for each category
+      const customHtml = indexHtmlContent
+        .replace(/<title>.*?<\/title>/, `<title>${item.bn} (${item.en}) - নিরাপদ ক্রয় | Nirapod Kroy</title>`)
+        .replace(/<meta property="og:title" content=".*?" \/>/, `<meta property="og:title" content="${item.bn} | নিরাপদ ক্রয়" />`);
+
+      targets.forEach(targetDir => {
+        if (fs.existsSync(targetDir)) {
+          // 1. Direct path /slug
+          const directDir = path.join(targetDir, item.slug);
+          if (!fs.existsSync(directDir)) fs.mkdirSync(directDir, { recursive: true });
+          fs.writeFileSync(path.join(directDir, 'index.html'), customHtml);
+
+          // 2. Prefix path /category/slug
+          const categorySubDir = path.join(targetDir, 'category', item.slug);
+          if (!fs.existsSync(categorySubDir)) fs.mkdirSync(categorySubDir, { recursive: true });
+          fs.writeFileSync(path.join(categorySubDir, 'index.html'), customHtml);
+        }
+      });
+    });
+
+    console.log(`[Postbuild] Successfully created ${categoriesToGenerate.length} static category pages in dist, docs, and root!`);
+  }
 
   console.log('[Postbuild] Successfully synced dist, docs, assets, 404.html, CNAME, favicon, products.json, and sitemap.xml!');
 } catch (err) {

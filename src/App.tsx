@@ -122,8 +122,17 @@ const StoreContent: React.FC = () => {
   // Synchronize category if matching dynamic categories loaded from API/cache
   useEffect(() => {
     const catFromUrl = getCategoryFromUrl(dynamicCategories);
-    if (catFromUrl && catFromUrl !== selectedCategory) {
-      setSelectedCategory(catFromUrl);
+    if (catFromUrl) {
+      if (catFromUrl !== selectedCategory) {
+        setSelectedCategory(catFromUrl);
+      }
+      // If user landed via 404 redirect (?p=slug) or query (?category=slug), replace with clean slug in address bar
+      if (typeof window !== "undefined") {
+        const search = window.location.search;
+        if (search.includes("p=") || search.includes("category=") || search.includes("c=")) {
+          updateCategoryUrl(catFromUrl, true);
+        }
+      }
     }
   }, [dynamicCategories]);
 
