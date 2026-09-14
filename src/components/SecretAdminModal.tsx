@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { Product, Order, AdminStats, AdminCustomer } from "../types";
@@ -46,6 +46,7 @@ import {
   Mail
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { BASE_CATEGORIES, categoryToSlug } from "../data/categories";
 
 interface SecretAdminModalProps {
   products: Product[];
@@ -106,6 +107,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [webhookUrl, setWebhookUrl] = useState("");
   const [isSavingWebhook, setIsSavingWebhook] = useState(false);
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
+  const [isTestingSubscribeWebhook, setIsTestingSubscribeWebhook] = useState(false);
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
 
@@ -137,6 +139,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [formPrice, setFormPrice] = useState("");
   const [formRegularPrice, setFormRegularPrice] = useState("");
   const [formCategory, setFormCategory] = useState("Groceries");
+  const [customCategoryName, setCustomCategoryName] = useState("");
   const [formStock, setFormStock] = useState("25");
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formImages, setFormImages] = useState<string[]>([]);
@@ -898,7 +901,15 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setFormDescription(prod.description);
     setFormPrice(String(prod.price));
     setFormRegularPrice(prod.regularPrice ? String(prod.regularPrice) : "");
-    setFormCategory(prod.category);
+    const knownCategories = BASE_CATEGORIES.filter(c => c !== "All");
+    const isStandard = knownCategories.some(c => c.toLowerCase() === (prod.category || "").trim().toLowerCase());
+    if (isStandard) {
+      setFormCategory(prod.category);
+      setCustomCategoryName("");
+    } else {
+      setFormCategory("__CUSTOM__");
+      setCustomCategoryName(prod.category || "");
+    }
     setFormStock(String(prod.stock));
     const existingImgs = (prod.images && prod.images.length > 0)
       ? prod.images
@@ -971,12 +982,14 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         ? (finalImagesList.includes(primaryImg) ? finalImagesList : [primaryImg, ...finalImagesList])
         : [primaryImg];
 
+      const resolvedCategory = (formCategory === "__CUSTOM__" ? customCategoryName.trim() : formCategory.trim()) || "Groceries";
+
       const payload: Partial<Product> = {
         title: formTitle.trim(),
         description: formDescription.trim(),
         price: Number(formPrice),
         regularPrice: formRegularPrice ? Number(formRegularPrice) : undefined,
-        category: formCategory.trim(),
+        category: resolvedCategory,
         stock: formIsAffiliate ? 999 : Number(formStock) || 0,
         imageUrl: primaryImg,
         images: payloadImages,
@@ -1327,7 +1340,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  // Test Webhook
+  // Test Order Webhook
   const handleTestWebhook = async () => {
     setIsTestingWebhook(true);
     try {
@@ -1342,9 +1355,9 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
 
       const data = await res.json();
       if (res.ok) {
-        addToast(data.message || "Webhook test passed! Check your Google Sheet.", "success");
+        addToast(data.message || "টেস্ট অর্ডার সফলভাবে পাঠানো হয়েছে! গুগল শিটের Orders/Customer_Order_Tracking ট্যাবে চেক করুন।", "success");
       } else {
-        addToast(data.error || "Webhook test failed.", "error");
+        addToast(data.error || "Webhook test failed. অনুগ্রহ করে আপনার স্ক্রিপ্ট ডিপ্লয়মেন্ট চেক করুন।", "error");
       }
     } catch {
       addToast("Webhook test failed.", "error");
@@ -1353,14 +1366,60 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  const sampleAppsScriptCode = `// 1. ডেটা পড়ার জন্য (GET Request - Live Google Sheets Sync)
+  // Test Subscribe Webhook
+  const handleTestSubscribeWebhook = async () => {
+    setIsTestingSubscribeWebhook(true);
+    try {
+      const res = await fetch("/api/admin/test-subscribe-webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ url: webhookUrl })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        addToast(data.message || "সাবস্ক্রাইব টেস্ট সফল! গুগল শিটের 'subscribe' ট্যাবে দেখুন।", "success");
+      } else {
+        addToast(data.error || "Subscribe Webhook test failed. নতুন ভার্সন ডিপ্লয় করা হয়েছে কিনা চেক করুন।", "error");
+      }
+    } catch {
+      addToast("Subscribe Webhook test failed.", "error");
+    } finally {
+      setIsTestingSubscribeWebhook(false);
+    }
+  };
+
+  // Memoized categories combining standard + products
+  const availableAdminCategories = useMemo(() => {
+    const set = new Set<string>(BASE_CATEGORIES.filter(c => c !== "All"));
+    if (Array.isArray(products)) {
+      products.forEach(p => {
+        if (p.category && typeof p.category === "string" && p.category.trim()) {
+          set.add(p.category.trim());
+        }
+      });
+    }
+    return Array.from(set);
+  }, [products]);
+
+  const sampleAppsScriptCode = `// ==========================================
+// নিরপদ ক্রয় (Nirapod Kroy) - Master Google Sheets Webhook
+// Support for: Orders, Customers, and Subscribe Tabs
+// ==========================================
+
+// 1. ডেটা পড়ার জন্য (GET Request - Live Google Sheets Sync)
 function doGet(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var result = { orders: [], customers: [], subscribers: [] };
     
-    // Orders tab
-    var orderSheet = ss.getSheetByName("Orders") || ss.getSheetByName("অর্ডার");
+    // 1. Orders tab (Customer_Order_Tracking অথবা Orders)
+    var orderSheet = ss.getSheetByName("Customer_Order_Tracking") || 
+                     ss.getSheetByName("Orders") || 
+                     ss.getSheetByName("অর্ডার");
     if (orderSheet && orderSheet.getLastRow() > 1) {
       var rows = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, 10).getValues();
       result.orders = rows.map(function(r) {
@@ -1379,8 +1438,11 @@ function doGet(e) {
       });
     }
 
-    // Subscribers tab ("subscribe")
-    var subSheet = ss.getSheetByName("subscribe") || ss.getSheetByName("Subscribe") || ss.getSheetByName("Subscribers") || ss.getSheetByName("সাবস্ক্রাইব");
+    // 2. Subscribers tab ("subscribe")
+    var subSheet = ss.getSheetByName("subscribe") || 
+                   ss.getSheetByName("Subscribe") || 
+                   ss.getSheetByName("Subscribers") || 
+                   ss.getSheetByName("সাবস্ক্রাইব");
     if (subSheet && subSheet.getLastRow() > 1) {
       var sRows = subSheet.getRange(2, 1, subSheet.getLastRow() - 1, 4).getValues();
       result.subscribers = sRows.map(function(r) {
@@ -1401,14 +1463,98 @@ function doGet(e) {
   }
 }
 
-// 2. নতুন ডেটা যুক্ত করার জন্য (POST Request - Orders, Registrations, Newsletter)
+// 2. নতুন ডেটা যুক্ত করার জন্য (POST Request - Orders, Customers, Newsletter)
 function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var data = JSON.parse(e.postData.contents);
+    var data = {};
     
-    // 1. গ্রাহক রেজিস্ট্রেশন (Customer Registration: Name, Phone, Email, Address, Password)
-    if (data.action === "customer_registration" || data.type === "customer") {
+    if (e && e.postData && e.postData.contents) {
+      try {
+        data = JSON.parse(e.postData.contents);
+      } catch (pe) {
+        data = e.parameter || {};
+      }
+    } else if (e && e.parameter) {
+      data = e.parameter;
+    }
+    
+    // সাবস্ক্রাইবার বা নিউজলেটার নির্ধারণ (Strict Check + Fallback Heuristics)
+    var isSubscriber = Boolean(
+      data.action === "subscribe" || 
+      data.action === "newsletter_subscription" || 
+      data.type === "subscriber" ||
+      data.sheetTab === "subscribe" ||
+      data.targetSheet === "subscribe" ||
+      (e && e.parameter && (e.parameter.tab === "subscribe" || e.parameter.type === "subscriber" || e.parameter.action === "subscribe")) ||
+      // Safeguard Heuristic: Row length 4 with @ or footer in row
+      (data.sheetRow && data.sheetRow.length === 4 && (
+        String(data.sheetRow[1]).indexOf("@") !== -1 ||
+        String(data.sheetRow[2]).toLowerCase().indexOf("footer") !== -1 ||
+        String(data.sheetRow[3]).toLowerCase() === "active"
+      ))
+    );
+
+    // গ্রাহক রেজিস্ট্রেশন চেক
+    var isCustomer = Boolean(
+      data.action === "customer_registration" || 
+      data.type === "customer" ||
+      (e && e.parameter && e.parameter.type === "customer") ||
+      (data.sheetRow && data.sheetRow.length === 7 && String(data.sheetRow[0]).indexOf("CUST-") !== -1)
+    );
+
+    // ===============================================
+    // ১. নিউজলেটার / সাবস্ক্রাইবার -> strictly "subscribe" ট্যাবে
+    // ===============================================
+    if (isSubscriber) {
+      var subSheet = ss.getSheetByName("subscribe") || 
+                     ss.getSheetByName("Subscribe") || 
+                     ss.getSheetByName("Subscribers") || 
+                     ss.getSheetByName("সাবস্ক্রাইব");
+      if (!subSheet) {
+        subSheet = ss.insertSheet("subscribe");
+      }
+      if (subSheet.getLastRow() === 0) {
+        subSheet.appendRow(["Subscription Date", "Email", "Source", "Status"]);
+        subSheet.getRange(1, 1, 1, 4).setFontWeight("bold").setBackground("#fff3cd");
+      }
+
+      var targetEmail = String(data.email || (data.sheetRow && data.sheetRow[1]) || "").trim().toLowerCase();
+      var isDuplicate = false;
+      if (subSheet.getLastRow() > 1 && targetEmail) {
+        var existingEmails = subSheet.getRange(2, 2, subSheet.getLastRow() - 1, 1).getValues();
+        for (var s = 0; s < existingEmails.length; s++) {
+          if (String(existingEmails[s][0]).trim().toLowerCase() === targetEmail) {
+            isDuplicate = true;
+            break;
+          }
+        }
+      }
+
+      if (!isDuplicate) {
+        var rowToAppend = data.sheetRow;
+        if (!rowToAppend || rowToAppend.length < 4) {
+          rowToAppend = [
+            data.date || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+            targetEmail,
+            data.source || "Website Footer",
+            "Active"
+          ];
+        }
+        subSheet.appendRow(rowToAppend);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: "success", 
+        target: "subscribe",
+        duplicate: isDuplicate 
+      })).setMimeType(ContentService.MimeType.JSON);
+    } 
+
+    // ===============================================
+    // ২. গ্রাহক নিবন্ধন -> strictly "Customers" ট্যাবে
+    // ===============================================
+    else if (isCustomer) {
       var customerSheet = ss.getSheetByName("Customers") || ss.getSheetByName("গ্রাহক_নিবন্ধন");
       if (!customerSheet) {
         customerSheet = ss.insertSheet("Customers");
@@ -1422,44 +1568,18 @@ function doPost(e) {
       if (data.sheetRow) {
         customerSheet.appendRow(data.sheetRow);
       }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", target: "Customers" }))
+        .setMimeType(ContentService.MimeType.JSON);
     } 
-    // 2. নিউজলেটার / সাবস্ক্রাইবার ("subscribe" ট্যাবে ডেটা সংরক্ষণ ও ডুপ্লিকেট রোধ)
-    else if (
-      data.action === "subscribe" || 
-      data.action === "newsletter_subscription" || 
-      data.type === "subscriber" ||
-      data.sheetTab === "subscribe" ||
-      data.targetSheet === "subscribe"
-    ) {
-      var subSheet = ss.getSheetByName("subscribe") || ss.getSheetByName("Subscribe") || ss.getSheetByName("Subscribers") || ss.getSheetByName("সাবস্ক্রাইব");
-      if (!subSheet) {
-        subSheet = ss.insertSheet("subscribe");
-      }
-      if (subSheet.getLastRow() === 0) {
-        subSheet.appendRow(["Subscription Date", "Email", "Source", "Status"]);
-        subSheet.getRange(1, 1, 1, 4).setFontWeight("bold").setBackground("#fff3cd");
-      }
 
-      // একই ইমেইল ২ বার যেন না আসে (Prevent Duplication)
-      var targetEmail = String(data.email || (data.sheetRow && data.sheetRow[1]) || "").trim().toLowerCase();
-      var isDuplicate = false;
-      if (subSheet.getLastRow() > 1 && targetEmail) {
-        var existingData = subSheet.getRange(2, 2, subSheet.getLastRow() - 1, 1).getValues();
-        for (var s = 0; s < existingData.length; s++) {
-          if (String(existingData[s][0]).trim().toLowerCase() === targetEmail) {
-            isDuplicate = true;
-            break;
-          }
-        }
-      }
-
-      if (!isDuplicate && data.sheetRow) {
-        subSheet.appendRow(data.sheetRow);
-      }
-    }
-    // 3. নতুন অর্ডার (New Customer Orders)
+    // ===============================================
+    // ৩. নতুন অর্ডার -> strictly "Customer_Order_Tracking" বা "Orders" ট্যাবে
+    // ===============================================
     else {
-      var orderSheet = ss.getSheetByName("Orders") || ss.getSheetByName("অর্ডার") || ss.getActiveSheet();
+      var orderSheet = ss.getSheetByName("Customer_Order_Tracking") || 
+                       ss.getSheetByName("Orders") || 
+                       ss.getSheetByName("অর্ডার") || 
+                       ss.getActiveSheet();
       if (orderSheet.getLastRow() === 0) {
         orderSheet.appendRow([
           "Order ID", "Date/Time", "Customer Name", "Customer Email", 
@@ -1471,10 +1591,9 @@ function doPost(e) {
       if (data.sheetRow) {
         orderSheet.appendRow(data.sheetRow);
       }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", target: orderSheet.getName() }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
-    
-    return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
-      .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -2696,28 +2815,38 @@ function doPost(e) {
                         <label className="block text-xs font-semibold text-zinc-300 mb-1">
                           Google Apps Script Webhook URL
                         </label>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <input
                             type="url"
                             placeholder="https://script.google.com/macros/s/.../exec"
                             value={webhookUrl}
                             onChange={(e) => setWebhookUrl(e.target.value)}
-                            className="flex-1 px-3.5 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="flex-1 min-w-[240px] px-3.5 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                           />
                           <button
                             onClick={handleSaveWebhook}
                             disabled={isSavingWebhook}
-                            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors"
+                            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs transition-colors"
                           >
                             {isSavingWebhook ? "Saving..." : "Save URL"}
                           </button>
                           <button
                             onClick={handleTestWebhook}
-                            disabled={isTestingWebhook}
-                            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-xs transition-colors"
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white font-bold text-xs transition-colors"
+                            title="অর্ডার ডেটা টেস্ট করতে চাপুন"
                           >
-                            <Send className="w-3.5 h-3.5" />
-                            <span>{isTestingWebhook ? "Testing..." : "Test Webhook"}</span>
+                            <Send className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>{isTestingWebhook ? "অর্ডার টেস্ট..." : "🧪 টেস্ট অর্ডার"}</span>
+                          </button>
+                          <button
+                            onClick={handleTestSubscribeWebhook}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 disabled:opacity-50 text-amber-200 font-bold text-xs transition-colors"
+                            title="সাবস্ক্রাইব ডেটা টেস্ট করতে চাপুন"
+                          >
+                            <Mail className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{isTestingSubscribeWebhook ? "সাবস্ক্রাইব টেস্ট..." : "📧 টেস্ট সাবস্ক্রাইব"}</span>
                           </button>
                         </div>
                         <p className="text-[11px] text-zinc-400 mt-1.5">
@@ -2726,38 +2855,70 @@ function doPost(e) {
                       </div>
                     </div>
 
-                    {/* 30-Second Setup Guide with Copyable Script */}
-                    <div className="p-5 rounded-2xl bg-zinc-800/40 border border-zinc-700 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-bold text-sm text-white">
-                          Ready-to-Deploy Google Apps Script Code (30-Second Setup)
-                        </h4>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(sampleAppsScriptCode);
-                            setCopiedScript(true);
-                            setTimeout(() => setCopiedScript(false), 2500);
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs font-bold text-white transition-colors"
-                        >
-                          {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedScript ? "Copied!" : "Copy Script"}</span>
-                        </button>
+                      {/* CRITICAL WARNING BOX: HOW TO DEPLOY NEW SCRIPT VERSION */}
+                      <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/50 text-xs text-amber-200 space-y-2.5 shadow-lg">
+                        <div className="flex items-center gap-2 font-bold text-amber-300 text-sm">
+                          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                          <span>⚠️ অতীব জরুরি: গুগল শিটে কোড আপডেট করার নিয়ম</span>
+                        </div>
+                        <p className="text-zinc-300 leading-relaxed text-xs">
+                          গুগল শিট স্ক্রিপ্ট এডিটরে কোড পেস্ট করে শুধু <strong className="text-white">Save (Ctrl+S)</strong> দিলে গুগল শিট নতুন কোড চালু করে না—আগের পুরানো কোডই চালু রাখে। নতুন কোড কার্যকর করতে মাত্র ২০ সেকেন্ডে নিচের স্টেপগুলো অনুসরণ করুন:
+                        </p>
+                        <div className="p-3 bg-zinc-900/90 rounded-xl border border-zinc-800 font-mono text-[11px] text-emerald-300 space-y-1.5">
+                          <div className="flex items-start gap-2">
+                            <span className="font-bold text-amber-400">১.</span>
+                            <span>গুগল স্ক্রিপ্ট এডিটরে ওপরের ডানে <strong>Deploy</strong> এ ক্লিক করুন &gt; <strong>Manage deployments</strong> সিলেক্ট করুন।</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="font-bold text-amber-400">২.</span>
+                            <span>সক্রিয় ডিপ্লয়মেন্টের পাশে <strong>Edit (পেন্সিল আইকন)</strong> এ ক্লিক করুন।</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="font-bold text-amber-400">৩.</span>
+                            <span><strong>Version</strong> ড্রপডাউনে ক্লিক করে <strong>New version</strong> সিলেক্ট করুন।</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="font-bold text-amber-400">৪.</span>
+                            <span>নিচে <strong>Deploy</strong> বাটনে ক্লিক করে দিন। ব্যাস!</span>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-zinc-400">
+                          এরপর উপরের <strong className="text-emerald-400">🧪 টেস্ট অর্ডার</strong> এবং <strong className="text-amber-400">📧 টেস্ট সাবস্ক্রাইব</strong> বাটনে ক্লিক করে পরীক্ষা করে নিন।
+                        </p>
                       </div>
 
-                      <ol className="text-xs text-zinc-300 space-y-1 list-decimal list-inside leading-relaxed">
-                        <li>Create a new Google Sheet at <strong>sheets.google.com</strong>.</li>
-                        <li>Click <strong>Extensions &gt; Apps Script</strong>.</li>
-                        <li>Paste the code snippet below into <code>Code.gs</code>.</li>
-                        <li>Click <strong>Deploy &gt; New deployment</strong>, select type <strong>Web app</strong>.</li>
-                        <li>Set <em>Execute as</em>: <strong>Me</strong>, and <em>Who has access</em>: <strong>Anyone</strong>.</li>
-                        <li>Copy the generated Web App URL and paste it into the field above!</li>
-                      </ol>
+                      {/* 30-Second Setup Guide with Copyable Script */}
+                      <div className="p-5 rounded-2xl bg-zinc-800/40 border border-zinc-700 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-sm text-white">
+                            Ready-to-Deploy Google Apps Script Code (Updated for Orders + Subscribe)
+                          </h4>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(sampleAppsScriptCode);
+                              setCopiedScript(true);
+                              setTimeout(() => setCopiedScript(false), 2500);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs font-bold text-white transition-colors"
+                          >
+                            {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedScript ? "Copied!" : "Copy Script"}</span>
+                          </button>
+                        </div>
 
-                      <pre className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-[11px] font-mono text-emerald-300 overflow-x-auto leading-relaxed max-h-48">
-                        {sampleAppsScriptCode}
-                      </pre>
-                    </div>
+                        <ol className="text-xs text-zinc-300 space-y-1 list-decimal list-inside leading-relaxed">
+                          <li>Create or open your Google Sheet at <strong>sheets.google.com</strong>.</li>
+                          <li>Click <strong>Extensions &gt; Apps Script</strong>.</li>
+                          <li>Select all existing code in <code>Code.gs</code>, delete it, and paste the code snippet below.</li>
+                          <li>Click <strong>Deploy &gt; Manage deployments &gt; Edit &gt; Version: New version &gt; Deploy</strong>.</li>
+                          <li>(প্রথমবার হলে: <strong>Deploy &gt; New deployment &gt; Web app</strong>, <em>Execute as:</em> <strong>Me</strong>, <em>Who has access:</em> <strong>Anyone</strong>).</li>
+                          <li>Copy the generated Web App URL and paste it into the field above!</li>
+                        </ol>
+
+                        <pre className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-[11px] font-mono text-emerald-300 overflow-x-auto leading-relaxed max-h-56">
+                          {sampleAppsScriptCode}
+                        </pre>
+                      </div>
                   </div>
                 )}
 
@@ -3239,22 +3400,44 @@ function doPost(e) {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-semibold text-zinc-300 mb-1">Category *</label>
+                      <label className="block font-semibold text-zinc-300 mb-1">ক্যাটাগরি (Category) *</label>
                       <select
                         value={formCategory}
-                        onChange={(e) => setFormCategory(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormCategory(val);
+                          if (val !== "__CUSTOM__") {
+                            setCustomCategoryName("");
+                          }
+                        }}
                         className="w-full px-3.5 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white focus:ring-1 focus:ring-emerald-500"
                       >
-                        <option value="Groceries">Groceries (মুদি ও খাদ্য)</option>
-                        <option value="Electronics">Electronics (ইলেকট্রনিক্স)</option>
-                        <option value="Fashion">Fashion (পোশাক ও ফ্যাশন)</option>
-                        <option value="Health & Beauty">Health & Beauty (রূপচর্চা ও স্বাস্থ্য)</option>
-                        <option value="Home & Kitchen">Home & Kitchen (গৃহস্থালি)</option>
-                        <option value="Baby & Kids">Baby & Kids (শিশু ও খেলনা)</option>
-                        <option value="Sports">Sports (খেলাধুলা ও ফিটনেস)</option>
-                        <option value="Books">Books (বই ও স্টেশনারি)</option>
-                        <option value="Accessories">Accessories (অন্যান্য)</option>
+                        {availableAdminCategories.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
+                        <option value="__CUSTOM__">➕ নতুন ক্যাটাগরি লিখুন (Add Custom Category)...</option>
                       </select>
+
+                      {formCategory === "__CUSTOM__" && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-zinc-950 border border-emerald-500/60 space-y-1">
+                          <label className="block text-[11px] font-semibold text-emerald-400">
+                            নতুন ক্যাটাগরির নাম (New Category Name) *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={customCategoryName}
+                            onChange={(e) => setCustomCategoryName(e.target.value)}
+                            placeholder="e.g. Winter Wear / অর্গানিক ফুড"
+                            className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                          />
+                          <p className="text-[10px] text-zinc-400">
+                            ক্যাটাগরিটি সাইটে স্বয়ংক্রিয়ভাবে পেজ হিসেবে যুক্ত হবে: <code className="text-emerald-300">/{categoryToSlug(customCategoryName || "category-name")}</code>
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div>

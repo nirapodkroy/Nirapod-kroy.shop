@@ -1,208 +1,24 @@
 // Category slug routing utilities for clean URL pages
+import {
+  BASE_CATEGORIES,
+  CATEGORY_SLUG_MAP,
+  SLUG_ALIASES,
+  categoryToSlug,
+  getDynamicCategories
+} from "../data/categories";
 
-export const CATEGORY_SLUG_MAP: Record<string, string> = {
-  "All": "",
-  "Honey": "honey",
-  "Oil & Ghee": "oil-and-ghee",
-  "Dates": "dates",
-  "Spices": "spices",
-  "Nuts & Seeds": "nuts-and-seeds",
-  "Beverage": "beverage",
-  "Rice": "rice",
-  "Flours & Lentils": "flours-and-lentils",
-  "Groceries": "groceries",
-  "Baby & Kids": "baby-and-kids",
-  "Sports": "sports",
-  "Electronics": "electronics",
-  "Fashion": "fashion",
-  "Health & Beauty": "health-and-beauty",
-  "Home & Kitchen": "home-and-kitchen",
-  "Books": "books"
+export {
+  BASE_CATEGORIES,
+  CATEGORY_SLUG_MAP,
+  SLUG_ALIASES,
+  categoryToSlug,
+  getDynamicCategories
 };
-
-// Common aliases for flexible URL matching (including English, Bengali transliterations, and Unicode Bengali)
-export const SLUG_ALIASES: Record<string, string> = {
-  // Baby & Kids
-  "baby-and-kids": "Baby & Kids",
-  "baby-kids": "Baby & Kids",
-  "babykids": "Baby & Kids",
-  "baby": "Baby & Kids",
-  "kids": "Baby & Kids",
-  "kid": "Baby & Kids",
-  "toy": "Baby & Kids",
-  "toys": "Baby & Kids",
-  "khelna": "Baby & Kids",
-  "shishu": "Baby & Kids",
-  "shishu-khelna": "Baby & Kids",
-  "shishu-o-khelna": "Baby & Kids",
-  "shishukhelna": "Baby & Kids",
-  "শিশু": "Baby & Kids",
-  "শিশু-ও-খেলনা": "Baby & Kids",
-  "খেলনা": "Baby & Kids",
-
-  // Honey
-  "honey": "Honey",
-  "modhu": "Honey",
-  "madhu": "Honey",
-  "sweetener": "Honey",
-  "sweeteners": "Honey",
-  "মধু": "Honey",
-  "মধু-ও-সুইটনার": "Honey",
-
-  // Oil & Ghee
-  "oil-and-ghee": "Oil & Ghee",
-  "oil-ghee": "Oil & Ghee",
-  "oilghee": "Oil & Ghee",
-  "oil": "Oil & Ghee",
-  "ghee": "Oil & Ghee",
-  "tel": "Oil & Ghee",
-  "tel-ghee": "Oil & Ghee",
-  "teyl": "Oil & Ghee",
-  "ঘি": "Oil & Ghee",
-  "তেল": "Oil & Ghee",
-  "তেল-ও-ঘি": "Oil & Ghee",
-
-  // Dates
-  "dates": "Dates",
-  "date": "Dates",
-  "khejur": "Dates",
-  "khajoor": "Dates",
-  "premium-khejur": "Dates",
-  "খেজুর": "Dates",
-  "প্রিমিয়াম-খেজুর": "Dates",
-
-  // Spices
-  "spices": "Spices",
-  "spice": "Spices",
-  "masala": "Spices",
-  "mosla": "Spices",
-  "moshla": "Spices",
-  "khati-moshla": "Spices",
-  "মসলা": "Spices",
-  "মশলা": "Spices",
-  "খাঁটি-মশলা": "Spices",
-
-  // Nuts & Seeds
-  "nuts-and-seeds": "Nuts & Seeds",
-  "nuts-seeds": "Nuts & Seeds",
-  "nutsseeds": "Nuts & Seeds",
-  "nuts": "Nuts & Seeds",
-  "seeds": "Nuts & Seeds",
-  "badam": "Nuts & Seeds",
-  "badam-beej": "Nuts & Seeds",
-  "বাদাম": "Nuts & Seeds",
-  "বাদাম-ও-বীজ": "Nuts & Seeds",
-
-  // Beverage
-  "beverage": "Beverage",
-  "beverages": "Beverage",
-  "tea": "Beverage",
-  "cha": "Beverage",
-  "coffee": "Beverage",
-  "drink": "Beverage",
-  "drinks": "Beverage",
-  "চা": "Beverage",
-  "চা-ও-পানীয়": "Beverage",
-  "পানীয়": "Beverage",
-
-  // Rice
-  "rice": "Rice",
-  "chal": "Rice",
-  "chaal": "Rice",
-  "premium-rice": "Rice",
-  "premium-chal": "Rice",
-  "চাল": "Rice",
-  "প্রিমিয়াম-চাল": "Rice",
-
-  // Flours & Lentils
-  "flours-and-lentils": "Flours & Lentils",
-  "flours-lentils": "Flours & Lentils",
-  "flourslentils": "Flours & Lentils",
-  "flour": "Flours & Lentils",
-  "lentil": "Flours & Lentils",
-  "lentils": "Flours & Lentils",
-  "atta": "Flours & Lentils",
-  "dal": "Flours & Lentils",
-  "daal": "Flours & Lentils",
-  "আটা": "Flours & Lentils",
-  "ডাল": "Flours & Lentils",
-  "আটা-ও-ডাল": "Flours & Lentils",
-
-  // Groceries
-  "groceries": "Groceries",
-  "grocery": "Groceries",
-  "mudi": "Groceries",
-  "muri": "Groceries",
-  "mudi-khaddo": "Groceries",
-  "মুদি": "Groceries",
-  "মুদি-ও-খাদ্য": "Groceries",
-
-  // Sports
-  "sports": "Sports",
-  "sport": "Sports",
-  "khela": "Sports",
-  "kheladhula": "Sports",
-  "খেলাধুলা": "Sports",
-
-  // Electronics
-  "electronics": "Electronics",
-  "electronic": "Electronics",
-  "gadget": "Electronics",
-  "gadgets": "Electronics",
-  "ইলেকট্রনিক্স": "Electronics",
-
-  // Fashion
-  "fashion": "Fashion",
-  "clothing": "Fashion",
-  "poshak": "Fashion",
-  "পোশাক": "Fashion",
-  "ফ্যাশন": "Fashion",
-
-  // Health & Beauty
-  "health-and-beauty": "Health & Beauty",
-  "health-beauty": "Health & Beauty",
-  "healthbeauty": "Health & Beauty",
-  "beauty": "Health & Beauty",
-  "health": "Health & Beauty",
-  "cosmetics": "Health & Beauty",
-  "প্রসাধন": "Health & Beauty",
-  "সৌন্দর্য": "Health & Beauty",
-
-  // Home & Kitchen
-  "home-and-kitchen": "Home & Kitchen",
-  "home-kitchen": "Home & Kitchen",
-  "homekitchen": "Home & Kitchen",
-  "kitchen": "Home & Kitchen",
-  "home": "Home & Kitchen",
-  "গৃহস্থালি": "Home & Kitchen",
-
-  // Books
-  "books": "Books",
-  "book": "Books",
-  "boi": "Books",
-  "বই": "Books"
-};
-
-/**
- * Convert a category display name to a clean URL slug
- */
-export function categoryToSlug(category: string): string {
-  if (!category || category === "All") return "";
-  if (CATEGORY_SLUG_MAP[category]) {
-    return CATEGORY_SLUG_MAP[category];
-  }
-  return category
-    .toLowerCase()
-    .trim()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
 
 /**
  * Clean path/slug string from URL
  */
-function normalizeSlug(raw: string): string {
+export function normalizeSlug(raw: string): string {
   let cleaned = "";
   try {
     cleaned = decodeURIComponent(raw).trim().toLowerCase();
@@ -227,6 +43,38 @@ function normalizeSlug(raw: string): string {
 }
 
 /**
+ * Helper: format slug to title case for any future custom category
+ */
+function slugToTitleCase(slug: string): string {
+  return slug
+    .split("-")
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/**
+ * Read any cached categories from localStorage (if in browser)
+ */
+function getCachedProductCategories(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem("nirapod_products_cache");
+    if (!raw) return [];
+    const prods = JSON.parse(raw);
+    if (Array.isArray(prods)) {
+      const cats = new Set<string>();
+      prods.forEach(p => {
+        if (p.category && typeof p.category === "string" && p.category.trim()) {
+          cats.add(p.category.trim());
+        }
+      });
+      return Array.from(cats);
+    }
+  } catch {}
+  return [];
+}
+
+/**
  * Detect category from URL (supports /slug, /category/slug, ?category=slug, ?c=slug, #/slug)
  */
 export function getCategoryFromUrl(availableCategories: string[] = []): string | null {
@@ -248,13 +96,14 @@ export function getCategoryFromUrl(availableCategories: string[] = []): string |
   }
 
   // 2. Check hash (#/category/honey or #/honey)
-  const hash = window.location.hash.replace(/^#\/?/, "");
-  if (hash && !hash.startsWith("!") && !hash.startsWith("/")) {
-    const matched = matchCategory(hash, availableCategories);
+  const hash = window.location.hash;
+  if (hash && hash.startsWith("#/")) {
+    const hashSlug = hash.slice(2);
+    const matched = matchCategory(hashSlug, availableCategories);
     if (matched) return matched;
   }
 
-  // 3. Check pathname (e.g. /honey, /classroom, /category/oil-and-ghee, /baby-and-kids)
+  // 3. Check pathname (/baby-and-kids or /category/baby-and-kids)
   const path = window.location.pathname;
   if (path && path !== "/" && path !== "/index.html") {
     // Ignore static assets (js, css, images, etc.), but allow category paths
@@ -269,7 +118,8 @@ export function getCategoryFromUrl(availableCategories: string[] = []): string |
 }
 
 /**
- * Match a raw slug or string to known categories
+ * Match a raw slug or string to known categories.
+ * Works seamlessly with any current category OR future dynamically added category.
  */
 export function matchCategory(rawSlug: string, availableCategories: string[] = []): string | null {
   const clean = normalizeSlug(rawSlug);
@@ -280,9 +130,11 @@ export function matchCategory(rawSlug: string, availableCategories: string[] = [
     return SLUG_ALIASES[clean];
   }
 
-  // Combine known base categories and any dynamic categories
+  // Combine known base categories, cached product categories, and dynamic categories
+  const cachedCategories = getCachedProductCategories();
   const allKnownCategories = Array.from(new Set([
-    ...Object.keys(CATEGORY_SLUG_MAP),
+    ...BASE_CATEGORIES,
+    ...cachedCategories,
     ...availableCategories
   ]));
 
@@ -304,9 +156,23 @@ export function matchCategory(rawSlug: string, availableCategories: string[] = [
   const cleanStripped = clean.replace(/[^a-z0-9]/g, "");
   for (const cat of allKnownCategories) {
     const catStripped = categoryToSlug(cat).replace(/[^a-z0-9]/g, "");
-    if (catStripped === cleanStripped) {
+    if (catStripped && catStripped === cleanStripped) {
       return cat;
     }
+  }
+
+  // 4. Future / Dynamic category fallback:
+  // If slug is a valid string (e.g. "smart-watch" or "organic-tea"),
+  // match by title-cased representation
+  if (clean && !clean.includes("/")) {
+    const titleCased = slugToTitleCase(clean);
+    // Check if any category matches case-insensitively
+    for (const cat of allKnownCategories) {
+      if (cat.toLowerCase() === titleCased.toLowerCase()) {
+        return cat;
+      }
+    }
+    return titleCased;
   }
 
   return null;

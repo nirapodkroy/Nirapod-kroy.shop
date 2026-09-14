@@ -23,26 +23,7 @@ import { FloatingWhatsApp } from "./components/FloatingWhatsApp";
 import { SecretAdminModal } from "./components/SecretAdminModal";
 import { Footer } from "./components/Footer";
 import { ToastContainer } from "./components/ToastContainer";
-
-const BASE_CATEGORIES = [
-  "All",
-  "Honey",
-  "Oil & Ghee",
-  "Dates",
-  "Spices",
-  "Nuts & Seeds",
-  "Beverage",
-  "Rice",
-  "Flours & Lentils",
-  "Groceries",
-  "Baby & Kids",
-  "Sports",
-  "Electronics",
-  "Fashion",
-  "Health & Beauty",
-  "Home & Kitchen",
-  "Books"
-];
+import { BASE_CATEGORIES, getDynamicCategories } from "./data/categories";
 
 const PRODUCTS_CACHE_KEY = "nirapod_products_cache";
 const WISHLIST_CACHE_KEY = "nirapod_wishlist_ids";
@@ -85,15 +66,9 @@ const StoreContent: React.FC = () => {
   const { isCheckoutOpen, setIsCheckoutOpen } = useCart();
   const { addToast } = useToast();
 
-  // Dynamically include categories present in the active products
+  // Dynamically include categories present in the active products and future additions
   const dynamicCategories = useMemo(() => {
-    const set = new Set(BASE_CATEGORIES);
-    products.forEach((p) => {
-      if (p.category && p.category.trim()) {
-        set.add(p.category.trim());
-      }
-    });
-    return Array.from(set);
+    return getDynamicCategories(products);
   }, [products]);
 
   // Handle URL change when selecting a category (updates browser address bar)

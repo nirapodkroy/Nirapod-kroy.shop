@@ -129,38 +129,88 @@ try {
     }
   });
 
-  // 10. Generate physical static HTML directories for ALL Category Pages
-  // This guarantees that direct visits like https://nirapodkroy.shop/baby-and-kids return HTTP 200 on GitHub Pages
+  // 10. Generate physical static HTML directories for ALL Category Pages (Current & Future Dynamic Categories)
+  // This guarantees that direct visits like https://nirapodkroy.shop/baby-and-kids or any future category return HTTP 200 on GitHub Pages
   if (indexHtmlContent) {
-    const categoriesToGenerate = [
-      { slug: 'baby-and-kids', bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
-      { slug: 'baby-kids', bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
-      { slug: 'kids', bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
-      { slug: 'baby', bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
-      { slug: 'shishu', bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
-      { slug: 'honey', bn: 'মধু ও সুইটনার', en: 'Honey' },
-      { slug: 'modhu', bn: 'মধু ও সুইটনার', en: 'Honey' },
-      { slug: 'oil-and-ghee', bn: 'তেল ও ঘি', en: 'Oil & Ghee' },
-      { slug: 'oil-ghee', bn: 'তেল ও ঘি', en: 'Oil & Ghee' },
-      { slug: 'dates', bn: 'প্রিমিয়াম খেজুর', en: 'Dates' },
-      { slug: 'khejur', bn: 'প্রিমিয়াম খেজুর', en: 'Dates' },
-      { slug: 'spices', bn: 'খাঁটি মশলা', en: 'Spices' },
-      { slug: 'moshla', bn: 'খাঁটি মশলা', en: 'Spices' },
-      { slug: 'nuts-and-seeds', bn: 'বাদাম ও বীজ', en: 'Nuts & Seeds' },
-      { slug: 'badam', bn: 'বাদাম ও বীজ', en: 'Nuts & Seeds' },
-      { slug: 'beverage', bn: 'চা ও পানীয়', en: 'Beverage' },
-      { slug: 'tea', bn: 'চা ও পানীয়', en: 'Beverage' },
-      { slug: 'rice', bn: 'প্রিমিয়াম চাল', en: 'Rice' },
-      { slug: 'chal', bn: 'প্রিমিয়াম চাল', en: 'Rice' },
-      { slug: 'flours-and-lentils', bn: 'আটা ও ডাল', en: 'Flours & Lentils' },
-      { slug: 'groceries', bn: 'মুদি ও খাদ্য', en: 'Groceries' },
-      { slug: 'sports', bn: 'খেলাধুলা', en: 'Sports' },
-      { slug: 'electronics', bn: 'ইলেকট্রনিক্স', en: 'Electronics' },
-      { slug: 'fashion', bn: 'ফ্যাশন ও পোশাক', en: 'Fashion' },
-      { slug: 'health-and-beauty', bn: 'সৌন্দর্য ও স্বাস্থ্য', en: 'Health & Beauty' },
-      { slug: 'home-and-kitchen', bn: 'গৃহস্থালি ও রান্নাঘর', en: 'Home & Kitchen' },
-      { slug: 'books', bn: 'বই ও সাহিত্য', en: 'Books' }
-    ];
+    const baseMap = {
+      'baby-and-kids': { bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
+      'baby-kids': { bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
+      'kids': { bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
+      'baby': { bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
+      'shishu': { bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
+      'honey': { bn: 'মধু ও সুইটনার', en: 'Honey' },
+      'modhu': { bn: 'মধু ও সুইটনার', en: 'Honey' },
+      'oil-and-ghee': { bn: 'তেল ও ঘি', en: 'Oil & Ghee' },
+      'oil-ghee': { bn: 'তেল ও ঘি', en: 'Oil & Ghee' },
+      'dates': { bn: 'প্রিমিয়াম খেজুর', en: 'Dates' },
+      'khejur': { bn: 'প্রিমিয়াম খেজুর', en: 'Dates' },
+      'spices': { bn: 'খাঁটি মশলা', en: 'Spices' },
+      'moshla': { bn: 'খাঁটি মশলা', en: 'Spices' },
+      'nuts-and-seeds': { bn: 'বাদাম ও বীজ', en: 'Nuts & Seeds' },
+      'badam': { bn: 'বাদাম ও বীজ', en: 'Nuts & Seeds' },
+      'beverage': { bn: 'চা ও পানীয়', en: 'Beverage' },
+      'tea': { bn: 'চা ও পানীয়', en: 'Beverage' },
+      'rice': { bn: 'প্রিমিয়াম চাল', en: 'Rice' },
+      'chal': { bn: 'প্রিমিয়াম চাল', en: 'Rice' },
+      'flours-and-lentils': { bn: 'আটা ও ডাল', en: 'Flours & Lentils' },
+      'groceries': { bn: 'মুদি ও খাদ্য', en: 'Groceries' },
+      'sports': { bn: 'খেলাধুলা', en: 'Sports' },
+      'electronics': { bn: 'ইলেকট্রনিক্স', en: 'Electronics' },
+      'fashion': { bn: 'ফ্যাশন ও পোশাক', en: 'Fashion' },
+      'health-and-beauty': { bn: 'সৌন্দর্য ও স্বাস্থ্য', en: 'Health & Beauty' },
+      'home-and-kitchen': { bn: 'গৃহস্থালি ও রান্নাঘর', en: 'Home & Kitchen' },
+      'books': { bn: 'বই ও সাহিত্য', en: 'Books' },
+      'accessories': { bn: 'অন্যান্য', en: 'Accessories' }
+    };
+
+    function toSlug(cat) {
+      return cat
+        .toLowerCase()
+        .trim()
+        .replace(/&/g, 'and')
+        .replace(/[\s_]+/g, '-')
+        .replace(/[^\w\u0980-\u09FF-]+/g, '')
+        .replace(/--+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    }
+
+    const categoriesToGenerate = [];
+    const seenSlugs = new Set();
+
+    // 1. Add base category entries
+    Object.keys(baseMap).forEach(slug => {
+      seenSlugs.add(slug);
+      categoriesToGenerate.push({
+        slug,
+        bn: baseMap[slug].bn,
+        en: baseMap[slug].en
+      });
+    });
+
+    // 2. Dynamically extract ALL categories from the product catalog (handles future custom categories)
+    if (productsJsonStr) {
+      try {
+        const prodList = JSON.parse(productsJsonStr);
+        if (Array.isArray(prodList)) {
+          prodList.forEach(p => {
+            if (p.category && typeof p.category === 'string' && p.category.trim()) {
+              const catName = p.category.trim();
+              const catSlug = toSlug(catName);
+              if (catSlug && !seenSlugs.has(catSlug)) {
+                seenSlugs.add(catSlug);
+                categoriesToGenerate.push({
+                  slug: catSlug,
+                  bn: catName,
+                  en: catName
+                });
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('[Postbuild] Failed to parse products for dynamic category generation:', err);
+      }
+    }
 
     const targets = [dist, docs, root];
 

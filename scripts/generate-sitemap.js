@@ -30,21 +30,53 @@ try {
 
 const today = new Date().toISOString().split('T')[0];
 
-const categories = [
+function toSlug(cat) {
+  return cat
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, 'and')
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^\w\u0980-\u09FF-]+/g, '')
+    .replace(/--+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+const baseCategories = [
+  'Honey',
+  'Oil & Ghee',
+  'Dates',
+  'Spices',
+  'Nuts & Seeds',
+  'Beverage',
+  'Rice',
+  'Flours & Lentils',
   'Groceries',
+  'Baby & Kids',
+  'Sports',
   'Electronics',
   'Fashion',
   'Health & Beauty',
   'Home & Kitchen',
-  'Baby & Kids',
-  'Sports',
-  'Books'
+  'Books',
+  'Accessories'
 ];
+
+// Dynamically extract all categories from product list
+const allCategoriesSet = new Set(baseCategories);
+if (Array.isArray(products)) {
+  products.forEach(p => {
+    if (p.category && typeof p.category === 'string' && p.category.trim()) {
+      allCategoriesSet.add(p.category.trim());
+    }
+  });
+}
+const categories = Array.from(allCategoriesSet);
 
 let urls = [
   { loc: `${DOMAIN}/`, priority: '1.0', changefreq: 'daily' },
+  // Clean category URLs (e.g. https://nirapodkroy.shop/baby-and-kids)
   ...categories.map(cat => ({
-    loc: `${DOMAIN}/?category=${encodeURIComponent(cat)}`,
+    loc: `${DOMAIN}/${toSlug(cat)}`,
     priority: '0.8',
     changefreq: 'daily'
   })),

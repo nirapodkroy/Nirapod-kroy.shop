@@ -827,8 +827,9 @@ async function syncNewsletterToGoogleSheets(email: string, source = "Website Foo
       ]
     };
 
-    console.log(`[Google Sheets] Dispatching newsletter subscriber ${email} to ${targetUrl}`);
-    const res = await fetch(targetUrl, {
+    const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + "tab=subscribe&type=subscriber&action=subscribe";
+    console.log(`[Google Sheets] Dispatching newsletter subscriber ${email} to ${urlWithParams}`);
+    const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",
       headers: {
@@ -1720,6 +1721,25 @@ app.post("/api/admin/test-webhook", requireAdmin, async (req, res) => {
     return res.json({ success: true, message: "Webhook successfully reached and responded OK!" });
   }
   return res.status(502).json({ error: "Webhook test failed or returned error. Please check your Apps Script Webhook deployment URL." });
+});
+
+// POST /api/admin/test-subscribe-webhook - Test sending a subscriber to "subscribe" tab
+app.post("/api/admin/test-subscribe-webhook", requireAdmin, async (req, res) => {
+  const targetUrl = req.body.url || req.body.webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return res.status(400).json({ error: "একটি সঠিক গুগল শিট ওয়েবহুক ইউআরএল দিন।" });
+  }
+
+  const ok = await syncNewsletterToGoogleSheets("test_subscriber@nirapodkroy.shop", "Admin Webhook Test");
+  if (ok) {
+    return res.json({ 
+      success: true, 
+      message: "সাবস্ক্রাইব টেস্ট সফল হয়েছে! গুগল শিটের 'subscribe' ট্যাবে টেস্ট ডেটা যুক্ত হয়েছে।" 
+    });
+  }
+  return res.status(502).json({ 
+    error: "Webhook subscriber test failed. অনুগ্রহ করে আপনার Apps Script Webhook ইউআরএল এবং ডিপ্লয়মেন্ট চেক করুন।" 
+  });
 });
 
 // 8. Newsletter & Subscribers API
