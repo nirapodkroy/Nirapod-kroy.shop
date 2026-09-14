@@ -189,5 +189,12 @@
       "createdAt": "2026-09-13T15:03:38.593Z"
     }
   ],
-  "webhookUrl": "https://script.google.com/macros/s/AKfycbwYakz5JjsuG3qKKPgwmbKUS7xQYXzWe0uV4rJMHU6OcNyN5zA4ulzt9B2R9SLdUXg/exec"
+  "webhookUrl": "https://script.google.com/macros/s/AKfycbwYakz5JjsuG3qKKPgwmbKUS7xQYXzWe0uV4rJMHU6OcNyN5zA4ulzt9B2R9SLdUXg/exec",
+  "subscribers": [
+    {
+      "email": "adib1234w@gmail.com",
+      "source": "Website Footer",
+      "subscribedAt": "2026-09-14T07:33:02.435Z"
+    }
+  ]
 }

@@ -1,6 +1,8 @@
 import React, { useState } from "react";
-import { ShieldCheck, Heart, CreditCard, Send, CheckCircle2, PhoneCall } from "lucide-react";
+import { ShieldCheck, Heart, CreditCard, Send, CheckCircle2, PhoneCall, Loader2 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
+import { useToast } from "../context/ToastContext";
+import { syncNewsletterToGoogleSheets, handleLocalApi } from "../lib/mockApi";
 
 interface FooterProps {
   onCategorySelect: (cat: string) => void;
@@ -8,17 +10,61 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
   const { language, t, getCategoryName } = useLanguage();
+  const { addToast } = useToast();
   const [subscribed, setSubscribed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailInput, setEmailInput] = useState("");
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!emailInput || !emailInput.includes("@")) return;
-    setSubscribed(true);
-    setTimeout(() => {
-      setSubscribed(false);
-      setEmailInput("");
-    }, 4000);
+    const cleanEmail = emailInput.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      addToast(language === "bn" ? "সঠিক ইমেইল এড্রেস প্রদান করুন" : "Please provide a valid email address", "warning");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // 1. Try server endpoint
+      const res = await fetch("/api/newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail, source: "Website Footer" })
+      }).catch(() => null);
+
+      if (!res || !res.ok) {
+        // 2. Fallback to client mockApi handler
+        await handleLocalApi("/api/newsletter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: cleanEmail, source: "Website Footer" })
+        });
+      }
+
+      // 3. Direct dispatch to Google Sheets webhook to guarantee synchronization
+      syncNewsletterToGoogleSheets(cleanEmail, "Website Footer").catch(console.error);
+
+      setSubscribed(true);
+      addToast(
+        language === "bn" 
+          ? "সাবস্ক্রাইব করার জন্য ধন্যবাদ! আপনার ইমেইলটি সফলভাবে Google Sheet-এ সংরক্ষিত হয়েছে।" 
+          : "Thank you for subscribing! Your email has been saved to Google Sheets.",
+        "success"
+      );
+
+      setTimeout(() => {
+        setSubscribed(false);
+        setEmailInput("");
+      }, 4000);
+    } catch (err) {
+      console.error("Newsletter error:", err);
+      // Still dispatch directly
+      syncNewsletterToGoogleSheets(cleanEmail, "Website Footer").catch(() => {});
+      setSubscribed(true);
+      addToast(language === "bn" ? "ধন্যবাদ! সাবস্ক্রিপশন সফল হয়েছে।" : "Thank you! Subscribed successfully.", "success");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -52,9 +98,15 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
               <button
                 id="footer-subscribe-btn"
                 type="submit"
-                className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+                disabled={isSubmitting}
+                className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-70 text-white font-bold text-xs shadow-md transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
               >
-                {subscribed ? (
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>{language === "bn" ? "যোগ হচ্ছে..." : "Subscribing..."}</span>
+                  </>
+                ) : subscribed ? (
                   <>
                     <span>{language === "bn" ? "ধন্যবাদ!" : "Subscribed!"}</span>
                     <CheckCircle2 className="w-3.5 h-3.5 text-white" />

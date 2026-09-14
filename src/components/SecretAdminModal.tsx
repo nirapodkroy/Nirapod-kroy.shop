@@ -42,7 +42,8 @@ import {
   FileText,
   CheckCircle,
   Github,
-  GitBranch
+  GitBranch,
+  Mail
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -69,7 +70,14 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Admin View Tabs
-  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "orders" | "customers" | "sheets" | "github">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "orders" | "customers" | "subscribers" | "sheets" | "github">("dashboard");
+
+  // Subscribers State
+  const [subscribers, setSubscribers] = useState<{ email: string; source: string; subscribedAt: string }[]>([]);
+  const [isLoadingSubscribers, setIsLoadingSubscribers] = useState(false);
+  const [subscriberSearchTerm, setSubscriberSearchTerm] = useState("");
+  const [subscriberToDelete, setSubscriberToDelete] = useState<string | null>(null);
+  const [isSyncingFromSheets, setIsSyncingFromSheets] = useState(false);
 
   // GitHub Auto-Sync State
   const [githubRepo, setGithubRepo] = useState(() => localStorage.getItem("nirapod_gh_repo") || "nirapodkroy/Nirapod-kroy.shop");
@@ -430,6 +438,16 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         setCustomers(custData.customers || []);
       }
 
+      // 2.2 Subscribers
+      setIsLoadingSubscribers(true);
+      const subsRes = await safeAdminFetch("/api/admin/subscribers", {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (subsRes.ok) {
+        const subsData = await subsRes.json();
+        setSubscribers(subsData.subscribers || []);
+      }
+
       // 3. Settings
       const settingsRes = await safeAdminFetch("/api/admin/settings", {
         headers: { Authorization: `Bearer ${adminToken}` }
@@ -454,6 +472,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     } finally {
       setIsLoadingOrders(false);
       setIsLoadingCustomers(false);
+      setIsLoadingSubscribers(false);
     }
   };
 
@@ -1219,6 +1238,70 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
+  // Delete Subscriber handler
+  const handleDeleteSubscriber = async (email: string) => {
+    try {
+      setSubscribers(prev => prev.filter(s => s.email.toLowerCase() !== email.toLowerCase()));
+      addToast(`সাবস্ক্রাইবার "${email}" মুছে ফেলা হয়েছে`, "info");
+      const res = await safeAdminFetch(`/api/admin/subscribers/${encodeURIComponent(email)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        fetchAdminData();
+      }
+    } catch (err) {
+      console.error(err);
+      fetchAdminData();
+    } finally {
+      setSubscriberToDelete(null);
+    }
+  };
+
+  // Export Subscribers to CSV
+  const exportSubscribersToCsv = () => {
+    if (subscribers.length === 0) {
+      addToast("কোন সাবস্ক্রাইবার ডেটা নেই", "warning");
+      return;
+    }
+    const headers = "Email,Source,SubscribedAt\n";
+    const rows = subscribers.map(s => `"${s.email}","${s.source}","${s.subscribedAt}"`).join("\n");
+    const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `nirapod-subscribers-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    addToast("CSV ফাইল ডাউনলোড সম্পন্ন হয়েছে", "success");
+  };
+
+  // Sync Live Data from Google Sheets Hub
+  const handleSyncFromGoogleSheets = async () => {
+    setIsSyncingFromSheets(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/sync-from-sheets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ webhookUrl })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addToast(data.message || "গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে!", "success");
+        fetchAdminData();
+      } else {
+        addToast(data.error || "গুগল শিট থেকে ডেটা পড়তে ব্যর্থ হয়েছে।", "error");
+      }
+    } catch (err: any) {
+      addToast(err?.message || "সিঙ্ক এরর", "error");
+    } finally {
+      setIsSyncingFromSheets(false);
+    }
+  };
+
   // Save Webhook URL
   const handleSaveWebhook = async () => {
     setIsSavingWebhook(true);
@@ -1270,7 +1353,56 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  const sampleAppsScriptCode = `function doPost(e) {
+  const sampleAppsScriptCode = `// 1. ডেটা পড়ার জন্য (GET Request - Live Google Sheets Sync)
+function doGet(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var result = { orders: [], customers: [], subscribers: [] };
+    
+    // Orders tab
+    var orderSheet = ss.getSheetByName("Orders") || ss.getSheetByName("অর্ডার");
+    if (orderSheet && orderSheet.getLastRow() > 1) {
+      var rows = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, 10).getValues();
+      result.orders = rows.map(function(r) {
+        return {
+          id: String(r[0]),
+          createdAt: String(r[1]),
+          customerName: String(r[2]),
+          customerEmail: String(r[3]),
+          customerPhone: String(r[4]),
+          shippingAddress: String(r[5]),
+          itemsText: String(r[6]),
+          totalPrice: String(r[7]),
+          paymentMethod: String(r[8]),
+          status: String(r[9])
+        };
+      });
+    }
+
+    // Subscribers tab
+    var subSheet = ss.getSheetByName("Subscribers") || ss.getSheetByName("সাবস্ক্রাইবার");
+    if (subSheet && subSheet.getLastRow() > 1) {
+      var sRows = subSheet.getRange(2, 1, subSheet.getLastRow() - 1, 4).getValues();
+      result.subscribers = sRows.map(function(r) {
+        return {
+          date: String(r[0]),
+          email: String(r[1]),
+          source: String(r[2]),
+          status: String(r[3])
+        };
+      });
+    }
+
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// 2. নতুন ডেটা যুক্ত করার জন্য (POST Request - Orders, Registrations, Newsletter)
+function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = JSON.parse(e.postData.contents);
@@ -1291,7 +1423,21 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         customerSheet.appendRow(data.sheetRow);
       }
     } 
-    // 2. নতুন অর্ডার (New Customer Orders)
+    // 2. নিউজলেটার / সাবস্ক্রাইবার (Newsletter Subscriptions)
+    else if (data.action === "newsletter_subscription" || data.type === "subscriber") {
+      var subSheet = ss.getSheetByName("Subscribers") || ss.getSheetByName("সাবস্ক্রাইবার");
+      if (!subSheet) {
+        subSheet = ss.insertSheet("Subscribers");
+      }
+      if (subSheet.getLastRow() === 0) {
+        subSheet.appendRow(["Subscription Date", "Email", "Source", "Status"]);
+        subSheet.getRange(1, 1, 1, 4).setFontWeight("bold").setBackground("#fff3cd");
+      }
+      if (data.sheetRow) {
+        subSheet.appendRow(data.sheetRow);
+      }
+    }
+    // 3. নতুন অর্ডার (New Customer Orders)
     else {
       var orderSheet = ss.getSheetByName("Orders") || ss.getSheetByName("অর্ডার") || ss.getActiveSheet();
       if (orderSheet.getLastRow() === 0) {
@@ -1507,6 +1653,17 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                   >
                     <Users className="w-4 h-4 text-sky-400" />
                     <span>Customers ({customers.length})</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("subscribers")}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      activeTab === "subscribers"
+                        ? "bg-zinc-800 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <Mail className="w-4 h-4 text-amber-400" />
+                    <span>Subscribers ({subscribers.length})</span>
                   </button>
                   <button
                     onClick={() => setActiveTab("sheets")}
@@ -2316,6 +2473,185 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                               </div>
                             </div>
                           ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB: SUBSCRIBERS LIST */}
+                {activeTab === "subscribers" && (
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h3 className="font-bold text-base text-white flex items-center gap-2">
+                          <Mail className="w-5 h-5 text-amber-400" />
+                          নিউজলেটার ও সাবস্ক্রাইবার তালিকা ({subscribers.length})
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          ফুটার ও বিভিন্ন ক্যাম্পেইন থেকে সংগৃহীত ইমেইল তালিকা। প্রতিটি সাবস্ক্রিপশন সাথে সাথে গুগল শিটের "Subscribers" ট্যাবেও সিঙ্ক হয়।
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleSyncFromGoogleSheets}
+                          disabled={isSyncingFromSheets}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 text-xs font-semibold cursor-pointer transition-colors"
+                          title="গুগল শিট থেকে নতুন সাবস্ক্রাইবার ও অর্ডার সিঙ্ক করুন"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFromSheets ? "animate-spin" : ""}`} />
+                          <span>{isSyncingFromSheets ? "সিঙ্ক হচ্ছে..." : "শিট থেকে সিঙ্ক"}</span>
+                        </button>
+                        <button
+                          onClick={exportSubscribersToCsv}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-semibold cursor-pointer transition-colors"
+                          title="CSV ফরম্যাটে সমস্ত ইমেইল ডাউনলোড করুন"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>CSV ডাউনলোড</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div className="relative">
+                      <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                      <input
+                        type="text"
+                        placeholder="ইমেইল বা সোর্স দিয়ে সাবস্ক্রাইবার খুঁজুন..."
+                        value={subscriberSearchTerm}
+                        onChange={(e) => setSubscriberSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 bg-zinc-800/80 border border-zinc-700 rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    {/* Subscribers List Content */}
+                    {isLoadingSubscribers ? (
+                      <div className="py-12 flex flex-col items-center justify-center text-zinc-400">
+                        <RefreshCw className="w-6 h-6 animate-spin text-amber-500 mb-2" />
+                        <span className="text-xs">সাবস্ক্রাইবার তালিকা লোড হচ্ছে...</span>
+                      </div>
+                    ) : subscribers.length === 0 ? (
+                      <div className="p-8 text-center rounded-2xl bg-zinc-800/40 border border-zinc-800">
+                        <Mail className="w-10 h-10 text-zinc-600 mx-auto mb-2" />
+                        <p className="text-sm font-semibold text-zinc-300">এখনও কোনো সাবস্ক্রাইবার তালিকাভুক্ত হয়নি</p>
+                        <p className="text-xs text-zinc-500 mt-1">ওয়েবসাইটের ফুটারে ইমেইল সাবস্ক্রাইব করা হলে তা এখানে এবং গুগল শিটে প্রদর্শিত হবে।</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
+                          <table className="w-full text-left text-xs text-zinc-300">
+                            <thead className="bg-zinc-800/80 text-zinc-400 uppercase text-[10px] tracking-wider border-b border-zinc-700">
+                              <tr>
+                                <th className="py-3 px-4">#</th>
+                                <th className="py-3 px-4">ইমেইল অ্যাড্রেস</th>
+                                <th className="py-3 px-4">উৎস (Source)</th>
+                                <th className="py-3 px-4">সাবস্ক্রিপশনের সময়</th>
+                                <th className="py-3 px-4 text-right">অ্যাকশন</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-800">
+                              {subscribers
+                                .filter(s =>
+                                  s.email.toLowerCase().includes(subscriberSearchTerm.toLowerCase()) ||
+                                  s.source.toLowerCase().includes(subscriberSearchTerm.toLowerCase())
+                                )
+                                .map((sub, idx) => (
+                                  <tr key={sub.email + idx} className="hover:bg-zinc-800/40 transition-colors">
+                                    <td className="py-3 px-4 font-mono text-zinc-500 text-[11px]">{idx + 1}</td>
+                                    <td className="py-3 px-4">
+                                      <div className="flex items-center gap-2 font-medium text-white">
+                                        <Mail className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                        <span>{sub.email}</span>
+                                        <button
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(sub.email);
+                                            addToast("ইমেইল কপি করা হয়েছে!", "success");
+                                          }}
+                                          className="p-1 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                                          title="ইমেইল কপি করুন"
+                                        >
+                                          <Copy className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                        {sub.source || "Website Footer"}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-4 text-zinc-400 font-mono text-[11px]">
+                                      {new Date(sub.subscribedAt).toLocaleString("bn-BD", {
+                                        dateStyle: "medium",
+                                        timeStyle: "short"
+                                      })}
+                                    </td>
+                                    <td className="py-3 px-4 text-right">
+                                      <button
+                                        onClick={() => setSubscriberToDelete(sub.email)}
+                                        className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors cursor-pointer"
+                                        title="সাবস্ক্রাইবার মুছে ফেলুন"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Mobile Responsive Cards */}
+                        <div className="md:hidden space-y-2.5">
+                          {subscribers
+                            .filter(s =>
+                              s.email.toLowerCase().includes(subscriberSearchTerm.toLowerCase()) ||
+                              s.source.toLowerCase().includes(subscriberSearchTerm.toLowerCase())
+                            )
+                            .map((sub, idx) => (
+                              <div
+                                key={sub.email + idx}
+                                className="p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700/80 space-y-2"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-mono text-zinc-400">#{idx + 1}</span>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                    {sub.source || "Website Footer"}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5 font-medium text-white text-xs truncate">
+                                    <Mail className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                    <span className="truncate">{sub.email}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(sub.email);
+                                        addToast("ইমেইল কপি করা হয়েছে!", "success");
+                                      }}
+                                      className="p-1.5 rounded-lg bg-zinc-700 text-zinc-300 hover:text-white"
+                                    >
+                                      <Copy className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={() => setSubscriberToDelete(sub.email)}
+                                      className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500/30"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="text-[11px] text-zinc-400 font-mono">
+                                  {new Date(sub.subscribedAt).toLocaleString("bn-BD", {
+                                    dateStyle: "medium",
+                                    timeStyle: "short"
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -3598,6 +3934,49 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
                     className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer transition-all active:scale-95"
                   >
                     Delete Customer
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Subscriber Confirmation Modal */}
+          {subscriberToDelete && (
+            <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+              <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl animate-in fade-in zoom-in duration-150">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 shrink-0">
+                    <Trash2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-white">সাবস্ক্রাইবার ডিলিট করবেন?</h4>
+                    <p className="text-[11px] text-zinc-400">Delete Subscriber</p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-800/60 border border-zinc-700 text-xs text-zinc-300">
+                  <p className="text-zinc-400 text-[11px]">ইমেইল:</p>
+                  <p className="font-bold text-white text-sm mt-0.5 break-all">{subscriberToDelete}</p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs leading-relaxed">
+                  ✓ <strong>গুগল শিট সুরক্ষিত থাকবে:</strong> এই ইমেইলটি অ্যাডমিন প্যানেল থেকে মুছে যাবে, কিন্তু গুগল শিটের সমস্ত রেকর্ড অক্ষত থাকবে।
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setSubscriberToDelete(null)}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    Cancel (বাতিল)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSubscriber(subscriberToDelete)}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer transition-all active:scale-95"
+                  >
+                    Delete Subscriber
                   </button>
                 </div>
               </div>

@@ -6,6 +6,9 @@ const ORDERS_KEY = "auracart_orders";
 const PRODUCTS_KEY = "nirapod_products_cache";
 const SETTINGS_KEY = "nirapod_admin_settings";
 const ADMIN_TOKEN_KEY = "nirapod_admin_token";
+export const SUBSCRIBERS_KEY = "nirapod_subscribers";
+
+export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbwYakz5JjsuG3qKKPgwmbKUS7xQYXzWe0uV4rJMHU6OcNyN5zA4ulzt9B2R9SLdUXg/exec";
 
 interface StoredCustomer extends CustomerUser {
   passwordHash: string;
@@ -112,9 +115,9 @@ function setSafeStorage<T>(key: string, val: T): void {
 }
 
 // Background sync to Google Sheets (supports static sites via direct Webhook post)
-async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promise<boolean> {
+export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promise<boolean> {
   const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
-  const target = webhookUrl || settings.webhookUrl;
+  const target = webhookUrl || settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!target || !target.startsWith("http")) return false;
 
   const itemsFormatted = order.items.map(i => `${i.title} (x${i.quantity} @ ৳${i.price})`).join(", ");
@@ -159,9 +162,9 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
   }
 }
 
-async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPassword?: string): Promise<boolean> {
+export async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPassword?: string): Promise<boolean> {
   const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
-  const target = settings.webhookUrl?.trim();
+  const target = settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!target || !target.startsWith("http")) return false;
 
   const payload = {
@@ -197,6 +200,60 @@ async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPassword?
     console.warn("[Google Sheets Customer Sync Error]:", err);
     return false;
   }
+}
+
+// Background sync newsletter subscriber to Google Sheets
+export async function syncNewsletterToGoogleSheets(email: string, source = "Website Footer"): Promise<boolean> {
+  const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
+  const target = settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!target || !target.startsWith("http")) return false;
+
+  const subDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+  const payload = {
+    action: "newsletter_subscription",
+    type: "subscriber",
+    email: email.trim().toLowerCase(),
+    date: subDate,
+    source,
+    sheetRow: [
+      subDate,
+      email.trim().toLowerCase(),
+      source,
+      "Active"
+    ]
+  };
+
+  try {
+    await fetch(target, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    return true;
+  } catch (err) {
+    console.warn("[Google Sheets Newsletter Sync Error]:", err);
+    return false;
+  }
+}
+
+// Helper to pull live orders, customers, and subscribers directly from Google Sheets
+export async function fetchLiveGoogleSheetData(webhookUrl?: string): Promise<{ orders?: any[]; customers?: any[]; subscribers?: any[] } | null> {
+  const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
+  const target = webhookUrl || settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!target || !target.startsWith("http")) return null;
+
+  try {
+    const fetchUrl = target + (target.includes("?") ? "&" : "?") + "action=get_all";
+    const res = await fetch(fetchUrl);
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (err) {
+    console.warn("[Google Sheet Pull Error]:", err);
+  }
+  return null;
 }
 
 function createJsonResponse(data: any, status = 200): Response {
@@ -750,6 +807,107 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     };
     await syncOrderToGoogleSheets(testOrder, targetUrl);
     return createJsonResponse({ success: true, message: "টেস্ট ওয়েবহুক রিকোয়েস্ট পাঠানো হয়েছে!" });
+  }
+
+  // 12. Newsletter Subscription (POST /api/newsletter or /api/subscribe)
+  if ((path === "/api/newsletter" || path === "/api/subscribe") && method === "POST") {
+    const { email, source } = body;
+    if (!email || !email.includes("@")) {
+      return createJsonResponse({ error: "একটি সঠিক ইমেইল অ্যাড্রেস প্রদান করুন।" }, 400);
+    }
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const subscribers = getSafeStorage<{ email: string; source: string; subscribedAt: string }[]>(SUBSCRIBERS_KEY, []);
+    if (!subscribers.some(s => s.email === normalizedEmail)) {
+      subscribers.unshift({
+        email: normalizedEmail,
+        source: source || "Website Footer",
+        subscribedAt: new Date().toISOString()
+      });
+      setSafeStorage(SUBSCRIBERS_KEY, subscribers);
+    }
+    // Sync to Google Sheets
+    syncNewsletterToGoogleSheets(normalizedEmail, source || "Website Footer").catch(() => {});
+    return createJsonResponse({
+      success: true,
+      message: "সাবস্ক্রাইব করার জন্য ধন্যবাদ! আপনার ইমেইলটি সফলভাবে সংরক্ষিত হয়েছে।"
+    });
+  }
+
+  // 13. Admin Subscribers List & Delete
+  if (path === "/api/admin/subscribers" && method === "GET") {
+    const subscribers = getSafeStorage<{ email: string; source: string; subscribedAt: string }[]>(SUBSCRIBERS_KEY, []);
+    return createJsonResponse({ subscribers, total: subscribers.length });
+  }
+
+  if (path.startsWith("/api/admin/subscribers/") && method === "DELETE") {
+    const targetEmail = decodeURIComponent(path.replace("/api/admin/subscribers/", "")).toLowerCase();
+    const subscribers = getSafeStorage<{ email: string; source: string; subscribedAt: string }[]>(SUBSCRIBERS_KEY, []);
+    const remaining = subscribers.filter(s => s.email.toLowerCase() !== targetEmail);
+    setSafeStorage(SUBSCRIBERS_KEY, remaining);
+    return createJsonResponse({ success: true, message: "সাবস্ক্রাইবার মুছে ফেলা হয়েছে", total: remaining.length });
+  }
+
+  // 14. Live Google Sheet Sync (Pull all orders, customers, subscribers across all live devices)
+  if (path === "/api/admin/sync-from-sheets" && method === "POST") {
+    const liveData = await fetchLiveGoogleSheetData(body.webhookUrl);
+    if (!liveData) {
+      return createJsonResponse({ error: "গুগল শিট থেকে ডেটা পড়তে ব্যর্থ হয়েছে। অ্যাপস স্ক্রিপ্টে doGet ফাংশনটি আছে কিনা নিশ্চিত করুন।" }, 500);
+    }
+
+    let importedOrders = 0;
+    let importedSubscribers = 0;
+
+    if (liveData.orders && Array.isArray(liveData.orders)) {
+      const currentOrders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
+      for (const sheetOrder of liveData.orders) {
+        if (!currentOrders.some(o => o.id === sheetOrder.id)) {
+          const rawPrice = String(sheetOrder.totalPrice || "0").replace(/[^0-9.]/g, "");
+          currentOrders.unshift({
+            id: sheetOrder.id,
+            customerName: sheetOrder.customerName || "Customer",
+            customerEmail: sheetOrder.customerEmail || "",
+            customerPhone: sheetOrder.customerPhone || "",
+            shippingAddress: sheetOrder.shippingAddress || "",
+            items: [{
+              productId: "imported",
+              title: sheetOrder.itemsText || "Order Items",
+              price: Number(rawPrice) || 0,
+              quantity: 1,
+              imageUrl: ""
+            }],
+            totalPrice: Number(rawPrice) || 0,
+            paymentMethod: sheetOrder.paymentMethod || "Cash on Delivery",
+            status: sheetOrder.status || "Pending",
+            createdAt: sheetOrder.createdAt || new Date().toISOString(),
+            syncedToGoogleSheet: true
+          });
+          importedOrders++;
+        }
+      }
+      setSafeStorage(ORDERS_KEY, currentOrders);
+    }
+
+    if (liveData.subscribers && Array.isArray(liveData.subscribers)) {
+      const currentSubs = getSafeStorage<{ email: string; source: string; subscribedAt: string }[]>(SUBSCRIBERS_KEY, []);
+      for (const s of liveData.subscribers) {
+        if (s.email && !currentSubs.some(cs => cs.email === s.email.toLowerCase())) {
+          currentSubs.unshift({
+            email: s.email.toLowerCase(),
+            source: s.source || "Google Sheet",
+            subscribedAt: s.date || new Date().toISOString()
+          });
+          importedSubscribers++;
+        }
+      }
+      setSafeStorage(SUBSCRIBERS_KEY, currentSubs);
+    }
+
+    return createJsonResponse({
+      success: true,
+      message: `গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে! (${importedOrders} টি নতুন অর্ডার, ${importedSubscribers} জন নতুন সাবস্ক্রাইবার)`,
+      importedOrders,
+      importedSubscribers
+    });
   }
 
   if (path === "/api/admin/github/verify" && method === "POST") {

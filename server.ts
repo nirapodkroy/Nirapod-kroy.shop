@@ -29,7 +29,8 @@ const DATA_FILE = path.join(process.cwd(), ".app_store_data.json");
 // Default Admin Credentials from environment
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mtarifprodhan@gmail.com").trim().toLowerCase();
 const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || "AdminSecurePass2026!").trim();
-let googleSheetWebhookUrl = (process.env.GOOGLE_SHEET_WEBHOOK_URL || "").trim();
+export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbwYakz5JjsuG3qKKPgwmbKUS7xQYXzWe0uV4rJMHU6OcNyN5zA4ulzt9B2R9SLdUXg/exec";
+let googleSheetWebhookUrl = (process.env.GOOGLE_SHEET_WEBHOOK_URL || DEFAULT_GOOGLE_SHEET_WEBHOOK).trim();
 
 // Types
 interface Product {
@@ -601,11 +602,18 @@ const INITIAL_CUSTOMERS: Customer[] = [
   }
 ];
 
+interface Subscriber {
+  email: string;
+  source: string;
+  subscribedAt: string;
+}
+
 // Data state
 interface StoreState {
   products: Product[];
   orders: Order[];
   customers: Customer[];
+  subscribers?: Subscriber[];
   webhookUrl: string;
 }
 
@@ -613,6 +621,7 @@ let storeState: StoreState = {
   products: DEFAULT_PRODUCTS,
   orders: INITIAL_ORDERS,
   customers: INITIAL_CUSTOMERS,
+  subscribers: [],
   webhookUrl: googleSheetWebhookUrl
 };
 
@@ -788,6 +797,48 @@ async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: stri
     return res.ok || responseText.includes('"status":"success"');
   } catch (err) {
     console.warn(`[Google Sheets Customer Sync Error]:`, err);
+    return false;
+  }
+}
+
+// Helper: dispatch newsletter subscription to Google Sheets webhook
+async function syncNewsletterToGoogleSheets(email: string, source = "Website Footer"): Promise<boolean> {
+  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return false;
+  }
+
+  try {
+    const subDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+    const payload = {
+      action: "newsletter_subscription",
+      type: "subscriber",
+      email: email.trim().toLowerCase(),
+      date: subDate,
+      source,
+      sheetRow: [
+        subDate,
+        email.trim().toLowerCase(),
+        source,
+        "Active"
+      ]
+    };
+
+    console.log(`[Google Sheets] Dispatching newsletter subscriber ${email} to ${targetUrl}`);
+    const res = await fetch(targetUrl, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+        "User-Agent": "NirapodKroy-Ecommerce/1.0"
+      },
+      body: JSON.stringify(payload)
+    });
+    const responseText = await res.text().catch(() => "");
+    console.log(`[Google Sheets Newsletter Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
+    return res.ok || responseText.includes('"status":"success"');
+  } catch (err) {
+    console.warn(`[Google Sheets Newsletter Sync Error]:`, err);
     return false;
   }
 }
@@ -1666,6 +1717,52 @@ app.post("/api/admin/test-webhook", requireAdmin, async (req, res) => {
     return res.json({ success: true, message: "Webhook successfully reached and responded OK!" });
   }
   return res.status(502).json({ error: "Webhook test failed or returned error. Please check your Apps Script Webhook deployment URL." });
+});
+
+// 8. Newsletter & Subscribers API
+// POST /api/newsletter or /api/subscribe
+app.post(["/api/newsletter", "/api/subscribe"], async (req, res) => {
+  const { email, source } = req.body;
+  if (!email || !String(email).includes("@")) {
+    return res.status(400).json({ error: "একটি সঠিক ইমেইল এড্রেস প্রদান করুন।" });
+  }
+
+  const cleanEmail = String(email).trim().toLowerCase();
+  if (!storeState.subscribers) storeState.subscribers = [];
+
+  if (!storeState.subscribers.some(s => s.email === cleanEmail)) {
+    storeState.subscribers.unshift({
+      email: cleanEmail,
+      source: source || "Website Footer",
+      subscribedAt: new Date().toISOString()
+    });
+    saveState();
+  }
+
+  // Sync to Google Sheets in background
+  syncNewsletterToGoogleSheets(cleanEmail, source || "Website Footer").catch(err => {
+    console.warn("[Google Sheets] Newsletter sync warning:", err);
+  });
+
+  res.json({
+    success: true,
+    message: "সাবস্ক্রাইব করার জন্য ধন্যবাদ! আপনার ইমেইলটি সফলভাবে সংরক্ষিত হয়েছে।"
+  });
+});
+
+// GET /api/admin/subscribers
+app.get("/api/admin/subscribers", requireAdmin, (_req, res) => {
+  const subscribers = storeState.subscribers || [];
+  res.json({ subscribers, total: subscribers.length });
+});
+
+// DELETE /api/admin/subscribers/:email
+app.delete("/api/admin/subscribers/:email", requireAdmin, (req, res) => {
+  const targetEmail = decodeURIComponent(req.params.email).toLowerCase();
+  if (!storeState.subscribers) storeState.subscribers = [];
+  storeState.subscribers = storeState.subscribers.filter(s => s.email.toLowerCase() !== targetEmail);
+  saveState();
+  res.json({ success: true, message: "Subscriber removed successfully", total: storeState.subscribers.length });
 });
 
 // ==========================================

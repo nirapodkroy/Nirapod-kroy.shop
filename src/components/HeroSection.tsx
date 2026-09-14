@@ -11,6 +11,21 @@ interface HeroSectionProps {
 const SLIDES = [
   {
     id: 1,
+    badge: { bn: "অফিশিয়াল ওয়ারেন্টি", en: "Official Warranty" },
+    badgeColor: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+    title: { bn: "স্মার্ট ইলেকট্রনিক্স ও টেক গ্যাজেটস", en: "Smart Tech & Electronics" },
+    highlight: { bn: "Gadgets & Accessories", en: "Gadgets & Accessories" },
+    subtitle: {
+      bn: "স্মার্টওয়াচ, প্রিমিয়াম নয়েজ ক্যানসেলিং হেডফোন, মেকানিক্যাল কীবোর্ড এবং হাই-স্পিড ফাস্ট চার্জার।",
+      en: "Smartwatches, active noise-cancelling headphones, mechanical keyboards, and 65W fast chargers."
+    },
+    discountBadge: { bn: "ব্র্যান্ড ওয়ারেন্টি সহ", en: "Brand Warranty Included" },
+    cta: { bn: "ইলেকট্রনিক্স এক্সপ্লোর করুন", en: "Explore Electronics" },
+    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=85",
+    accent: "from-indigo-500/25 to-sky-500/10"
+  },
+  {
+    id: 2,
     badge: { bn: "নিরাপদ কেনাকাটা", en: "Safe & Trusted" },
     badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
     title: { bn: "সব ধরনের পণ্যের বিশ্বস্ত বাজার", en: "Your Ultimate Everything Store" },
@@ -25,7 +40,7 @@ const SLIDES = [
     accent: "from-emerald-500/25 to-teal-500/10"
   },
   {
-    id: 2,
+    id: 3,
     badge: { bn: "১০০% খাঁটি ও অর্গানিক", en: "100% Pure & Organic" },
     badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
     title: { bn: "স্বাস্থ্যসম্মত খাঁটি খাদ্য ও মুদি পণ্য", en: "Healthy Groceries & Pure Food" },
@@ -38,21 +53,6 @@ const SLIDES = [
     cta: { bn: "মুদি পণ্য দেখুন", en: "Browse Groceries" },
     image: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=85",
     accent: "from-amber-500/25 to-orange-500/10"
-  },
-  {
-    id: 3,
-    badge: { bn: "অফিশিয়াল ওয়ারেন্টি", en: "Official Warranty" },
-    badgeColor: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
-    title: { bn: "স্মার্ট ইলেকট্রনিক্স ও টেক গ্যাজেটস", en: "Smart Tech & Electronics" },
-    highlight: { bn: "Gadgets & Accessories", en: "Gadgets & Accessories" },
-    subtitle: {
-      bn: "স্মার্টওয়াচ, প্রিমিয়াম নয়েজ ক্যানসেলিং হেডফোন, মেকানিক্যাল কীবোর্ড এবং হাই-স্পিড ফাস্ট চার্জার।",
-      en: "Smartwatches, active noise-cancelling headphones, mechanical keyboards, and 65W fast chargers."
-    },
-    discountBadge: { bn: "ব্র্যান্ড ওয়ারেন্টি সহ", en: "Brand Warranty Included" },
-    cta: { bn: "ইলেকট্রনিক্স এক্সপ্লোর করুন", en: "Explore Electronics" },
-    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=85",
-    accent: "from-indigo-500/25 to-sky-500/10"
   },
   {
     id: 4,
