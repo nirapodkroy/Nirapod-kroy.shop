@@ -1379,8 +1379,8 @@ function doGet(e) {
       });
     }
 
-    // Subscribers tab
-    var subSheet = ss.getSheetByName("Subscribers") || ss.getSheetByName("সাবস্ক্রাইবার");
+    // Subscribers tab ("subscribe")
+    var subSheet = ss.getSheetByName("subscribe") || ss.getSheetByName("Subscribe") || ss.getSheetByName("Subscribers") || ss.getSheetByName("সাবস্ক্রাইব");
     if (subSheet && subSheet.getLastRow() > 1) {
       var sRows = subSheet.getRange(2, 1, subSheet.getLastRow() - 1, 4).getValues();
       result.subscribers = sRows.map(function(r) {
@@ -1423,17 +1423,37 @@ function doPost(e) {
         customerSheet.appendRow(data.sheetRow);
       }
     } 
-    // 2. নিউজলেটার / সাবস্ক্রাইবার (Newsletter Subscriptions)
-    else if (data.action === "newsletter_subscription" || data.type === "subscriber") {
-      var subSheet = ss.getSheetByName("Subscribers") || ss.getSheetByName("সাবস্ক্রাইবার");
+    // 2. নিউজলেটার / সাবস্ক্রাইবার ("subscribe" ট্যাবে ডেটা সংরক্ষণ ও ডুপ্লিকেট রোধ)
+    else if (
+      data.action === "subscribe" || 
+      data.action === "newsletter_subscription" || 
+      data.type === "subscriber" ||
+      data.sheetTab === "subscribe" ||
+      data.targetSheet === "subscribe"
+    ) {
+      var subSheet = ss.getSheetByName("subscribe") || ss.getSheetByName("Subscribe") || ss.getSheetByName("Subscribers") || ss.getSheetByName("সাবস্ক্রাইব");
       if (!subSheet) {
-        subSheet = ss.insertSheet("Subscribers");
+        subSheet = ss.insertSheet("subscribe");
       }
       if (subSheet.getLastRow() === 0) {
         subSheet.appendRow(["Subscription Date", "Email", "Source", "Status"]);
         subSheet.getRange(1, 1, 1, 4).setFontWeight("bold").setBackground("#fff3cd");
       }
-      if (data.sheetRow) {
+
+      // একই ইমেইল ২ বার যেন না আসে (Prevent Duplication)
+      var targetEmail = String(data.email || (data.sheetRow && data.sheetRow[1]) || "").trim().toLowerCase();
+      var isDuplicate = false;
+      if (subSheet.getLastRow() > 1 && targetEmail) {
+        var existingData = subSheet.getRange(2, 2, subSheet.getLastRow() - 1, 1).getValues();
+        for (var s = 0; s < existingData.length; s++) {
+          if (String(existingData[s][0]).trim().toLowerCase() === targetEmail) {
+            isDuplicate = true;
+            break;
+          }
+        }
+      }
+
+      if (!isDuplicate && data.sheetRow) {
         subSheet.appendRow(data.sheetRow);
       }
     }
@@ -2663,10 +2683,10 @@ function doPost(e) {
                     <div>
                       <h3 className="font-bold text-base text-white flex items-center gap-2">
                         <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-                        Google Sheets অটো সিঙ্ক (Orders & Customer Registrations)
+                        Google Sheets অটো সিঙ্ক (Orders, Customers ও subscribe ট্যাব)
                       </h3>
                       <p className="text-xs text-zinc-400 mt-1">
-                        গ্রাহক নিবন্ধন (নাম, মোবাইল নম্বর, ইমেইল, ঠিকানা ও পাসওয়ার্ড) অথবা নতুন অর্ডার হলে তা স্বয়ংক্রিয়ভাবে আপনার গুগল শিটের সংশ্লিষ্ট ট্যাবে (Customers ও Orders) যুক্ত হবে।
+                        অর্ডার হলে <strong>Orders</strong> ট্যাবে, গ্রাহক নিবন্ধনে <strong>Customers</strong> ট্যাবে এবং নিউজলেটার সাবস্ক্রাইব হলে সম্পূর্ণ আলাদা <strong>subscribe</strong> ট্যাবে ডেটা যুক্ত হবে। ডুপ্লিকেট এন্ট্রি প্রতিরোধ ব্যবস্থা সংযুক্ত রয়েছে।
                       </p>
                     </div>
 

@@ -811,7 +811,10 @@ async function syncNewsletterToGoogleSheets(email: string, source = "Website Foo
   try {
     const subDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
     const payload = {
-      action: "newsletter_subscription",
+      action: "subscribe",
+      subAction: "newsletter_subscription",
+      sheetTab: "subscribe",
+      targetSheet: "subscribe",
       type: "subscriber",
       email: email.trim().toLowerCase(),
       date: subDate,
@@ -1763,6 +1766,81 @@ app.delete("/api/admin/subscribers/:email", requireAdmin, (req, res) => {
   storeState.subscribers = storeState.subscribers.filter(s => s.email.toLowerCase() !== targetEmail);
   saveState();
   res.json({ success: true, message: "Subscriber removed successfully", total: storeState.subscribers.length });
+});
+
+// POST /api/admin/sync-from-sheets
+app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
+  const target = req.body.webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!target || !target.startsWith("http")) {
+    return res.status(400).json({ error: "গুগল শিট ওয়েবহুক ইউআরএল পাওয়া যায়নি।" });
+  }
+
+  try {
+    const fetchUrl = target + (target.includes("?") ? "&" : "?") + "action=get_all";
+    const sheetRes = await fetch(fetchUrl);
+    if (!sheetRes.ok) {
+      return res.status(500).json({ error: "গুগল শিট থেকে ডেটা পড়তে ব্যর্থ হয়েছে। অ্যাপস স্ক্রিপ্টে doGet ফাংশনটি আছে কিনা নিশ্চিত করুন।" });
+    }
+    const liveData: any = await sheetRes.json().catch(() => null);
+    if (!liveData) {
+      return res.status(500).json({ error: "গুগল শিট থেকে ডেটা সঠিক ফরম্যাটে পাওয়া যায়নি।" });
+    }
+
+    let importedOrders = 0;
+    let importedSubscribers = 0;
+
+    if (liveData.orders && Array.isArray(liveData.orders)) {
+      for (const sheetOrder of liveData.orders) {
+        if (!storeState.orders.some(o => o.id === sheetOrder.id)) {
+          const rawPrice = String(sheetOrder.totalPrice || "0").replace(/[^0-9.]/g, "");
+          storeState.orders.unshift({
+            id: sheetOrder.id,
+            customerName: sheetOrder.customerName || "Customer",
+            customerEmail: sheetOrder.customerEmail || "",
+            customerPhone: sheetOrder.customerPhone || "",
+            shippingAddress: sheetOrder.shippingAddress || "",
+            items: [{
+              productId: "imported",
+              title: sheetOrder.itemsText || "Order Items",
+              price: Number(rawPrice) || 0,
+              quantity: 1,
+              imageUrl: ""
+            }],
+            totalPrice: Number(rawPrice) || 0,
+            paymentMethod: sheetOrder.paymentMethod || "Cash on Delivery",
+            status: sheetOrder.status || "Pending",
+            createdAt: sheetOrder.createdAt || new Date().toISOString(),
+            syncedToGoogleSheet: true
+          });
+          importedOrders++;
+        }
+      }
+    }
+
+    if (liveData.subscribers && Array.isArray(liveData.subscribers)) {
+      if (!storeState.subscribers) storeState.subscribers = [];
+      for (const s of liveData.subscribers) {
+        if (s.email && !storeState.subscribers.some(cs => cs.email === s.email.toLowerCase())) {
+          storeState.subscribers.unshift({
+            email: s.email.toLowerCase(),
+            source: s.source || "Google Sheet",
+            subscribedAt: s.date || new Date().toISOString()
+          });
+          importedSubscribers++;
+        }
+      }
+    }
+
+    saveState();
+    return res.json({
+      success: true,
+      message: `গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে! (${importedOrders} টি নতুন অর্ডার, ${importedSubscribers} জন নতুন সাবস্ক্রাইবার)`,
+      importedOrders,
+      importedSubscribers
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || "গুগল শিট সিঙ্ক এরর" });
+  }
 });
 
 // ==========================================

@@ -210,7 +210,10 @@ export async function syncNewsletterToGoogleSheets(email: string, source = "Webs
 
   const subDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
   const payload = {
-    action: "newsletter_subscription",
+    action: "subscribe",
+    subAction: "newsletter_subscription",
+    sheetTab: "subscribe",
+    targetSheet: "subscribe",
     type: "subscriber",
     email: email.trim().toLowerCase(),
     date: subDate,

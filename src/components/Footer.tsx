@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { ShieldCheck, Heart, CreditCard, Send, CheckCircle2, PhoneCall, Loader2 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
-import { syncNewsletterToGoogleSheets, handleLocalApi } from "../lib/mockApi";
+import { handleLocalApi } from "../lib/mockApi";
 
 interface FooterProps {
   onCategorySelect: (cat: string) => void;
@@ -14,35 +14,44 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
   const [subscribed, setSubscribed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailInput, setEmailInput] = useState("");
+  const isSubmittingRef = useRef(false);
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
+
     const cleanEmail = emailInput.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes("@")) {
       addToast(language === "bn" ? "সঠিক ইমেইল এড্রেস প্রদান করুন" : "Please provide a valid email address", "warning");
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
-      // 1. Try server endpoint
-      const res = await fetch("/api/newsletter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail, source: "Website Footer" })
-      }).catch(() => null);
-
-      if (!res || !res.ok) {
-        // 2. Fallback to client mockApi handler
-        await handleLocalApi("/api/newsletter", {
+      let serverSynced = false;
+      // 1. Try server endpoint (which will dispatch ONCE to Google Sheets)
+      try {
+        const res = await fetch("/api/newsletter", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: cleanEmail, source: "Website Footer" })
         });
+        if (res.ok) {
+          serverSynced = true;
+        }
+      } catch {
+        serverSynced = false;
       }
 
-      // 3. Direct dispatch to Google Sheets webhook to guarantee synchronization
-      syncNewsletterToGoogleSheets(cleanEmail, "Website Footer").catch(console.error);
+      // 2. If server was unreachable, fallback to client-side local handler
+      if (!serverSynced) {
+        await handleLocalApi("/api/newsletter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: cleanEmail, source: "Website Footer" })
+        }).catch(() => null);
+      }
 
       setSubscribed(true);
       addToast(
@@ -55,13 +64,15 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
       setTimeout(() => {
         setSubscribed(false);
         setEmailInput("");
-      }, 4000);
+        isSubmittingRef.current = false;
+      }, 3000);
     } catch (err) {
       console.error("Newsletter error:", err);
-      // Still dispatch directly
-      syncNewsletterToGoogleSheets(cleanEmail, "Website Footer").catch(() => {});
       setSubscribed(true);
       addToast(language === "bn" ? "ধন্যবাদ! সাবস্ক্রিপশন সফল হয়েছে।" : "Thank you! Subscribed successfully.", "success");
+      setTimeout(() => {
+        isSubmittingRef.current = false;
+      }, 2000);
     } finally {
       setIsSubmitting(false);
     }
