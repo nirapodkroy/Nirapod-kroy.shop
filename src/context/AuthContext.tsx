@@ -93,8 +93,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (matchesOriginal || matchesCtrlAltT || matchesAdminA) {
         e.preventDefault();
         e.stopPropagation();
-        setIsAdminModalOpen(prev => !prev);
-        addToast("অ্যাডমিন প্যানেল সক্রিয় হয়েছে (Admin Console Activated)", "info");
+        setIsAdminModalOpen(prev => {
+          if (!prev) {
+            addToast("অ্যাডমিন প্যানেল সক্রিয় হয়েছে (Admin Console Activated)", "info");
+          }
+          return !prev;
+        });
       }
     };
 

@@ -12,7 +12,6 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
   const { language, t, getCategoryName } = useLanguage();
   const { addToast } = useToast();
-  const { setIsAdminModalOpen, adminToken } = useAuth();
   const [subscribed, setSubscribed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailInput, setEmailInput] = useState("");
@@ -283,17 +282,6 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
             <span>
               © {new Date().getFullYear()} Nirapod Kroy (নিরাপদ ক্রয়) — {t("copyright")}
             </span>
-            <span className="text-zinc-600 hidden sm:inline">•</span>
-            <button
-              type="button"
-              id="footer-admin-btn"
-              onClick={() => setIsAdminModalOpen(true)}
-              className="text-zinc-400 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors inline-flex items-center gap-1 cursor-pointer font-medium"
-              title="অ্যাডমিন প্যানেল (Admin Access)"
-            >
-              <Lock className="w-3 h-3" />
-              <span>{adminToken ? "অ্যাডমিন ড্যাশবোর্ড" : "অ্যাডমিন"}</span>
-            </button>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-center">

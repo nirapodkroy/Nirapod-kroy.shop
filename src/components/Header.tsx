@@ -53,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { theme, toggleTheme } = useTheme();
   const { itemCount, setIsCartOpen } = useCart();
-  const { currentUser, logoutCustomer, setIsAuthModalOpen, setAuthModalTab, setIsProfileModalOpen, setIsAdminModalOpen, adminToken } = useAuth();
+  const { currentUser, logoutCustomer, setIsAuthModalOpen, setAuthModalTab, setIsProfileModalOpen } = useAuth();
   const { language, setLanguage, toggleLanguage, t, getCategoryName } = useLanguage();
 
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -211,16 +211,6 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="Toggle theme"
             >
               {theme === "dark" ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-zinc-300" />}
-            </button>
-
-            {/* Admin Panel Access Button */}
-            <button
-              onClick={() => setIsAdminModalOpen(true)}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 text-[11px] font-semibold border border-emerald-600/40 hover:border-emerald-500 transition-colors cursor-pointer"
-              title="অ্যাডমিন প্যানেল"
-            >
-              <Lock className="w-3 h-3 text-emerald-400" />
-              <span>{adminToken ? (language === "bn" ? "অ্যাডমিন" : "Admin") : (language === "bn" ? "অ্যাডমিন" : "Admin")}</span>
             </button>
           </div>
         </div>
@@ -851,17 +841,6 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Package className="w-4 h-4 text-emerald-500" />
                   <span>{language === "bn" ? "আমার পূর্ববর্তী অর্ডার" : "Order History"}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsMoreOpen(false);
-                    setIsAdminModalOpen(true);
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2.5 transition-colors cursor-pointer border border-emerald-500/20"
-                >
-                  <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span>{language === "bn" ? "অ্যাডমিন প্যানেল" : "Admin Panel"}</span>
                 </button>
 
                 {/* Theme / Mode Switcher */}

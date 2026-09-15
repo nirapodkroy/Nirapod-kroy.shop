@@ -122,6 +122,19 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isPublishingLive, setIsPublishingLive] = useState(false);
   const [lastPublishedTime, setLastPublishedTime] = useState<string | null>(null);
 
+  // Memoized categories combining standard + products - declared at top level
+  const availableAdminCategories = useMemo(() => {
+    const set = new Set<string>(BASE_CATEGORIES.filter(c => c !== "All"));
+    if (Array.isArray(products)) {
+      products.forEach(p => {
+        if (p.category && typeof p.category === "string" && p.category.trim()) {
+          set.add(p.category.trim());
+        }
+      });
+    }
+    return Array.from(set);
+  }, [products]);
+
   // Editable Revenue State
   const [isEditingRevenue, setIsEditingRevenue] = useState(false);
   const [customRevenueInput, setCustomRevenueInput] = useState("");
@@ -907,7 +920,16 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   }, [products]);
 
-  if (!isAdminModalOpen) return null;
+  // Listen for Escape key to cleanly close admin console for comfortable UX
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isAdminModalOpen) {
+        setIsAdminModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [isAdminModalOpen, setIsAdminModalOpen]);
 
   // Handle Admin Login
   const handleAdminLogin = async (e: React.FormEvent) => {
@@ -1571,19 +1593,6 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  // Memoized categories combining standard + products
-  const availableAdminCategories = useMemo(() => {
-    const set = new Set<string>(BASE_CATEGORIES.filter(c => c !== "All"));
-    if (Array.isArray(products)) {
-      products.forEach(p => {
-        if (p.category && typeof p.category === "string" && p.category.trim()) {
-          set.add(p.category.trim());
-        }
-      });
-    }
-    return Array.from(set);
-  }, [products]);
-
   const sampleAppsScriptCode = `// ==========================================
 // নিরপদ ক্রয় (Nirapod Kroy) - Master Google Sheets Webhook
 // Support for: Orders, Customers, and Subscribe Tabs
@@ -1781,7 +1790,8 @@ function doPost(e) {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-start sm:justify-center p-2 sm:p-4 md:p-6 overflow-y-auto overscroll-contain">
+      {isAdminModalOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-start sm:justify-center p-2 sm:p-4 md:p-6 overflow-y-auto overscroll-contain">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -4618,6 +4628,7 @@ function doPost(e) {
           )}
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 };
