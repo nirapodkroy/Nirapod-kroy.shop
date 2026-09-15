@@ -29,6 +29,12 @@ import {
   Home,
   Lock
 } from "lucide-react";
+import {
+  GROCERIES_PARENT,
+  GROCERY_SUBCATEGORIES,
+  isGrocerySubcategory,
+  isGroceryRelatedCategory
+} from "../data/categories";
 
 interface HeaderProps {
   searchQuery: string;
@@ -97,7 +103,7 @@ export const Header: React.FC<HeaderProps> = ({
     const c = cat.toLowerCase().trim();
     if (c === "all") return lang === "bn" ? "সব পণ্য (All)" : "All Products";
     if (c === "offer zone" || c === "offers" || c === "offer-zone" || c === "offer") return lang === "bn" ? "🔥 অফার জোন (Offer Zone)" : "🔥 Offer Zone";
-    if (c === "groceries") return lang === "bn" ? "মুদি ও খাদ্য (Groceries)" : "Groceries";
+    if (c === "groceries & food" || c === "groceries" || c === "grocery") return lang === "bn" ? "মুদি ও খাদ্য (Groceries & Food)" : "Groceries & Food";
     if (c === "electronics") return lang === "bn" ? "ইলেকট্রনিক্স (Electronics)" : "Electronics";
     if (c === "fashion") return lang === "bn" ? "পোশাক ও ফ্যাশন (Fashion)" : "Fashion";
     if (c === "health & beauty" || c === "beauty") return lang === "bn" ? "রূপচর্চা ও স্বাস্থ্য (Beauty)" : "Health & Beauty";
@@ -151,9 +157,8 @@ export const Header: React.FC<HeaderProps> = ({
   const handleCategoryClick = (cat: string) => {
     setSelectedCategory(cat);
     setSearchQuery("");
-    const catalogEl = document.getElementById("catalog-section");
-    if (catalogEl) {
-      catalogEl.scrollIntoView({ behavior: "smooth" });
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     }
   };
 
@@ -312,8 +317,71 @@ export const Header: React.FC<HeaderProps> = ({
                       {selectedCategory === "All" && <span className="text-[10px]">✓</span>}
                     </button>
 
+                    {/* Offer Zone in Search Dropdown */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleCategoryClick("Offer Zone");
+                        setIsSearchCatDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors ${
+                        selectedCategory.toLowerCase() === "offer zone" || selectedCategory.toLowerCase() === "offer-zone"
+                          ? "bg-amber-500 text-zinc-950 font-bold"
+                          : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                      }`}
+                    >
+                      <span>{getCategoryDropdownLabel("Offer Zone", language)}</span>
+                      {(selectedCategory.toLowerCase() === "offer zone" || selectedCategory.toLowerCase() === "offer-zone") && <span className="text-[10px]">✓</span>}
+                    </button>
+
+                    {/* Groceries & Food with 8 Subcategories */}
+                    <div className="border-y border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20 py-1 my-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleCategoryClick(GROCERIES_PARENT);
+                          setIsSearchCatDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-xs font-bold flex items-center justify-between transition-colors ${
+                          selectedCategory.toLowerCase() === GROCERIES_PARENT.toLowerCase()
+                            ? "bg-emerald-600 text-white"
+                            : "text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/40"
+                        }`}
+                      >
+                        <span>🛒 {getCategoryDropdownLabel(GROCERIES_PARENT, language)}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200/80 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-bold">
+                          {language === "bn" ? "৮ উপ-ক্যাটাগরি" : "8 Subcategories"}
+                        </span>
+                      </button>
+
+                      <div className="pl-6 pr-2 py-0.5 space-y-0.5">
+                        {GROCERY_SUBCATEGORIES.map((sub) => {
+                          const isSubSelected = selectedCategory.toLowerCase() === sub.toLowerCase();
+                          return (
+                            <button
+                              key={sub}
+                              type="button"
+                              onClick={() => {
+                                handleCategoryClick(sub);
+                                setIsSearchCatDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-1.5 text-xs rounded-lg flex items-center justify-between transition-colors ${
+                                isSubSelected
+                                  ? "bg-emerald-600 text-white font-bold"
+                                  : "text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 hover:text-emerald-600 font-medium"
+                              }`}
+                            >
+                              <span>• {getCategoryDropdownLabel(sub, language)}</span>
+                              {isSubSelected && <span className="text-[10px]">✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Other Categories */}
                     {categories
-                      .filter(c => c !== "All")
+                      .filter(c => c !== "All" && c !== "Offer Zone" && c !== "Groceries" && c !== GROCERIES_PARENT && !isGrocerySubcategory(c))
                       .map(cat => {
                         const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
                         return (
@@ -521,7 +589,30 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Secondary Bar: Dark Green / Teal Bar (Smooth horizontal scrolling with visible category names & arrows) */}
       <div className="bg-[#0b2923] text-white border-b border-[#071f1a] relative z-40 overflow-visible">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 relative overflow-visible flex items-center gap-1">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 relative overflow-visible flex items-center gap-1 sm:gap-2">
+          {/* 1. STABLE PINNED HOME BUTTON - Outside scroll container, ALWAYS stays in place and never moves */}
+          <div className="shrink-0 flex items-center">
+            <button
+              type="button"
+              id="header-subnav-home-btn"
+              onClick={() => {
+                setSelectedCategory("All");
+                setSearchQuery("");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                selectedCategory === "All" && !searchQuery
+                  ? "bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-400/40"
+                  : "text-zinc-200 hover:text-white hover:bg-white/10"
+              }`}
+              title={language === "bn" ? "হোম পেজ ও সকল পণ্য" : "Home & All Products"}
+            >
+              <Home className="w-3.5 h-3.5" />
+              <span>{language === "bn" ? "হোম" : "Home"}</span>
+            </button>
+            <div className="h-4 w-px bg-white/20 ml-1.5 mr-0.5 hidden sm:block" />
+          </div>
+
           {/* Left scroll chevron for desktop & tablet */}
           <button
             type="button"
@@ -533,31 +624,11 @@ export const Header: React.FC<HeaderProps> = ({
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          {/* Horizontally scrollable category list */}
+          {/* Horizontally scrollable category list (Categories scroll smoothly, while Home stays fixed!) */}
           <div
             ref={categoryScrollRef}
             className="flex items-center gap-1.5 sm:gap-2 py-2 overflow-x-auto category-scrollbar scroll-smooth flex-1 select-none"
           >
-            {/* 1. Home / হোম (Homepage & All Products) */}
-            <button
-              type="button"
-              id="header-subnav-home-btn"
-              onClick={() => {
-                setSelectedCategory("All");
-                setSearchQuery("");
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                selectedCategory === "All" && !searchQuery
-                  ? "bg-emerald-600 text-white font-bold shadow-xs ring-1 ring-emerald-400/40"
-                  : "text-zinc-200 hover:text-white hover:bg-white/10"
-              }`}
-              title={language === "bn" ? "হোম পেজ ও সকল পণ্য" : "Home & All Products"}
-            >
-              <Home className="w-3.5 h-3.5" />
-              <span>{language === "bn" ? "হোম" : "Home"}</span>
-            </button>
-
             {/* 2. Offer Zone (Navigates directly to /offer-zone page) */}
             <button
               type="button"
@@ -576,11 +647,12 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{language === "bn" ? "অফার জোন" : "Offer Zone"}</span>
             </button>
 
-            {/* 3. All Individual Categories Directly Visible & Clickable */}
+            {/* 3. Main Categories in scroll track (Excluding subcategories so scrollbar remains tidy) */}
             {categories
-              .filter((c) => c !== "All" && c !== "Offer Zone")
+              .filter((c) => c !== "All" && c !== "Offer Zone" && c !== "Groceries" && !isGrocerySubcategory(c))
               .map((cat) => {
-                const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
+                const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase() || (cat === GROCERIES_PARENT && isGroceryRelatedCategory(selectedCategory));
+                const isGrocery = cat === GROCERIES_PARENT || cat.toLowerCase() === "groceries & food";
                 return (
                   <button
                     key={cat}
@@ -589,6 +661,8 @@ export const Header: React.FC<HeaderProps> = ({
                     className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
                       isSelected
                         ? "bg-emerald-600 text-white font-bold shadow-xs ring-1 ring-emerald-400/40"
+                        : isGrocery
+                        ? "text-emerald-300 font-semibold hover:text-white hover:bg-white/10"
                         : "text-zinc-200 hover:text-white hover:bg-white/10"
                     }`}
                   >
@@ -609,7 +683,7 @@ export const Header: React.FC<HeaderProps> = ({
             <ChevronRight className="w-4 h-4" />
           </button>
 
-          {/* 4. আরও (Aro) Dropdown - Quick Jump for ALL categories */}
+          {/* 4. আরও (Aro / More) Dropdown - Quick Jump for ALL categories & Subcategories */}
           <div className="relative overflow-visible shrink-0" ref={aroDropdownRef}>
             <button
               type="button"
@@ -627,12 +701,12 @@ export const Header: React.FC<HeaderProps> = ({
               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isAroDropdownOpen ? "rotate-180" : ""}`} />
             </button>
 
-            {/* Dropdown containing ALL categories - completely unclipped and floating above hero */}
+            {/* Dropdown containing ALL categories & subcategories - completely unclipped and floating above hero */}
             {isAroDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-64 sm:w-72 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-2 z-[9999] animate-fadeIn max-h-[72vh] overflow-y-auto">
+              <div className="absolute right-0 top-full mt-1.5 w-72 sm:w-80 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-2 z-[9999] animate-fadeIn max-h-[78vh] overflow-y-auto">
                 <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
                   <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                    {language === "bn" ? "সকল ক্যাটাগরি" : "All Categories"}
+                    {language === "bn" ? "সকল ক্যাটাগরি ও পণ্য" : "All Categories & Products"}
                   </span>
                   <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
                     {categories.length} টি
@@ -674,9 +748,58 @@ export const Header: React.FC<HeaderProps> = ({
                     {selectedCategory === "Offer Zone" && <span className="text-[10px]">✓</span>}
                   </button>
 
-                  {/* All Category Items */}
+                  {/* Groceries & Food Group with 8 Subcategories */}
+                  <div className="my-1.5 border-y border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20 py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleCategoryClick(GROCERIES_PARENT);
+                        setIsAroDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                        selectedCategory.toLowerCase() === GROCERIES_PARENT.toLowerCase()
+                          ? "bg-emerald-600 text-white font-bold"
+                          : "text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/40"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span>🛒</span>
+                        <span>{getCategoryDropdownLabel(GROCERIES_PARENT, language)}</span>
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200/80 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-bold">
+                        {language === "bn" ? "৮ উপ-ক্যাটাগরি" : "8 Subcategories"}
+                      </span>
+                    </button>
+
+                    {/* 8 Subcategories under Groceries */}
+                    <div className="pl-6 pr-2 py-1 space-y-0.5">
+                      {GROCERY_SUBCATEGORIES.map((sub) => {
+                        const isSubSelected = selectedCategory.toLowerCase() === sub.toLowerCase();
+                        return (
+                          <button
+                            key={sub}
+                            type="button"
+                            onClick={() => {
+                              handleCategoryClick(sub);
+                              setIsAroDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
+                              isSubSelected
+                                ? "bg-emerald-600 text-white font-bold"
+                                : "text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 hover:text-emerald-600 font-medium"
+                            }`}
+                          >
+                            <span>• {getCategoryDropdownLabel(sub, language)}</span>
+                            {isSubSelected && <span className="text-[10px]">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* All Other Categories */}
                   {categories
-                    .filter((c) => c !== "All" && c !== "Offer Zone")
+                    .filter((c) => c !== "All" && c !== "Offer Zone" && c !== "Groceries" && c !== GROCERIES_PARENT && !isGrocerySubcategory(c))
                     .map((cat) => {
                       const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
                       return (
@@ -757,8 +880,51 @@ export const Header: React.FC<HeaderProps> = ({
                     <ChevronRight className="w-4 h-4 text-zinc-400" />
                   </button>
 
+                  {/* Groceries & Food with 8 Subcategories */}
+                  <div className="space-y-1 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 p-1.5 border border-emerald-500/20">
+                    <button
+                      onClick={() => {
+                        handleCategoryClick(GROCERIES_PARENT);
+                        setIsMoreOpen(false);
+                      }}
+                      className={`w-full px-2.5 py-2 rounded-lg text-left text-xs font-bold flex items-center justify-between transition-colors cursor-pointer ${
+                        selectedCategory.toLowerCase() === GROCERIES_PARENT.toLowerCase()
+                          ? "bg-emerald-600 text-white"
+                          : "text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/40"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span>🛒</span>
+                        <span>{getCategoryName(GROCERIES_PARENT)}</span>
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200/80 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-bold">8</span>
+                    </button>
+                    <div className="pl-4 pr-1 py-0.5 space-y-1 border-l-2 border-emerald-500/30 ml-2">
+                      {GROCERY_SUBCATEGORIES.map((sub) => {
+                        const isSubActive = selectedCategory.toLowerCase() === sub.toLowerCase();
+                        return (
+                          <button
+                            key={sub}
+                            onClick={() => {
+                              handleCategoryClick(sub);
+                              setIsMoreOpen(false);
+                            }}
+                            className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer flex items-center justify-between ${
+                              isSubActive
+                                ? "bg-emerald-600 text-white font-bold shadow-xs"
+                                : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-emerald-600 font-medium"
+                            }`}
+                          >
+                            <span>• {getCategoryName(sub)}</span>
+                            {isSubActive && <span className="text-[10px]">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {categories
-                    .filter((c) => c !== "All")
+                    .filter((c) => c !== "All" && c !== "Groceries" && c !== GROCERIES_PARENT && !isGrocerySubcategory(c))
                     .map((cat) => (
                       <button
                         key={cat}

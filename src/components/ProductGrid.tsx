@@ -17,6 +17,12 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
+import {
+  GROCERIES_PARENT,
+  GROCERY_SUBCATEGORIES,
+  isGrocerySubcategory,
+  isGroceryRelatedCategory
+} from "../data/categories";
 
 interface ProductGridProps {
   products: Product[];
@@ -66,10 +72,18 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
 
     // Category filter
     if (selectedCategory && selectedCategory !== "All") {
+      const catLower = selectedCategory.toLowerCase().trim();
       const isOfferZone =
-        selectedCategory.toLowerCase() === "offer zone" ||
-        selectedCategory.toLowerCase() === "offers" ||
-        selectedCategory.toLowerCase() === "offer-zone";
+        catLower === "offer zone" ||
+        catLower === "offers" ||
+        catLower === "offer-zone";
+      const isGroceriesParent =
+        catLower === "groceries & food" ||
+        catLower === "groceries" ||
+        catLower === "grocery" ||
+        catLower === "food" ||
+        catLower === "মুদি ও খাদ্য" ||
+        catLower === "মুদি";
 
       if (isOfferZone) {
         list = list.filter(
@@ -83,10 +97,24 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                 p.badge.toLowerCase().includes("offer") ||
                 p.badge.toLowerCase().includes("deal")))
         );
+      } else if (isGroceriesParent) {
+        list = list.filter((p) => {
+          const pCat = p.category.toLowerCase().trim();
+          const pParent = (p.parentCategory || "").toLowerCase().trim();
+          return (
+            pCat === "groceries & food" ||
+            pCat === "groceries" ||
+            isGrocerySubcategory(p.category) ||
+            pParent === "groceries & food" ||
+            pParent === "groceries"
+          );
+        });
       } else {
-        list = list.filter(
-          (p) => p.category.toLowerCase() === selectedCategory.toLowerCase()
-        );
+        list = list.filter((p) => {
+          const pCat = p.category.toLowerCase().trim();
+          const pParent = (p.parentCategory || "").toLowerCase().trim();
+          return pCat === catLower || pParent === catLower;
+        });
       }
     }
 
@@ -116,9 +144,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
 
   const handleCategorySelect = (cat: string) => {
     setSelectedCategory(cat);
-    const catalogEl = document.getElementById("catalog-section");
-    if (catalogEl) {
-      catalogEl.scrollIntoView({ behavior: "smooth" });
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     }
   };
 
@@ -171,7 +198,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
           <div className="space-y-4 mb-8">
             {/* Breadcrumb & Navigation Actions */}
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs pb-3 border-b border-zinc-200/80 dark:border-zinc-800/80">
-              <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+              <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 flex-wrap">
                 <button
                   type="button"
                   onClick={() => handleCategorySelect("All")}
@@ -180,10 +207,29 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                   <Home className="w-3.5 h-3.5" />
                   <span>{language === "bn" ? "হোম" : "Home"}</span>
                 </button>
-                <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                  {getCategoryName(selectedCategory)}
-                </span>
+                {isGrocerySubcategory(selectedCategory) ? (
+                  <>
+                    <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <button
+                      type="button"
+                      onClick={() => handleCategorySelect(GROCERIES_PARENT)}
+                      className="hover:text-emerald-600 dark:hover:text-emerald-400 font-medium transition-colors cursor-pointer"
+                    >
+                      {getCategoryName(GROCERIES_PARENT)}
+                    </button>
+                    <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      {getCategoryName(selectedCategory)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      {getCategoryName(selectedCategory)}
+                    </span>
+                  </>
+                )}
               </nav>
 
               <div className="flex items-center gap-2">
@@ -269,6 +315,65 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* If inside Groceries & Food or any grocery subcategory, show interactive Subcategories Strip */}
+            {isGroceryRelatedCategory(selectedCategory) && (
+              <div className="pt-3 border-t border-zinc-200/80 dark:border-zinc-800/80">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 category-scrollbar select-none">
+                  <div className="flex items-center gap-1 text-xs font-bold text-zinc-600 dark:text-zinc-300 shrink-0 mr-1">
+                    <Filter className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>{language === "bn" ? "সাব-ক্যাটাগরি:" : "Sub-categories:"}</span>
+                  </div>
+
+                  {/* All Groceries Parent Pill */}
+                  <button
+                    type="button"
+                    onClick={() => handleCategorySelect(GROCERIES_PARENT)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
+                      selectedCategory.toLowerCase() === GROCERIES_PARENT.toLowerCase() ||
+                      selectedCategory.toLowerCase() === "groceries"
+                        ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/30 font-bold"
+                        : "bg-white dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:border-emerald-500 hover:text-emerald-600"
+                    }`}
+                  >
+                    <span>{language === "bn" ? "সকল মুদি ও খাদ্য" : "All Groceries"}</span>
+                  </button>
+
+                  {/* 8 Grocery Subcategory Pills */}
+                  {GROCERY_SUBCATEGORIES.map((sub) => {
+                    const isCurrent = selectedCategory.toLowerCase() === sub.toLowerCase();
+                    const subCount = products.filter(
+                      (p) => p.category.toLowerCase() === sub.toLowerCase()
+                    ).length;
+                    return (
+                      <button
+                        key={sub}
+                        type="button"
+                        onClick={() => handleCategorySelect(sub)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
+                          isCurrent
+                            ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/30 font-bold"
+                            : "bg-white dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:border-emerald-500 hover:text-emerald-600"
+                        }`}
+                      >
+                        <span>{getCategoryName(sub)}</span>
+                        {subCount > 0 && (
+                          <span
+                            className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                              isCurrent
+                                ? "bg-white/25 text-white"
+                                : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400"
+                            }`}
+                          >
+                            {subCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /* Home page: Full Section Header & Category Navigation Track */

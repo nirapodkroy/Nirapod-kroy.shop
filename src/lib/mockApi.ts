@@ -1,4 +1,4 @@
-import { Product, Order, CustomerUser, OrderTickerItem } from "../types";
+import { Product, Order, CustomerUser, OrderTickerItem, UserTrackingEntry } from "../types";
 import { DEFAULT_PRODUCTS } from "../data/defaultProducts";
 
 const CUSTOMERS_KEY = "nirapod_customers";
@@ -8,6 +8,7 @@ const SETTINGS_KEY = "nirapod_admin_settings";
 const ADMIN_TOKEN_KEY = "nirapod_admin_token";
 const REVENUE_KEY = "nirapod_custom_revenue";
 export const SUBSCRIBERS_KEY = "nirapod_subscribers";
+export const USER_TRACKING_KEY = "nirapod_user_tracking_list";
 
 export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4/exec";
 
@@ -239,6 +240,60 @@ export async function syncNewsletterToGoogleSheets(email: string, source = "Webs
     return true;
   } catch (err) {
     console.warn("[Google Sheets Newsletter Sync Error]:", err);
+    return false;
+  }
+}
+
+// Background sync user tracking to Google Sheets ("user tracking" tab)
+export async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHeartbeat = false): Promise<boolean> {
+  const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
+  const target = settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!target || !target.startsWith("http")) return false;
+
+  const payload = {
+    action: "user_tracking",
+    type: "user_tracking",
+    sheetTab: "user tracking",
+    targetSheet: "user tracking",
+    sessionId: entry.sessionId,
+    isHeartbeat: Boolean(isHeartbeat),
+    timeSpent: entry.timeSpent,
+    page: entry.page,
+    ip: entry.ip,
+    location: entry.location,
+    device: entry.device,
+    os: entry.os,
+    browser: entry.browser,
+    referrer: entry.referrer,
+    screen: entry.screen,
+    time: entry.time,
+    sheetRow: [
+      entry.time,
+      entry.page,
+      entry.ip,
+      entry.location,
+      entry.device,
+      entry.os,
+      entry.browser,
+      entry.timeSpent,
+      entry.referrer,
+      entry.screen,
+      entry.sessionId
+    ]
+  };
+
+  const urlWithParams = target + (target.includes("?") ? "&" : "?") + "tab=user+tracking&type=user_tracking&action=user_tracking";
+
+  try {
+    await fetch(urlWithParams, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    return true;
+  } catch (err) {
+    console.warn("[Google Sheets User Tracking Sync Error]:", err);
     return false;
   }
 }
@@ -560,11 +615,25 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     let list = getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
 
     if (category && category !== "All") {
-      const isOffer = category.toLowerCase() === "offer zone" || category.toLowerCase() === "offers" || category.toLowerCase() === "offer-zone";
+      const catLower = category.toLowerCase().trim();
+      const isOffer = catLower === "offer zone" || catLower === "offers" || catLower === "offer-zone";
+      const isGrocery = catLower === "groceries & food" || catLower === "groceries" || catLower === "grocery" || catLower === "food" || catLower === "মুদি ও খাদ্য" || catLower === "মুদি";
+      const grocerySubcategories = ["honey", "oil & ghee", "dates", "spices", "nuts & seeds", "beverage", "rice", "flours & lentils"];
+
       if (isOffer) {
         list = list.filter(p => p.isOfferZone || p.category.toLowerCase() === "offer zone" || (p.regularPrice && p.regularPrice > p.price) || (p.badge && (p.badge.toLowerCase().includes("off") || p.badge.toLowerCase().includes("ছাড়") || p.badge.toLowerCase().includes("offer") || p.badge.toLowerCase().includes("deal"))));
+      } else if (isGrocery) {
+        list = list.filter(p => {
+          const pCat = p.category.toLowerCase().trim();
+          const pParent = (p.parentCategory || "").toLowerCase().trim();
+          return pCat === "groceries & food" || pCat === "groceries" || grocerySubcategories.includes(pCat) || pParent === "groceries & food" || pParent === "groceries";
+        });
       } else {
-        list = list.filter(p => p.category.toLowerCase() === category.toLowerCase());
+        list = list.filter(p => {
+          const pCat = p.category.toLowerCase().trim();
+          const pParent = (p.parentCategory || "").toLowerCase().trim();
+          return pCat === catLower || pParent === catLower;
+        });
       }
     }
     if (search) {
@@ -593,6 +662,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       price: Number(body.price) || 0,
       regularPrice: body.regularPrice ? Number(body.regularPrice) : undefined,
       category: body.category || "General",
+      parentCategory: body.parentCategory ? String(body.parentCategory).trim() : undefined,
       stock: Number(body.stock) || 0,
       imageUrl: body.imageUrl || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80",
       images: Array.isArray(body.images) && body.images.length > 0 ? body.images : [body.imageUrl],
@@ -974,6 +1044,115 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       message: `গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে! (${importedOrders} টি নতুন অর্ডার, ${importedSubscribers} জন নতুন সাবস্ক্রাইবার)`,
       importedOrders,
       importedSubscribers
+    });
+  }
+
+  // --- USER TRACKING ROUTES ---
+  if (path === "/api/track" && method === "POST") {
+    const page = String(body.page || "হোমপেজ (Home)").trim();
+    const sessionId = String(body.sessionId || `v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}_root`).trim();
+    const isHeartbeat = Boolean(body.isHeartbeat);
+    const timeSpent = String(body.timeSpent || "সক্রিয় রয়েছে (Active)...").trim();
+    const clientIp = String(body.clientIp || "Unknown").trim();
+    const location = String(body.location || "Bangladesh").trim();
+    const device = String(body.device || "Desktop / PC").trim();
+    const os = String(body.os || "Windows 10/11").trim();
+    const browser = String(body.browser || "Chrome").trim();
+    const screen = String(body.screen || "1920x1080").trim();
+    const referrer = String(body.referrer || "সরাসরি (Direct)").trim();
+    const time = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+
+    const currentTracking = getSafeStorage<UserTrackingEntry[]>(USER_TRACKING_KEY, []);
+    const existingIndex = currentTracking.findIndex(t => t.sessionId === sessionId);
+    let currentEntry: UserTrackingEntry;
+
+    if (existingIndex >= 0) {
+      currentTracking[existingIndex].timeSpent = timeSpent;
+      currentTracking[existingIndex].updatedAt = Date.now();
+      currentEntry = currentTracking[existingIndex];
+    } else {
+      currentEntry = {
+        id: sessionId,
+        time,
+        page,
+        ip: clientIp,
+        location,
+        device,
+        os,
+        browser,
+        timeSpent,
+        referrer,
+        screen,
+        sessionId,
+        updatedAt: Date.now()
+      };
+      currentTracking.unshift(currentEntry);
+      if (currentTracking.length > 300) currentTracking.splice(300);
+    }
+    setSafeStorage(USER_TRACKING_KEY, currentTracking);
+
+    // Sync to Google Sheet in background
+    syncTrackingToGoogleSheets(currentEntry, isHeartbeat).catch(() => {});
+    return createJsonResponse({ success: true, sessionId, timeSpent });
+  }
+
+  if (path === "/api/admin/tracking" && method === "GET") {
+    const currentTracking = getSafeStorage<UserTrackingEntry[]>(USER_TRACKING_KEY, []);
+    const now = Date.now();
+    const activeNow = currentTracking.filter(t => t.updatedAt && (now - t.updatedAt < 120000)).length;
+
+    const pageCounts: Record<string, number> = {};
+    const deviceCounts: Record<string, number> = {};
+    const browserCounts: Record<string, number> = {};
+
+    currentTracking.forEach(t => {
+      pageCounts[t.page] = (pageCounts[t.page] || 0) + 1;
+      deviceCounts[t.device] = (deviceCounts[t.device] || 0) + 1;
+      browserCounts[t.browser] = (browserCounts[t.browser] || 0) + 1;
+    });
+
+    return createJsonResponse({
+      success: true,
+      totalVisits: currentTracking.length,
+      activeNow: Math.max(activeNow, 1),
+      tracking: currentTracking,
+      pageStats: pageCounts,
+      deviceStats: deviceCounts,
+      browserStats: browserCounts,
+      sheetTab: "user tracking"
+    });
+  }
+
+  if (path === "/api/admin/tracking/test" && method === "POST") {
+    const testSessionId = `v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}_test`;
+    const testEntry: UserTrackingEntry = {
+      id: testSessionId,
+      time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+      page: "হোমপেজ (Home)",
+      ip: "103.171.251.14",
+      location: "Bangladesh",
+      device: "Desktop / PC",
+      os: "Windows 10/11",
+      browser: "Chrome",
+      timeSpent: "সক্রিয় রয়েছে (Active)...",
+      referrer: "সরাসরি (Direct)",
+      screen: "1920x1080",
+      sessionId: testSessionId,
+      updatedAt: Date.now()
+    };
+
+    const currentTracking = getSafeStorage<UserTrackingEntry[]>(USER_TRACKING_KEY, []);
+    currentTracking.unshift(testEntry);
+    setSafeStorage(USER_TRACKING_KEY, currentTracking);
+
+    const synced = await syncTrackingToGoogleSheets(testEntry, false);
+    return createJsonResponse({
+      success: true,
+      synced,
+      message: synced
+        ? "গুগল শিটের 'user tracking' ট্যাবে সফলভাবে টেস্ট ডেটা পাঠানো হয়েছে!"
+        : "সার্ভারে লগ হয়েছে, কিন্তু গুগল শিটে পৌঁছায়নি। দয়া করে অ্যাপস স্ক্রিপ্ট ও ওয়েবহুক ইউআরএল পরীক্ষা করুন।",
+      entry: testEntry
     });
   }
 

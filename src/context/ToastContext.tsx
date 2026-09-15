@@ -19,7 +19,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const addToast = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info', title?: string) => {
     const id = "toast_" + Math.random().toString(36).substring(2) + Date.now();
     const newToast: Toast = { id, message, type, title };
-    setToasts(prev => [...prev.slice(-4), newToast]); // keep max 5 toasts
+    // Defer state update so that if addToast is ever invoked from any lifecycle callback, it runs safely
+    setTimeout(() => {
+      setToasts(prev => [...prev.slice(-4), newToast]); // keep max 5 toasts
+    }, 0);
 
     setTimeout(() => {
       removeToast(id);

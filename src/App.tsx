@@ -23,6 +23,7 @@ import { SecretAdminModal } from "./components/SecretAdminModal";
 import { Footer } from "./components/Footer";
 import { ToastContainer } from "./components/ToastContainer";
 import { BASE_CATEGORIES, getDynamicCategories } from "./data/categories";
+import { trackPageView } from "./utils/tracker";
 
 const PRODUCTS_CACHE_KEY = "nirapod_products_cache";
 const WISHLIST_CACHE_KEY = "nirapod_wishlist_ids";
@@ -76,9 +77,9 @@ const StoreContent: React.FC = () => {
     setSelectedCategory(targetCat);
     updateCategoryUrl(targetCat, replace);
 
-    // Scroll smoothly to top of page when changing category
+    // Scroll cleanly to the top of the page when changing category
     if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     }
   }, []);
 
@@ -87,11 +88,21 @@ const StoreContent: React.FC = () => {
     const handlePopState = () => {
       const catFromUrl = getCategoryFromUrl(dynamicCategories);
       setSelectedCategory(catFromUrl || "All");
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      }
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, [dynamicCategories]);
+
+  // Whenever selectedCategory changes, always ensure viewport starts at the top of the category page
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }
+  }, [selectedCategory]);
 
   // Synchronize category if matching dynamic categories loaded from API/cache
   useEffect(() => {
@@ -121,6 +132,25 @@ const StoreContent: React.FC = () => {
       }
     }
   }, [selectedCategory, language, getCategoryName]);
+
+  // Active page resolution for real-time user tracking
+  const activePageInfo = useMemo(() => {
+    if (isCheckoutOpen) return { title: "চেকআউট পেজ (Checkout)", slug: "checkout" };
+    if (quickViewProduct) return { title: `পণ্য ভিউ: ${quickViewProduct.title.slice(0, 30)}`, slug: `product_${quickViewProduct.id}` };
+    if (isTrackOrderOpen) return { title: "অর্ডার ট্র্যাকিং (Track Order)", slug: "track_order" };
+    if (isWishlistOpen) return { title: "উইশলিস্ট (Wishlist)", slug: "wishlist" };
+    if (selectedCategory && selectedCategory !== "All") {
+      const catName = getCategoryName(selectedCategory);
+      return { title: `ক্যাটাগরি: ${catName}`, slug: `cat_${selectedCategory.toLowerCase().replace(/\s+/g, '_')}` };
+    }
+    return { title: "হোমপেজ (Home)", slug: "home" };
+  }, [isCheckoutOpen, quickViewProduct, isTrackOrderOpen, isWishlistOpen, selectedCategory, getCategoryName]);
+
+  // Track page view and active visitor time
+  useEffect(() => {
+    const cleanup = trackPageView(activePageInfo.title, activePageInfo.slug);
+    return () => cleanup();
+  }, [activePageInfo.title, activePageInfo.slug]);
 
   // Load products from static products.json, API, or local storage cache
   const fetchProducts = useCallback(async () => {
@@ -207,20 +237,26 @@ const StoreContent: React.FC = () => {
   }, [products, wishlistIds]);
 
   const handleExploreClick = () => {
-    handleSelectCategory("All");
-    const catalogEl = document.getElementById("catalog-section");
-    if (catalogEl) {
-      catalogEl.scrollIntoView({ behavior: "smooth" });
-    }
+    setSelectedCategory("All");
+    updateCategoryUrl("All");
+    setTimeout(() => {
+      const catalogEl = document.getElementById("catalog-section");
+      if (catalogEl) {
+        catalogEl.scrollIntoView({ behavior: "smooth" });
+      }
+    }, 50);
   };
 
   const handleDealsClick = () => {
-    handleSelectCategory("All");
+    setSelectedCategory("All");
     setSearchQuery("");
-    const catalogEl = document.getElementById("catalog-section");
-    if (catalogEl) {
-      catalogEl.scrollIntoView({ behavior: "smooth" });
-    }
+    updateCategoryUrl("All");
+    setTimeout(() => {
+      const catalogEl = document.getElementById("catalog-section");
+      if (catalogEl) {
+        catalogEl.scrollIntoView({ behavior: "smooth" });
+      }
+    }, 50);
   };
 
   // When user clicks ANY product on the home page:

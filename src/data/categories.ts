@@ -6,9 +6,40 @@
 // 4. Static Page Generation (scripts/postbuild.js)
 // 5. Sitemap Generation (scripts/generate-sitemap.js)
 
+export const GROCERIES_PARENT = "Groceries & Food";
+
+// 8 Subcategories under Groceries & Food
+export const GROCERY_SUBCATEGORIES: string[] = [
+  "Honey",
+  "Oil & Ghee",
+  "Dates",
+  "Spices",
+  "Nuts & Seeds",
+  "Beverage",
+  "Rice",
+  "Flours & Lentils"
+];
+
+// Main top-level navigation categories
+export const MAIN_CATEGORIES: string[] = [
+  "All",
+  "Offer Zone",
+  "Groceries & Food",
+  "Baby & Kids",
+  "Sports",
+  "Electronics",
+  "Fashion",
+  "Health & Beauty",
+  "Home & Kitchen",
+  "Books",
+  "Accessories"
+];
+
 export const BASE_CATEGORIES: string[] = [
   "All",
   "Offer Zone",
+  "Groceries & Food",
+  "Groceries",
   "Honey",
   "Oil & Ghee",
   "Dates",
@@ -17,7 +48,6 @@ export const BASE_CATEGORIES: string[] = [
   "Beverage",
   "Rice",
   "Flours & Lentils",
-  "Groceries",
   "Baby & Kids",
   "Sports",
   "Electronics",
@@ -32,6 +62,8 @@ export const BASE_CATEGORIES: string[] = [
 export const CATEGORY_SLUG_MAP: Record<string, string> = {
   "All": "",
   "Offer Zone": "offer-zone",
+  "Groceries & Food": "groceries-and-food",
+  "Groceries": "groceries",
   "Honey": "honey",
   "Oil & Ghee": "oil-and-ghee",
   "Dates": "dates",
@@ -40,7 +72,6 @@ export const CATEGORY_SLUG_MAP: Record<string, string> = {
   "Beverage": "beverage",
   "Rice": "rice",
   "Flours & Lentils": "flours-and-lentils",
-  "Groceries": "groceries",
   "Baby & Kids": "baby-and-kids",
   "Sports": "sports",
   "Electronics": "electronics",
@@ -50,6 +81,148 @@ export const CATEGORY_SLUG_MAP: Record<string, string> = {
   "Books": "books",
   "Accessories": "accessories"
 };
+
+/**
+ * Checks whether a category is one of the 8 subcategories of Groceries & Food
+ */
+export function isGrocerySubcategory(category: string): boolean {
+  if (!category) return false;
+  const lower = category.toLowerCase().trim();
+  return GROCERY_SUBCATEGORIES.some((sub) => sub.toLowerCase() === lower);
+}
+
+/**
+ * Checks whether a category is either Groceries & Food itself OR any of its 8 subcategories
+ */
+export function isGroceryRelatedCategory(category: string): boolean {
+  if (!category) return false;
+  const lower = category.toLowerCase().trim();
+  if (lower === "groceries & food" || lower === "groceries" || lower === "grocery" || lower === "food" || lower === "মুদি ও খাদ্য" || lower === "মুদি") {
+    return true;
+  }
+  return isGrocerySubcategory(category);
+}
+
+/**
+ * Returns the parent category if the category is a subcategory, otherwise null
+ */
+export function getParentCategory(
+  category: string,
+  productList?: Array<{ category?: string; parentCategory?: string }>
+): string | null {
+  if (!category) return null;
+  if (isGrocerySubcategory(category)) {
+    return GROCERIES_PARENT;
+  }
+  if (Array.isArray(productList)) {
+    const found = productList.find(
+      (p) => p.category && p.category.toLowerCase().trim() === category.toLowerCase().trim() && p.parentCategory
+    );
+    if (found?.parentCategory) {
+      return found.parentCategory;
+    }
+  }
+  return null;
+}
+
+/**
+ * Get subcategories for a given parent category
+ */
+export function getSubcategories(
+  parentCategory: string,
+  productList?: Array<{ category?: string; parentCategory?: string }>
+): string[] {
+  const lower = (parentCategory || "").toLowerCase().trim();
+  const subSet = new Set<string>();
+
+  if (
+    lower === "groceries & food" ||
+    lower === "groceries" ||
+    lower === "grocery" ||
+    lower === "মুদি ও খাদ্য" ||
+    lower === "মুদি"
+  ) {
+    GROCERY_SUBCATEGORIES.forEach((s) => subSet.add(s));
+  }
+
+  if (Array.isArray(productList)) {
+    productList.forEach((p) => {
+      if (
+        p.parentCategory &&
+        p.parentCategory.toLowerCase().trim() === lower &&
+        p.category &&
+        p.category.trim()
+      ) {
+        subSet.add(p.category.trim());
+      }
+    });
+  }
+
+  return Array.from(subSet);
+}
+
+/**
+ * Get all available main categories (excluding All and Offer Zone)
+ */
+export function getAllMainCategories(
+  productList?: Array<{ category?: string; parentCategory?: string }>
+): string[] {
+  const set = new Set<string>(
+    MAIN_CATEGORIES.filter((c) => c !== "All" && c !== "Offer Zone")
+  );
+
+  if (Array.isArray(productList)) {
+    productList.forEach((p) => {
+      if (p.parentCategory && p.parentCategory.trim()) {
+        set.add(p.parentCategory.trim());
+      } else if (p.category && p.category.trim()) {
+        const cat = p.category.trim();
+        if (cat !== "All" && cat !== "Offer Zone" && !isGrocerySubcategory(cat)) {
+          set.add(cat);
+        }
+      }
+    });
+  }
+
+  return Array.from(set);
+}
+
+/**
+ * Format category label with English & Bengali translation for UI display
+ */
+export function formatCategoryDisplayLabel(cat: string, lang: string = "bn"): string {
+  if (!cat) return "";
+  const c = cat.toLowerCase().trim();
+  if (c === "all") return lang === "bn" ? "সব পণ্য (All)" : "All Products";
+  if (c === "offer zone" || c === "offers" || c === "offer-zone" || c === "offer")
+    return lang === "bn" ? "🔥 অফার জোন (Offer Zone)" : "🔥 Offer Zone";
+  if (c === "groceries & food" || c === "groceries" || c === "grocery")
+    return lang === "bn" ? "মুদি ও খাদ্য (Groceries & Food)" : "Groceries & Food";
+  if (c === "electronics") return lang === "bn" ? "ইলেকট্রনিক্স (Electronics)" : "Electronics";
+  if (c === "fashion") return lang === "bn" ? "পোশাক ও ফ্যাশন (Fashion)" : "Fashion";
+  if (c === "health & beauty" || c === "beauty")
+    return lang === "bn" ? "রূপচর্চা ও স্বাস্থ্য (Beauty)" : "Health & Beauty";
+  if (c === "home & kitchen" || c === "home")
+    return lang === "bn" ? "গৃহস্থালি ও কিচেন (Home)" : "Home & Kitchen";
+  if (c === "baby & kids" || c === "kids" || c === "baby")
+    return lang === "bn" ? "শিশু ও খেলনা (Kids)" : "Baby & Kids";
+  if (c === "sports") return lang === "bn" ? "খেলাধুলা ও ফিটনেস (Sports)" : "Sports";
+  if (c === "books") return lang === "bn" ? "বই ও স্টেশনারি (Books)" : "Books";
+  if (c === "accessories") return lang === "bn" ? "এক্সেসরিজ (Accessories)" : "Accessories";
+  if (c === "honey") return lang === "bn" ? "মধু ও সুইটনার (Honey)" : "Honey";
+  if (c === "oil & ghee" || c === "oil" || c === "ghee")
+    return lang === "bn" ? "তেল ও ঘি (Oil & Ghee)" : "Oil & Ghee";
+  if (c === "dates") return lang === "bn" ? "প্রিমিয়াম খেজুর (Dates)" : "Dates";
+  if (c === "spices") return lang === "bn" ? "খাঁটি মশলা (Spices)" : "Spices";
+  if (c === "nuts & seeds" || c === "nuts")
+    return lang === "bn" ? "বাদাম ও বীজ (Nuts & Seeds)" : "Nuts & Seeds";
+  if (c === "beverage" || c === "tea")
+    return lang === "bn" ? "চা ও পানীয় (Beverage)" : "Beverage";
+  if (c === "rice") return lang === "bn" ? "প্রিমিয়াম চাল (Rice)" : "Rice";
+  if (c === "flours & lentils" || c === "lentils")
+    return lang === "bn" ? "আটা ও ডাল (Flours & Lentils)" : "Flours & Lentils";
+  return cat;
+}
 
 // Common aliases for flexible URL matching (including Bengali transliterations and Unicode)
 export const SLUG_ALIASES: Record<string, string> = {
@@ -170,14 +343,17 @@ export const SLUG_ALIASES: Record<string, string> = {
   "ডাল": "Flours & Lentils",
   "আটা-ও-ডাল": "Flours & Lentils",
 
-  // Groceries
-  "groceries": "Groceries",
-  "grocery": "Groceries",
-  "mudi": "Groceries",
-  "muri": "Groceries",
-  "mudi-khaddo": "Groceries",
-  "মুদি": "Groceries",
-  "মুদি-ও-খাদ্য": "Groceries",
+  // Groceries & Food
+  "groceries-and-food": "Groceries & Food",
+  "groceries-food": "Groceries & Food",
+  "groceries": "Groceries & Food",
+  "grocery": "Groceries & Food",
+  "food": "Groceries & Food",
+  "mudi": "Groceries & Food",
+  "muri": "Groceries & Food",
+  "mudi-khaddo": "Groceries & Food",
+  "মুদি": "Groceries & Food",
+  "মুদি-ও-খাদ্য": "Groceries & Food",
 
   // Sports
   "sports": "Sports",

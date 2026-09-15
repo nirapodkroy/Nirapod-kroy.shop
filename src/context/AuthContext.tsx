@@ -56,6 +56,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Secret Admin state
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const isAdminModalOpenRef = React.useRef(isAdminModalOpen);
+  isAdminModalOpenRef.current = isAdminModalOpen;
+
   const [adminToken, setAdminToken] = useState<string | null>(() => {
     return (
       safeGetSessionStorage("auracart_admin_token") ||
@@ -93,12 +96,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (matchesOriginal || matchesCtrlAltT || matchesAdminA) {
         e.preventDefault();
         e.stopPropagation();
-        setIsAdminModalOpen(prev => {
-          if (!prev) {
-            addToast("অ্যাডমিন প্যানেল সক্রিয় হয়েছে (Admin Console Activated)", "info");
-          }
-          return !prev;
-        });
+        const willOpen = !isAdminModalOpenRef.current;
+        setIsAdminModalOpen(willOpen);
+        if (willOpen) {
+          addToast("অ্যাডমিন প্যানেল সক্রিয় হয়েছে (Admin Console Activated)", "info");
+        }
       }
     };
 

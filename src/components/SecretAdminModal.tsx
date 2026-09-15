@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { Product, Order, AdminStats, AdminCustomer } from "../types";
+import { Product, Order, AdminStats, AdminCustomer, UserTrackingEntry } from "../types";
 import { handleLocalApi } from "../lib/mockApi";
 import {
   X,
@@ -46,10 +46,25 @@ import {
   Mail,
   Tag,
   Percent,
-  Sparkles
+  Sparkles,
+  Activity,
+  Clock,
+  Monitor,
+  MapPin,
+  Compass
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { BASE_CATEGORIES, categoryToSlug } from "../data/categories";
+import {
+  BASE_CATEGORIES,
+  categoryToSlug,
+  GROCERIES_PARENT,
+  GROCERY_SUBCATEGORIES,
+  isGrocerySubcategory,
+  getParentCategory,
+  getSubcategories,
+  getAllMainCategories,
+  formatCategoryDisplayLabel
+} from "../data/categories";
 
 interface SecretAdminModalProps {
   products: Product[];
@@ -74,7 +89,21 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Admin View Tabs
-  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "orders" | "customers" | "subscribers" | "sheets" | "github">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "orders" | "customers" | "subscribers" | "tracking" | "sheets" | "github">("dashboard");
+
+  // User Real-Time Tracking State
+  const [userTracking, setUserTracking] = useState<UserTrackingEntry[]>([]);
+  const [isLoadingTracking, setIsLoadingTracking] = useState(false);
+  const [trackingStats, setTrackingStats] = useState<{
+    totalVisits: number;
+    activeNow: number;
+    pageStats: Record<string, number>;
+    deviceStats: Record<string, number>;
+    browserStats: Record<string, number>;
+  } | null>(null);
+  const [trackingSearchTerm, setTrackingSearchTerm] = useState("");
+  const [isTestingTrackingWebhook, setIsTestingTrackingWebhook] = useState(false);
+  const [isCleaningOrderSheet, setIsCleaningOrderSheet] = useState(false);
 
   // Subscribers State
   const [subscribers, setSubscribers] = useState<{ email: string; source: string; subscribedAt: string }[]>([]);
@@ -135,6 +164,11 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     return Array.from(set);
   }, [products]);
 
+  // Memoized Main Categories for Parent selection
+  const availableMainCategories = useMemo(() => {
+    return getAllMainCategories(products);
+  }, [products]);
+
   // Editable Revenue State
   const [isEditingRevenue, setIsEditingRevenue] = useState(false);
   const [customRevenueInput, setCustomRevenueInput] = useState("");
@@ -180,8 +214,23 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [formDescription, setFormDescription] = useState("");
   const [formPrice, setFormPrice] = useState("");
   const [formRegularPrice, setFormRegularPrice] = useState("");
-  const [formCategory, setFormCategory] = useState("Groceries");
+  // Category configuration states:
+  // "main" -> Product is added under a Main Category
+  // "sub" -> Product is added as a Sub-category under a parent category
+  const [categoryClassification, setCategoryClassification] = useState<"main" | "sub">("main");
+  const [formCategory, setFormCategory] = useState("Groceries & Food");
+  const [formParentCategory, setFormParentCategory] = useState("");
   const [customCategoryName, setCustomCategoryName] = useState("");
+  const [customParentCategoryName, setCustomParentCategoryName] = useState("");
+  const [isCustomMainCategory, setIsCustomMainCategory] = useState(false);
+  const [isCustomParentCategory, setIsCustomParentCategory] = useState(false);
+
+  // Subcategory suggestions based on selected parent category
+  const currentSubcategorySuggestions = useMemo(() => {
+    const parent = isCustomParentCategory ? customParentCategoryName.trim() : formParentCategory.trim();
+    if (!parent) return [];
+    return getSubcategories(parent, products);
+  }, [formParentCategory, customParentCategoryName, isCustomParentCategory, products]);
   const [formStock, setFormStock] = useState("25");
   const [formImageUrl, setFormImageUrl] = useState("");
   const [formImages, setFormImages] = useState<string[]>([]);
@@ -514,6 +563,29 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       console.warn("Admin subscribers fetch fallback:", e);
     } finally {
       setIsLoadingSubscribers(false);
+    }
+
+    // 2.3 User Real-Time Tracking
+    setIsLoadingTracking(true);
+    try {
+      const trackRes = await safeAdminFetch("/api/admin/tracking", {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (trackRes.ok) {
+        const trackData = await trackRes.json();
+        setUserTracking(trackData?.tracking || []);
+        setTrackingStats({
+          totalVisits: trackData?.totalVisits || 0,
+          activeNow: trackData?.activeNow || 0,
+          pageStats: trackData?.pageStats || {},
+          deviceStats: trackData?.deviceStats || {},
+          browserStats: trackData?.browserStats || {}
+        });
+      }
+    } catch (e) {
+      console.warn("Admin tracking fetch fallback:", e);
+    } finally {
+      setIsLoadingTracking(false);
     }
 
     // 3. Settings
@@ -951,7 +1023,13 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setFormDescription("");
     setFormPrice("");
     setFormRegularPrice("");
-    setFormCategory("Groceries");
+    setCategoryClassification("main");
+    setFormCategory("Groceries & Food");
+    setFormParentCategory("");
+    setCustomCategoryName("");
+    setCustomParentCategoryName("");
+    setIsCustomMainCategory(false);
+    setIsCustomParentCategory(false);
     setFormStock("20");
     setFormImageUrl("");
     setFormImages([]);
@@ -978,15 +1056,35 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setFormDescription(prod.description);
     setFormPrice(String(prod.price));
     setFormRegularPrice(prod.regularPrice ? String(prod.regularPrice) : "");
-    const knownCategories = BASE_CATEGORIES.filter(c => c !== "All");
-    const isStandard = knownCategories.some(c => c.toLowerCase() === (prod.category || "").trim().toLowerCase());
-    if (isStandard) {
-      setFormCategory(prod.category);
-      setCustomCategoryName("");
-    } else {
-      setFormCategory("__CUSTOM__");
+
+    // Determine category hierarchy: Sub-category vs Main Category
+    const parentCat = prod.parentCategory || getParentCategory(prod.category, products);
+    if (parentCat) {
+      setCategoryClassification("sub");
+      setFormParentCategory(parentCat);
+      setCustomParentCategoryName(parentCat);
+      setFormCategory(prod.category || "");
       setCustomCategoryName(prod.category || "");
+      setIsCustomParentCategory(false);
+      setIsCustomMainCategory(false);
+    } else {
+      setCategoryClassification("main");
+      setFormParentCategory("");
+      setCustomParentCategoryName("");
+      const isKnownMain = availableMainCategories.some(
+        (c) => c.toLowerCase() === (prod.category || "").trim().toLowerCase()
+      );
+      if (isKnownMain) {
+        setFormCategory(prod.category);
+        setCustomCategoryName("");
+        setIsCustomMainCategory(false);
+      } else {
+        setFormCategory(prod.category || "");
+        setCustomCategoryName(prod.category || "");
+        setIsCustomMainCategory(true);
+      }
     }
+
     setFormStock(String(prod.stock));
     const existingImgs = (prod.images && prod.images.length > 0)
       ? prod.images
@@ -1061,7 +1159,20 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         ? (finalImagesList.includes(primaryImg) ? finalImagesList : [primaryImg, ...finalImagesList])
         : [primaryImg];
 
-      const resolvedCategory = (formCategory === "__CUSTOM__" ? customCategoryName.trim() : formCategory.trim()) || "Groceries";
+      let resolvedCategory = "";
+      let resolvedParentCategory: string | undefined = undefined;
+
+      if (categoryClassification === "sub") {
+        resolvedCategory = (formCategory.trim() || customCategoryName.trim()) || "General";
+        const parent = isCustomParentCategory ? customParentCategoryName.trim() : formParentCategory.trim();
+        resolvedParentCategory = parent || "Groceries & Food";
+      } else {
+        resolvedCategory = (isCustomMainCategory
+          ? customCategoryName.trim()
+          : (formCategory === "__CUSTOM__" ? customCategoryName.trim() : formCategory.trim())
+        ) || "Groceries & Food";
+        resolvedParentCategory = undefined;
+      }
 
       const payload: Partial<Product> = {
         title: formTitle.trim(),
@@ -1069,6 +1180,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         price: Number(formPrice),
         regularPrice: formRegularPrice ? Number(formRegularPrice) : undefined,
         category: resolvedCategory,
+        parentCategory: resolvedParentCategory,
         stock: formIsAffiliate ? 999 : Number(formStock) || 0,
         imageUrl: primaryImg,
         images: payloadImages,
@@ -1593,52 +1705,222 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
+  // Fetch Tracking Data
+  const fetchTrackingData = useCallback(async () => {
+    if (!adminToken) return;
+    setIsLoadingTracking(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/tracking", {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUserTracking(data.tracking || []);
+        setTrackingStats({
+          totalVisits: data.totalVisits || 0,
+          activeNow: data.activeNow || 0,
+          pageStats: data.pageStats || {},
+          deviceStats: data.deviceStats || {},
+          browserStats: data.browserStats || {}
+        });
+      }
+    } catch (err) {
+      console.warn("Tracking data fetch fallback:", err);
+    } finally {
+      setIsLoadingTracking(false);
+    }
+  }, [adminToken]);
+
+  // Test User Tracking Webhook -> sends dummy log to "user traking" tab in Google Sheets
+  const handleTestTrackingWebhook = async () => {
+    setIsTestingTrackingWebhook(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/tracking/test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ url: webhookUrl })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addToast(data.message || "ট্র্যাকিং টেস্ট সফল! গুগল শিটের 'user traking' ট্যাবে দেখুন।", "success");
+        fetchTrackingData();
+      } else {
+        addToast(data.error || "User Tracking test failed. স্ক্রিপ্ট ডিপ্লয়মেন্ট চেক করুন।", "error");
+      }
+    } catch {
+      addToast("User Tracking test failed.", "error");
+    } finally {
+      setIsTestingTrackingWebhook(false);
+    }
+  };
+
+  // Clean Order Sheet: removes tracking rows accidentally inserted into "order sheet" and moves them to "user traking"
+  const handleCleanOrderSheet = async () => {
+    setIsCleaningOrderSheet(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/clean-order-sheet", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ url: webhookUrl })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addToast(data.message || "অর্ডার শিট থেকে ট্র্যাকিং ডেটা সফলভাবে 'user traking' ট্যাবে সরানো হয়েছে!", "success");
+      } else {
+        addToast(data.error || "ক্লিন অপারেশন সম্পন্ন করা সম্ভব হয়নি। গুগল স্ক্রিপ্ট আপডেট করুন।", "error");
+      }
+    } catch {
+      addToast("ক্লিন অপারেশন সম্পন্ন করা সম্ভব হয়নি।", "error");
+    } finally {
+      setIsCleaningOrderSheet(false);
+    }
+  };
+
+  // Export Tracking Logs to CSV
+  const exportTrackingToCsv = () => {
+    if (userTracking.length === 0) {
+      addToast("ডাউনলোড করার মতো কোনো ট্র্যাকিং ডেটা নেই", "warning");
+      return;
+    }
+    const headers = "Time,Page,IP,Location,Device,OS,Browser,TimeSpent,Referrer,Screen,SessionID\n";
+    const rows = userTracking
+      .map((t) =>
+        [
+          `"${t.time}"`,
+          `"${t.page}"`,
+          `"${t.ip}"`,
+          `"${t.location}"`,
+          `"${t.device}"`,
+          `"${t.os}"`,
+          `"${t.browser}"`,
+          `"${t.timeSpent}"`,
+          `"${t.referrer}"`,
+          `"${t.screen}"`,
+          `"${t.sessionId}"`
+        ].join(",")
+      )
+      .join("\n");
+    const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `nirapod-user-tracking-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    addToast("ইউজার ট্র্যাকিং CSV ফাইল ডাউনলোড সম্পন্ন হয়েছে", "success");
+  };
+
   const sampleAppsScriptCode = `// ==========================================
 // নিরপদ ক্রয় (Nirapod Kroy) - Master Google Sheets Webhook
-// Support for: Orders, Customers, and Subscribe Tabs
+// Tabs Supported: "order sheet", "user traking" (also "user tracking"), "subscribe", "Customers"
 // ==========================================
+
+// Helper: কেস-ইনসেনসিটিভ এবং বানানের তারতম্য সত্ত্বেও শিট খুঁজে বের করার ফাংশন
+function findSheet(ss, candidates, keyword) {
+  var sheets = ss.getSheets();
+  // ১. হুবহু নাম চেক (ছোট/বড় হাতের অক্ষর বা স্পেস অগ্রাহ্য করে)
+  for (var i = 0; i < sheets.length; i++) {
+    var sheetName = sheets[i].getName().trim().toLowerCase();
+    for (var j = 0; j < candidates.length; j++) {
+      if (sheetName === candidates[j].toLowerCase().trim()) {
+        return sheets[i];
+      }
+    }
+  }
+  // ২. কিওয়ার্ড চেক (যেমন 'trak' বা 'track')
+  if (keyword) {
+    var kw = keyword.toLowerCase().trim();
+    for (var i = 0; i < sheets.length; i++) {
+      var sName = sheets[i].getName().trim().toLowerCase();
+      if (sName.indexOf(kw) !== -1) {
+        return sheets[i];
+      }
+    }
+  }
+  return null;
+}
 
 // 1. ডেটা পড়ার জন্য (GET Request - Live Google Sheets Sync)
 function doGet(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var result = { orders: [], customers: [], subscribers: [] };
     
-    // 1. Orders tab (Customer_Order_Tracking অথবা Orders)
-    var orderSheet = ss.getSheetByName("Customer_Order_Tracking") || 
-                     ss.getSheetByName("Orders") || 
-                     ss.getSheetByName("অর্ডার");
+    // ম্যানুয়াল ক্লিনআপ রিকোয়েস্ট হ্যান্ডলিং (?action=clean_order_sheet)
+    if (e && e.parameter && e.parameter.action === "clean_order_sheet") {
+      var cleanMsg = cleanOrderSheetTrackingRows();
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: cleanMsg }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var result = { orders: [], customers: [], subscribers: [], tracking: [] };
+    
+    // 1. Orders tab ("order sheet" বা "Orders")
+    var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Customer_Order_Tracking", "Orders", "অর্ডার_লিস্ট", "অর্ডার"], "order");
     if (orderSheet && orderSheet.getLastRow() > 1) {
-      var rows = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, 10).getValues();
-      result.orders = rows.map(function(r) {
+      var lastCol = Math.min(orderSheet.getLastColumn(), 10);
+      var rows = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, lastCol).getValues();
+      result.orders = rows
+        .filter(function(r) {
+          // ট্র্যাকিংয়ের ভুল রো বাদ দিয়ে শুধু আসল অর্ডার ফিল্টার
+          var colA = String(r[0] || "");
+          var colB = String(r[1] || "");
+          return colA.indexOf("NK-") !== -1 || colA.indexOf("ORD-") !== -1 || colB.indexOf("হোমপেজ") === -1;
+        })
+        .map(function(r) {
+          return {
+            id: String(r[0] || ""),
+            createdAt: String(r[1] || ""),
+            customerName: String(r[2] || ""),
+            customerEmail: String(r[3] || ""),
+            customerPhone: String(r[4] || ""),
+            shippingAddress: String(r[5] || ""),
+            itemsText: String(r[6] || ""),
+            totalPrice: String(r[7] || ""),
+            paymentMethod: String(r[8] || ""),
+            status: String(r[9] || "Pending")
+          };
+        });
+    }
+
+    // 2. Subscribers tab ("subscribe")
+    var subSheet = findSheet(ss, ["subscribe", "Subscribe", "Subscribers", "সাবস্ক্রাইব"], "subscrib");
+    if (subSheet && subSheet.getLastRow() > 1) {
+      var sRows = subSheet.getRange(2, 1, subSheet.getLastRow() - 1, Math.min(subSheet.getLastColumn(), 4)).getValues();
+      result.subscribers = sRows.map(function(r) {
         return {
-          id: String(r[0]),
-          createdAt: String(r[1]),
-          customerName: String(r[2]),
-          customerEmail: String(r[3]),
-          customerPhone: String(r[4]),
-          shippingAddress: String(r[5]),
-          itemsText: String(r[6]),
-          totalPrice: String(r[7]),
-          paymentMethod: String(r[8]),
-          status: String(r[9])
+          date: String(r[0] || ""),
+          email: String(r[1] || ""),
+          source: String(r[2] || ""),
+          status: String(r[3] || "Active")
         };
       });
     }
 
-    // 2. Subscribers tab ("subscribe")
-    var subSheet = ss.getSheetByName("subscribe") || 
-                   ss.getSheetByName("Subscribe") || 
-                   ss.getSheetByName("Subscribers") || 
-                   ss.getSheetByName("সাবস্ক্রাইব");
-    if (subSheet && subSheet.getLastRow() > 1) {
-      var sRows = subSheet.getRange(2, 1, subSheet.getLastRow() - 1, 4).getValues();
-      result.subscribers = sRows.map(function(r) {
+    // 3. User Tracking tab ("user traking" বা "user tracking")
+    var trackSheet = findSheet(ss, ["user traking", "user tracking", "User Traking", "User Tracking"], "trak") || findSheet(ss, [], "track");
+    if (trackSheet && trackSheet.getLastRow() > 1) {
+      var maxRowsToRead = Math.min(trackSheet.getLastRow() - 1, 200);
+      var tRows = trackSheet.getRange(2, 1, maxRowsToRead, 11).getValues();
+      result.tracking = tRows.map(function(r) {
         return {
-          date: String(r[0]),
-          email: String(r[1]),
-          source: String(r[2]),
-          status: String(r[3])
+          time: String(r[0] || ""),
+          page: String(r[1] || ""),
+          ip: String(r[2] || ""),
+          location: String(r[3] || ""),
+          device: String(r[4] || ""),
+          os: String(r[5] || ""),
+          browser: String(r[6] || ""),
+          timeSpent: String(r[7] || ""),
+          referrer: String(r[8] || ""),
+          screen: String(r[9] || ""),
+          sessionId: String(r[10] || "")
         };
       });
     }
@@ -1651,7 +1933,7 @@ function doGet(e) {
   }
 }
 
-// 2. নতুন ডেটা যুক্ত করার জন্য (POST Request - Orders, Customers, Newsletter)
+// 2. নতুন ডেটা যুক্ত করার জন্য (POST Request)
 function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1666,24 +1948,43 @@ function doPost(e) {
     } else if (e && e.parameter) {
       data = e.parameter;
     }
+
+    // অর্ডার শিট ক্লিন করার স্পেশাল কমান্ড
+    if (data.action === "clean_order_sheet" || (e && e.parameter && e.parameter.action === "clean_order_sheet")) {
+      var cleanMsg = cleanOrderSheetTrackingRows();
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: cleanMsg }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     
-    // সাবস্ক্রাইবার বা নিউজলেটার নির্ধারণ (Strict Check + Fallback Heuristics)
+    // ১. ইউজার ট্র্যাকিং ডেটা নিখুঁতভাবে শনাক্তকরণ (user traking / user tracking)
+    var isTracking = Boolean(
+      data.action === "user_tracking" || 
+      data.action === "user_traking" || 
+      data.type === "user_tracking" ||
+      data.type === "user_traking" ||
+      String(data.sheetTab || data.targetSheet || "").toLowerCase().indexOf("trak") !== -1 ||
+      String(data.sheetTab || data.targetSheet || "").toLowerCase().indexOf("track") !== -1 ||
+      (e && e.parameter && (
+        String(e.parameter.tab || "").toLowerCase().indexOf("trak") !== -1 ||
+        String(e.parameter.tab || "").toLowerCase().indexOf("track") !== -1 ||
+        String(e.parameter.type || "").toLowerCase().indexOf("tracking") !== -1 ||
+        String(e.parameter.action || "").toLowerCase().indexOf("tracking") !== -1
+      )) ||
+      (data.sheetRow && data.sheetRow.length === 11) ||
+      Boolean(data.sessionId && (data.page || data.timeSpent))
+    );
+
+    // ২. সাবস্ক্রাইবার বা নিউজলেটার নির্ধারণ
     var isSubscriber = Boolean(
       data.action === "subscribe" || 
       data.action === "newsletter_subscription" || 
       data.type === "subscriber" ||
-      data.sheetTab === "subscribe" ||
-      data.targetSheet === "subscribe" ||
-      (e && e.parameter && (e.parameter.tab === "subscribe" || e.parameter.type === "subscriber" || e.parameter.action === "subscribe")) ||
-      // Safeguard Heuristic: Row length 4 with @ or footer in row
-      (data.sheetRow && data.sheetRow.length === 4 && (
-        String(data.sheetRow[1]).indexOf("@") !== -1 ||
-        String(data.sheetRow[2]).toLowerCase().indexOf("footer") !== -1 ||
-        String(data.sheetRow[3]).toLowerCase() === "active"
-      ))
+      String(data.sheetTab || data.targetSheet || "").toLowerCase().indexOf("subscrib") !== -1 ||
+      (e && e.parameter && String(e.parameter.tab || "").toLowerCase().indexOf("subscrib") !== -1) ||
+      (data.sheetRow && data.sheetRow.length === 4 && String(data.sheetRow[1]).indexOf("@") !== -1)
     );
 
-    // গ্রাহক রেজিস্ট্রেশন চেক
+    // ৩. গ্রাহক রেজিস্ট্রেশন চেক
     var isCustomer = Boolean(
       data.action === "customer_registration" || 
       data.type === "customer" ||
@@ -1692,13 +1993,87 @@ function doPost(e) {
     );
 
     // ===============================================
-    // ১. নিউজলেটার / সাবস্ক্রাইবার -> strictly "subscribe" ট্যাবে
+    // ১. ইউজার ট্র্যাকিং -> শুধুমাত্র "user traking" ট্যাবে
     // ===============================================
-    if (isSubscriber) {
-      var subSheet = ss.getSheetByName("subscribe") || 
-                     ss.getSheetByName("Subscribe") || 
-                     ss.getSheetByName("Subscribers") || 
-                     ss.getSheetByName("সাবস্ক্রাইব");
+    if (isTracking) {
+      var trackSheet = findSheet(ss, ["user traking", "user tracking", "User Traking", "User Tracking"], "trak") || 
+                       findSheet(ss, [], "track");
+      if (!trackSheet) {
+        trackSheet = ss.insertSheet("user traking");
+      }
+      
+      // হেডার না থাকলে হেডার যুক্ত করা
+      if (trackSheet.getLastRow() === 0) {
+        trackSheet.appendRow([
+          "তারিখ ও সময় (Time)", 
+          "পেজ (Page)", 
+          "আইপি (IP)", 
+          "লোকেশন (Location)", 
+          "ডিভাইস (Device)", 
+          "অপারেটিং সিস্টেম (OS)", 
+          "ব্রাউজার (Browser)", 
+          "সাইটে থাকার সময় (Time Spent)", 
+          "কোথা থেকে এসেছে (Referrer)", 
+          "স্ক্রিন রেজুলেশন (Screen)", 
+          "সেশন আইডি (Session ID)"
+        ]);
+        trackSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#d0e1fd");
+      }
+
+      var sessionId = String(data.sessionId || (data.sheetRow && data.sheetRow[10]) || "").trim();
+      var timeSpent = String(data.timeSpent || (data.sheetRow && data.sheetRow[7]) || "সক্রিয় রয়েছে (Active)...").trim();
+      var updated = false;
+
+      // সেশন আইডি দিয়ে আগের রো খুঁজে সময় আপডেট (হৃদস্পন্দন / Heartbeat Update)
+      if (sessionId && trackSheet.getLastRow() > 1) {
+        var lastRow = trackSheet.getLastRow();
+        var searchRangeCount = Math.min(lastRow - 1, 150);
+        var startRow = Math.max(2, lastRow - searchRangeCount + 1);
+        var sessionValues = trackSheet.getRange(startRow, 11, searchRangeCount, 1).getValues();
+        
+        for (var i = sessionValues.length - 1; i >= 0; i--) {
+          if (String(sessionValues[i][0]).trim() === sessionId) {
+            var targetRowIndex = startRow + i;
+            trackSheet.getRange(targetRowIndex, 8).setValue(timeSpent);
+            updated = true;
+            break;
+          }
+        }
+      }
+
+      // নতুন ভিজিটর হলে নতুন রো যোগ
+      if (!updated) {
+        var rowToAppend = data.sheetRow;
+        if (!rowToAppend || rowToAppend.length < 11) {
+          rowToAppend = [
+            data.time || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+            data.page || "হোমপেজ (Home)",
+            data.ip || "Unknown",
+            data.location || "Bangladesh",
+            data.device || "Desktop / PC",
+            data.os || "Windows 10/11",
+            data.browser || "Chrome",
+            timeSpent,
+            data.referrer || "সরাসরি (Direct)",
+            data.screen || "1920x1080",
+            sessionId || ("v_" + new Date().getTime())
+          ];
+        }
+        trackSheet.appendRow(rowToAppend);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: "success", 
+        target: trackSheet.getName(),
+        updatedExisting: updated 
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ===============================================
+    // ২. নিউজলেটার / সাবস্ক্রাইবার -> strictly "subscribe" ট্যাবে
+    // ===============================================
+    else if (isSubscriber) {
+      var subSheet = findSheet(ss, ["subscribe", "Subscribe", "Subscribers", "সাবস্ক্রাইব"], "subscrib");
       if (!subSheet) {
         subSheet = ss.insertSheet("subscribe");
       }
@@ -1734,16 +2109,16 @@ function doPost(e) {
 
       return ContentService.createTextOutput(JSON.stringify({ 
         status: "success", 
-        target: "subscribe",
+        target: subSheet.getName(),
         duplicate: isDuplicate 
       })).setMimeType(ContentService.MimeType.JSON);
     } 
 
     // ===============================================
-    // ২. গ্রাহক নিবন্ধন -> strictly "Customers" ট্যাবে
+    // ৩. গ্রাহক নিবন্ধন -> strictly "Customers" ট্যাবে
     // ===============================================
     else if (isCustomer) {
-      var customerSheet = ss.getSheetByName("Customers") || ss.getSheetByName("গ্রাহক_নিবন্ধন");
+      var customerSheet = findSheet(ss, ["Customers", "customers", "Customer", "গ্রাহক_নিবন্ধন"], "custom");
       if (!customerSheet) {
         customerSheet = ss.insertSheet("Customers");
       }
@@ -1756,18 +2131,25 @@ function doPost(e) {
       if (data.sheetRow) {
         customerSheet.appendRow(data.sheetRow);
       }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", target: "Customers" }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", target: customerSheet.getName() }))
         .setMimeType(ContentService.MimeType.JSON);
     } 
 
     // ===============================================
-    // ৩. নতুন অর্ডার -> strictly "Customer_Order_Tracking" বা "Orders" ট্যাবে
+    // ৪. নতুন অর্ডার -> strictly "order sheet" ট্যাবে
     // ===============================================
     else {
-      var orderSheet = ss.getSheetByName("Customer_Order_Tracking") || 
-                       ss.getSheetByName("Orders") || 
-                       ss.getSheetByName("অর্ডার") || 
-                       ss.getActiveSheet();
+      // Ironclad Safeguard: ১১ কলামের ট্র্যাকিং ডেটা কখনোই অর্ডার শিটে যাবে না
+      if ((data.sheetRow && data.sheetRow.length === 11) || data.sessionId || (data.sheetRow && String(data.sheetRow[1]).indexOf("Home") !== -1)) {
+        var trackSheetFallback = findSheet(ss, ["user traking", "user tracking"], "trak") || ss.insertSheet("user traking");
+        trackSheetFallback.appendRow(data.sheetRow || [data.time, data.page, data.ip, data.location, data.device, data.os, data.browser, data.timeSpent, data.referrer, data.screen, data.sessionId]);
+        return ContentService.createTextOutput(JSON.stringify({ status: "rerouted_to_tracking", target: trackSheetFallback.getName() }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Customer_Order_Tracking", "Orders", "অর্ডার"], "order") || 
+                       ss.getSheetByName("order sheet") || 
+                       ss.getSheets()[0];
       if (orderSheet.getLastRow() === 0) {
         orderSheet.appendRow([
           "Order ID", "Date/Time", "Customer Name", "Customer Email", 
@@ -1786,6 +2168,78 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ==========================================
+// ৩. অর্ডার শিট ক্লিনআপ ফাংশন (Clean Order Sheet)
+// এটি চালালে অর্ডার শিটে ভুল করে ঢুকে যাওয়া ট্র্যাকিং রোগুলো 'user traking' এ চলে যাবে
+// ==========================================
+function cleanOrderSheetTrackingRows() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Customer_Order_Tracking", "Orders"], "order") || ss.getSheets()[0];
+  var trackSheet = findSheet(ss, ["user traking", "user tracking"], "trak") || findSheet(ss, [], "track") || ss.insertSheet("user traking");
+  
+  if (trackSheet.getLastRow() === 0) {
+    trackSheet.appendRow([
+      "তারিখ ও সময় (Time)", "পেজ (Page)", "আইপি (IP)", "লোকেশন (Location)", 
+      "ডিভাইস (Device)", "অপারেটিং সিস্টেম (OS)", "ব্রাউজার (Browser)", 
+      "সাইটে থাকার সময় (Time Spent)", "কোথা থেকে এসেছে (Referrer)", 
+      "স্ক্রিন রেজুলেশন (Screen)", "সেশন আইডি (Session ID)"
+    ]);
+    trackSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#d0e1fd");
+  }
+  
+  if (!orderSheet || orderSheet.getLastRow() <= 1) {
+    return "অর্ডার শিটে কোনো রো নেই";
+  }
+  
+  var lastRow = orderSheet.getLastRow();
+  var cleanedCount = 0;
+  
+  // নিচ থেকে ওপরের দিকে লুপ চালিয়ে ডিলিট করা
+  for (var r = lastRow; r >= 2; r--) {
+    var rowValues = orderSheet.getRange(r, 1, 1, Math.min(orderSheet.getLastColumn(), 11)).getValues()[0];
+    var colA = String(rowValues[0] || "").trim();
+    var colB = String(rowValues[1] || "").trim();
+    var colC = String(rowValues[2] || "").trim();
+    var colD = String(rowValues[3] || "").trim();
+    var colE = String(rowValues[4] || "").trim();
+    var colF = String(rowValues[5] || "").trim();
+    var colG = String(rowValues[6] || "").trim();
+    
+    // ট্র্যাকিং রো শনাক্তকরণ (যেমন হোমপেজ, আইপি এড্রেস, Desktop / PC, Windows, Chrome ইত্যাদি)
+    var isTrackingRow = (
+      colB.indexOf("হোমপেজ") !== -1 || colB.indexOf("Home") !== -1 ||
+      colC.indexOf("103.") !== -1 || (colC.indexOf(".") !== -1 && colC.split(".").length === 4) ||
+      colD === "Bangladesh" ||
+      colE.indexOf("Desktop") !== -1 || colE.indexOf("Mobile") !== -1 ||
+      colF.indexOf("Windows") !== -1 || colF.indexOf("Android") !== -1 ||
+      colG === "Chrome" || colG === "Safari" || colG === "Firefox" ||
+      (colA.indexOf("NK-") === -1 && colA.indexOf("ORD-") === -1 && colB.indexOf("202") !== -1 && colC.indexOf("103.") !== -1)
+    );
+    
+    if (isTrackingRow) {
+      // সাজিয়ে ১১ কলামে user traking ট্যাবে স্থানান্তর
+      var trackingRow = [
+        colA.indexOf("/") !== -1 ? colA : colB,
+        colB.indexOf("হোমপেজ") !== -1 ? colB : "হোমপেজ (Home)",
+        colC.indexOf(".") !== -1 ? colC : "Unknown",
+        colD || "Bangladesh",
+        colE || "Desktop / PC",
+        colF || "Windows 10/11",
+        colG || "Chrome",
+        String(rowValues[7] || "সক্রিয় রয়েছে (Active)..."),
+        String(rowValues[8] || "সরাসরি (Direct)"),
+        String(rowValues[9] || "1920x1080"),
+        String(rowValues[10] || ("v_cleaned_" + r))
+      ];
+      trackSheet.appendRow(trackingRow);
+      orderSheet.deleteRow(r);
+      cleanedCount++;
+    }
+  }
+  
+  return "সফলভাবে " + cleanedCount + " টি ট্র্যাকিং রো অর্ডার শিট থেকে মুছে 'user traking' ট্যাবে স্থানান্তর করা হয়েছে!";
 }`;
 
   return (
@@ -1993,6 +2447,26 @@ function doPost(e) {
                   >
                     <Mail className="w-4 h-4 text-amber-400" />
                     <span>Subscribers ({subscribers.length})</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab("tracking");
+                      fetchTrackingData();
+                    }}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                      activeTab === "tracking"
+                        ? "bg-zinc-800 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <Activity className="w-4 h-4 text-cyan-400" />
+                    <span>User Tracking ({userTracking.length})</span>
+                    {trackingStats?.activeNow && trackingStats.activeNow > 0 ? (
+                      <span className="flex h-2 w-2 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                    ) : null}
                   </button>
                   <button
                     onClick={() => setActiveTab("sheets")}
@@ -2391,6 +2865,7 @@ function doPost(e) {
                                   !term ||
                                   prod.title.toLowerCase().includes(term) ||
                                   prod.category.toLowerCase().includes(term) ||
+                                  (prod.parentCategory && prod.parentCategory.toLowerCase().includes(term)) ||
                                   (prod.affiliateSource && prod.affiliateSource.toLowerCase().includes(term));
 
                                 if (!matchesSearch) return false;
@@ -2449,7 +2924,31 @@ function doPost(e) {
                                         </div>
                                       </div>
                                     </td>
-                                    <td className="p-3.5 text-zinc-300">{prod.category}</td>
+                                    <td className="p-3.5 text-zinc-300">
+                                      {prod.parentCategory ? (
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="text-[10px] text-zinc-400 font-medium">
+                                            {prod.parentCategory} ›
+                                          </span>
+                                          <span className="text-xs font-semibold text-emerald-400">
+                                            {prod.category}
+                                          </span>
+                                        </div>
+                                      ) : isGrocerySubcategory(prod.category) ? (
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="text-[10px] text-zinc-400 font-medium">
+                                            Groceries & Food ›
+                                          </span>
+                                          <span className="text-xs font-semibold text-emerald-400">
+                                            {prod.category}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs font-medium text-zinc-300">
+                                          {prod.category}
+                                        </span>
+                                      )}
+                                    </td>
                                     <td className="p-3.5 font-bold text-white">
                                       <span>৳{prod.price.toLocaleString()}</span>
                                       {prod.regularPrice && prod.regularPrice > prod.price && (
@@ -2556,6 +3055,7 @@ function doPost(e) {
                             !term ||
                             prod.title.toLowerCase().includes(term) ||
                             prod.category.toLowerCase().includes(term) ||
+                            (prod.parentCategory && prod.parentCategory.toLowerCase().includes(term)) ||
                             (prod.affiliateSource && prod.affiliateSource.toLowerCase().includes(term));
 
                           if (!matchesSearch) return false;
@@ -2605,7 +3105,17 @@ function doPost(e) {
                                         ৳{prod.regularPrice.toLocaleString()}
                                       </span>
                                     )}
-                                    <span className="text-[10px] text-zinc-400 bg-zinc-700/50 px-1.5 py-0.5 rounded">{prod.category}</span>
+                                    {prod.parentCategory ? (
+                                      <span className="text-[10px] text-emerald-300 bg-emerald-950/80 border border-emerald-500/40 px-1.5 py-0.5 rounded font-medium">
+                                        {prod.parentCategory} › {prod.category}
+                                      </span>
+                                    ) : isGrocerySubcategory(prod.category) ? (
+                                      <span className="text-[10px] text-emerald-300 bg-emerald-950/80 border border-emerald-500/40 px-1.5 py-0.5 rounded font-medium">
+                                        Groceries & Food › {prod.category}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-zinc-400 bg-zinc-700/50 px-1.5 py-0.5 rounded">{prod.category}</span>
+                                    )}
                                     <span className="text-[10px] text-zinc-400 font-mono">স্টক: {prod.stock}</span>
                                   </div>
 
@@ -3087,16 +3597,315 @@ function doPost(e) {
                   </div>
                 )}
 
+                {/* TAB: REAL-TIME USER TRACKING */}
+                {activeTab === "tracking" && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h3 className="font-bold text-base text-white flex items-center gap-2">
+                          <Activity className="w-5 h-5 text-cyan-400" />
+                          রিয়েল-টাইম ভিজিটর ট্র্যাকিং (User Tracking - {userTracking.length})
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          ওয়েবসাইটের প্রতিটি ভিজিটর কোন পেজে আসছে, কত সময় কাটাচ্ছে এবং কোন ডিভাইস ব্যবহার করছে তা স্বয়ংক্রিয়ভাবে ট্র্যাক হয় এবং গুগল শিটের <strong>"user tracking"</strong> ট্যাবে সিঙ্ক হয়।
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={fetchTrackingData}
+                          disabled={isLoadingTracking}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 border border-cyan-500/30 text-xs font-semibold cursor-pointer transition-colors"
+                          title="ট্র্যাকিং লগ রিফ্রেশ করুন"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingTracking ? "animate-spin" : ""}`} />
+                          <span>{isLoadingTracking ? "রিফ্রেশ হচ্ছে..." : "রিফ্রেশ"}</span>
+                        </button>
+                        <button
+                          onClick={handleTestTrackingWebhook}
+                          disabled={isTestingTrackingWebhook}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer transition-colors"
+                          title="গুগল শিটের user tracking ট্যাবে টেস্ট ডেটা পাঠান"
+                        >
+                          <Send className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>{isTestingTrackingWebhook ? "পাঠানো হচ্ছে..." : "🧪 টেস্ট ট্র্যাকিং"}</span>
+                        </button>
+                        <button
+                          onClick={exportTrackingToCsv}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-semibold cursor-pointer transition-colors"
+                          title="CSV ফরম্যাটে সমস্ত ভিজিটর লগ ডাউনলোড করুন"
+                        >
+                          <Download className="w-3.5 h-3.5 text-zinc-400" />
+                          <span>CSV ডাউনলোড</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Summary Statistics Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {/* Active Now */}
+                      <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 relative overflow-hidden">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-cyan-300">সক্রিয় ভিজিটর (Active Now)</span>
+                          <span className="flex h-2.5 w-2.5 relative">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                          </span>
+                        </div>
+                        <p className="mt-2 text-2xl font-extrabold text-white font-display">
+                          {trackingStats?.activeNow ?? 0}
+                        </p>
+                        <span className="text-[11px] text-cyan-400/80 mt-1 block">
+                          বর্তমান সেশনে লাইভ রয়েছে
+                        </span>
+                      </div>
+
+                      {/* Total Visits Tracked */}
+                      <div className="p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700/60">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-zinc-400">মোট ভিজিট হিস্ট্রি</span>
+                          <Clock className="w-4 h-4 text-amber-400" />
+                        </div>
+                        <p className="mt-2 text-2xl font-extrabold text-amber-400 font-display">
+                          {trackingStats?.totalVisits ?? userTracking.length}
+                        </p>
+                        <span className="text-[11px] text-zinc-500 mt-1 block">
+                          রেকর্ডকৃত পেজ ভিউ
+                        </span>
+                      </div>
+
+                      {/* Top Page */}
+                      <div className="p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700/60">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-zinc-400">শীর্ষ ভিউ পেজ</span>
+                          <Compass className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <p className="mt-2 text-sm font-bold text-white truncate" title={Object.keys(trackingStats?.pageStats || {})[0] || "হোমপেজ"}>
+                          {Object.keys(trackingStats?.pageStats || {})[0] || "হোমপেজ (Home)"}
+                        </p>
+                        <span className="text-[11px] text-zinc-500 mt-1 block">
+                          সর্বাধিক ভিজিট হচ্ছে
+                        </span>
+                      </div>
+
+                      {/* Device Split */}
+                      <div className="p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700/60">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-zinc-400">প্রধান ডিভাইস</span>
+                          <Monitor className="w-4 h-4 text-purple-400" />
+                        </div>
+                        <p className="mt-2 text-sm font-bold text-purple-300 truncate">
+                          {Object.keys(trackingStats?.deviceStats || {})[0] || "Desktop / PC"}
+                        </p>
+                        <span className="text-[11px] text-zinc-500 mt-1 block">
+                          ডিভাইস শনাক্তকরণ
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div className="relative">
+                      <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                      <input
+                        type="text"
+                        placeholder="পেজ, আইপি, লোকেশন, ডিভাইস, ব্রাউজার বা সেশন আইডি দিয়ে খুঁজুন..."
+                        value={trackingSearchTerm}
+                        onChange={(e) => setTrackingSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 bg-zinc-800/80 border border-zinc-700 rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      />
+                    </div>
+
+                    {/* Tracking Logs List Content */}
+                    {isLoadingTracking ? (
+                      <div className="py-12 flex flex-col items-center justify-center text-zinc-400">
+                        <RefreshCw className="w-6 h-6 animate-spin text-cyan-500 mb-2" />
+                        <span className="text-xs">ট্র্যাকিং ডেটা লোড হচ্ছে...</span>
+                      </div>
+                    ) : userTracking.length === 0 ? (
+                      <div className="p-8 text-center rounded-2xl bg-zinc-800/40 border border-zinc-800 space-y-3">
+                        <Activity className="w-10 h-10 text-cyan-500/50 mx-auto mb-2" />
+                        <p className="text-sm font-semibold text-zinc-300">এখনও কোনো ভিজিটর লগ যুক্ত হয়নি</p>
+                        <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                          ভিজিটররা ওয়েবসাইটে প্রবেশ করলে তাদের প্রতিটি সেশন স্বয়ংক্রিয়ভাবে এখানে এবং গুগল শিটের <strong>"user tracking"</strong> ট্যাবে যুক্ত হবে।
+                        </p>
+                        <button
+                          onClick={handleTestTrackingWebhook}
+                          disabled={isTestingTrackingWebhook}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>একটি টেস্ট ভিজিটর লগ তৈরি করুন</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Desktop Table View (11 Columns matching user's spreadsheet) */}
+                        <div className="hidden lg:block overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-900/60 scrollbar-thin scrollbar-thumb-zinc-700">
+                          <table className="w-full text-left text-xs text-zinc-300 min-w-[950px]">
+                            <thead className="bg-zinc-800/90 text-zinc-400 uppercase text-[10px] tracking-wider border-b border-zinc-700">
+                              <tr>
+                                <th className="py-3 px-3">#</th>
+                                <th className="py-3 px-3">তারিখ ও সময় (Time)</th>
+                                <th className="py-3 px-3">পেজ (Page)</th>
+                                <th className="py-3 px-3">আইপি (IP)</th>
+                                <th className="py-3 px-3">লোকেশন (Location)</th>
+                                <th className="py-3 px-3">ডিভাইস (Device)</th>
+                                <th className="py-3 px-3">অপারেটিং সিস্টেম (OS)</th>
+                                <th className="py-3 px-3">ব্রাউজার (Browser)</th>
+                                <th className="py-3 px-3">সাইটে থাকার সময় (Time Spent)</th>
+                                <th className="py-3 px-3">কোথা থেকে এসেছে (Referrer)</th>
+                                <th className="py-3 px-3">স্ক্রিন রেজুলেশন</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-800">
+                              {userTracking
+                                .filter((t) => {
+                                  if (!trackingSearchTerm.trim()) return true;
+                                  const term = trackingSearchTerm.toLowerCase();
+                                  return (
+                                    t.page.toLowerCase().includes(term) ||
+                                    t.ip.toLowerCase().includes(term) ||
+                                    t.location.toLowerCase().includes(term) ||
+                                    t.device.toLowerCase().includes(term) ||
+                                    t.os.toLowerCase().includes(term) ||
+                                    t.browser.toLowerCase().includes(term) ||
+                                    t.referrer.toLowerCase().includes(term) ||
+                                    t.sessionId.toLowerCase().includes(term)
+                                  );
+                                })
+                                .map((track, idx) => (
+                                  <tr key={track.sessionId + idx} className="hover:bg-zinc-800/40 transition-colors">
+                                    <td className="py-3 px-3 font-mono text-zinc-500 text-[11px]">{idx + 1}</td>
+                                    <td className="py-3 px-3 text-zinc-300 font-mono text-[11px] whitespace-nowrap">
+                                      {track.time}
+                                    </td>
+                                    <td className="py-3 px-3">
+                                      <span className="font-semibold text-white truncate max-w-[160px] block" title={track.page}>
+                                        {track.page}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 font-mono text-zinc-400 text-[11px] whitespace-nowrap">
+                                      {track.ip}
+                                    </td>
+                                    <td className="py-3 px-3">
+                                      <span className="inline-flex items-center gap-1 text-zinc-300 text-[11px]">
+                                        <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
+                                        <span>{track.location}</span>
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 text-zinc-300 whitespace-nowrap">
+                                      <span className="inline-flex items-center gap-1">
+                                        <Smartphone className="w-3 h-3 text-purple-400 shrink-0" />
+                                        <span>{track.device}</span>
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 text-zinc-400 text-[11px] whitespace-nowrap">
+                                      {track.os}
+                                    </td>
+                                    <td className="py-3 px-3 text-zinc-400 text-[11px] whitespace-nowrap">
+                                      {track.browser}
+                                    </td>
+                                    <td className="py-3 px-3 whitespace-nowrap">
+                                      <span
+                                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                                          track.timeSpent.includes("Active") || track.timeSpent.includes("সক্রিয়")
+                                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30 animate-pulse"
+                                            : "bg-cyan-500/10 text-cyan-300 border-cyan-500/30"
+                                        }`}
+                                      >
+                                        <Clock className="w-2.5 h-2.5 mr-1" />
+                                        {track.timeSpent}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 text-zinc-400 text-[11px] truncate max-w-[120px]" title={track.referrer}>
+                                      {track.referrer}
+                                    </td>
+                                    <td className="py-3 px-3 font-mono text-zinc-400 text-[11px] whitespace-nowrap">
+                                      {track.screen}
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Mobile Responsive Cards */}
+                        <div className="lg:hidden space-y-3">
+                          {userTracking
+                            .filter((t) => {
+                              if (!trackingSearchTerm.trim()) return true;
+                              const term = trackingSearchTerm.toLowerCase();
+                              return (
+                                t.page.toLowerCase().includes(term) ||
+                                t.ip.toLowerCase().includes(term) ||
+                                t.location.toLowerCase().includes(term) ||
+                                t.device.toLowerCase().includes(term) ||
+                                t.os.toLowerCase().includes(term) ||
+                                t.browser.toLowerCase().includes(term) ||
+                                t.referrer.toLowerCase().includes(term) ||
+                                t.sessionId.toLowerCase().includes(term)
+                              );
+                            })
+                            .map((track, idx) => (
+                              <div
+                                key={track.sessionId + idx}
+                                className="p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700/80 space-y-2.5"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 font-bold text-white text-xs">
+                                    <span className="font-mono text-zinc-400">#{idx + 1}</span>
+                                    <span className="truncate max-w-[200px]">{track.page}</span>
+                                  </div>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                                      track.timeSpent.includes("Active") || track.timeSpent.includes("সক্রিয়")
+                                        ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30 animate-pulse"
+                                        : "bg-cyan-500/10 text-cyan-300 border-cyan-500/30"
+                                    }`}
+                                  >
+                                    {track.timeSpent}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-zinc-700/50">
+                                  <div>
+                                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">আইপি ও অবস্থান</span>
+                                    <span className="font-mono text-zinc-300">{track.ip}</span>
+                                    <div className="text-zinc-400 flex items-center gap-1">
+                                      <MapPin className="w-2.5 h-2.5 text-emerald-400" />
+                                      <span>{track.location}</span>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">ডিভাইস ও ওএস</span>
+                                    <span className="text-zinc-300">{track.device}</span>
+                                    <div className="text-zinc-400">{track.os} ({track.browser})</div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-1 border-t border-zinc-700/30">
+                                  <span>{track.time}</span>
+                                  <span>রেজুলেশন: {track.screen}</span>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* TAB 4: GOOGLE SHEETS INTEGRATION HUB */}
                 {activeTab === "sheets" && (
                   <div className="space-y-6">
                     <div>
                       <h3 className="font-bold text-base text-white flex items-center gap-2">
                         <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-                        Google Sheets অটো সিঙ্ক (Orders, Customers ও subscribe ট্যাব)
+                        Google Sheets অটো সিঙ্ক (order sheet, Customers, subscribe ও user traking ট্যাব)
                       </h3>
                       <p className="text-xs text-zinc-400 mt-1">
-                        অর্ডার হলে <strong>Orders</strong> ট্যাবে, গ্রাহক নিবন্ধনে <strong>Customers</strong> ট্যাবে এবং নিউজলেটার সাবস্ক্রাইব হলে সম্পূর্ণ আলাদা <strong>subscribe</strong> ট্যাবে ডেটা যুক্ত হবে। ডুপ্লিকেট এন্ট্রি প্রতিরোধ ব্যবস্থা সংযুক্ত রয়েছে।
+                        অর্ডার হলে <strong>order sheet</strong> ট্যাবে, গ্রাহক নিবন্ধনে <strong>Customers</strong> ট্যাবে, নিউজলেটার সাবস্ক্রাইব হলে <strong>subscribe</strong> ট্যাবে এবং ওয়েবসাইট ভিজিটরদের লাইভ তথ্য সম্পূর্ণ আলাদা <strong>user traking</strong> ট্যাবে স্বয়ংক্রিয়ভাবে যুক্ত হবে।
                       </p>
                     </div>
 
@@ -3123,7 +3932,7 @@ function doPost(e) {
                           </button>
                           <button
                             onClick={handleTestWebhook}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isCleaningOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white font-bold text-xs transition-colors"
                             title="অর্ডার ডেটা টেস্ট করতে চাপুন"
                           >
@@ -3132,12 +3941,30 @@ function doPost(e) {
                           </button>
                           <button
                             onClick={handleTestSubscribeWebhook}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isCleaningOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 disabled:opacity-50 text-amber-200 font-bold text-xs transition-colors"
                             title="সাবস্ক্রাইব ডেটা টেস্ট করতে চাপুন"
                           >
                             <Mail className="w-3.5 h-3.5 text-amber-400" />
                             <span>{isTestingSubscribeWebhook ? "সাবস্ক্রাইব টেস্ট..." : "📧 টেস্ট সাবস্ক্রাইব"}</span>
+                          </button>
+                          <button
+                            onClick={handleTestTrackingWebhook}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isCleaningOrderSheet}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/40 disabled:opacity-50 text-cyan-200 font-bold text-xs transition-colors"
+                            title="ইউজার ট্র্যাকিং ডেটা টেস্ট করতে চাপুন"
+                          >
+                            <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>{isTestingTrackingWebhook ? "ট্র্যাকিং টেস্ট..." : "🧪 টেস্ট ট্র্যাকিং"}</span>
+                          </button>
+                          <button
+                            onClick={handleCleanOrderSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isCleaningOrderSheet}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/40 disabled:opacity-50 text-rose-200 font-bold text-xs transition-colors"
+                            title="অর্ডার শিট থেকে ভুল করে ঢুকে যাওয়া ট্র্যাকিং রো মুছে 'user traking' এ স্থানান্তর করতে চাপুন"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            <span>{isCleaningOrderSheet ? "ক্লিন হচ্ছে..." : "🧹 অর্ডার শিট ক্লিন করুন"}</span>
                           </button>
                         </div>
                         <p className="text-[11px] text-zinc-400 mt-1.5">
@@ -3689,63 +4516,292 @@ function doPost(e) {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-semibold text-zinc-300 mb-1">ক্যাটাগরি (Category) *</label>
-                      <select
-                        value={formCategory}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFormCategory(val);
-                          if (val !== "__CUSTOM__") {
-                            setCustomCategoryName("");
+                  {/* Comprehensive Category Configuration Card */}
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-zinc-950 border border-zinc-700/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>ক্যাটাগরি নির্ধারণ (Category Configuration) *</span>
+                      </label>
+                      <span className="text-[10px] text-zinc-400">
+                        {categoryClassification === "main" ? "প্রধান ক্যাটাগরি মোড" : "সাব-ক্যাটাগরি মোড"}
+                      </span>
+                    </div>
+
+                    {/* Mode Toggle Buttons: Main Category vs Sub-Category */}
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCategoryClassification("main");
+                          setFormParentCategory("");
+                          if (!formCategory || formCategory === "__CUSTOM__") {
+                            setFormCategory("Groceries & Food");
                           }
                         }}
-                        className="w-full px-3.5 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white focus:ring-1 focus:ring-emerald-500"
+                        className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          categoryClassification === "main"
+                            ? "bg-emerald-600 text-white shadow-sm"
+                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                        }`}
                       >
-                        {availableAdminCategories.map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat}
-                          </option>
-                        ))}
-                        <option value="__CUSTOM__">➕ নতুন ক্যাটাগরি লিখুন (Add Custom Category)...</option>
-                      </select>
+                        <span>🏢 প্রধান ক্যাটাগরি (Main)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCategoryClassification("sub");
+                          if (!formParentCategory) {
+                            setFormParentCategory("Groceries & Food");
+                          }
+                          if (!formCategory || formCategory === "Groceries & Food") {
+                            setFormCategory("Honey");
+                          }
+                        }}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          categoryClassification === "sub"
+                            ? "bg-emerald-600 text-white shadow-sm"
+                            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                        }`}
+                      >
+                        <span>📂 সাব-ক্যাটাগরি (Sub-Category)</span>
+                      </button>
+                    </div>
 
-                      {formCategory === "__CUSTOM__" && (
-                        <div className="mt-2 p-2.5 rounded-xl bg-zinc-950 border border-emerald-500/60 space-y-1">
-                          <label className="block text-[11px] font-semibold text-emerald-400">
-                            নতুন ক্যাটাগরির নাম (New Category Name) *
-                          </label>
+                    {/* MAIN CATEGORY SELECTION */}
+                    {categoryClassification === "main" && (
+                      <div className="space-y-2 pt-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-zinc-300 font-medium">প্রধান ক্যাটাগরি বাছুন:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCustomMainCategory(!isCustomMainCategory);
+                              if (!isCustomMainCategory) {
+                                setCustomCategoryName("");
+                              }
+                            }}
+                            className="text-emerald-400 hover:text-emerald-300 underline text-xs cursor-pointer font-medium"
+                          >
+                            {isCustomMainCategory ? "বিদ্যমান তালিকা থেকে বাছুন" : "➕ নতুন কাস্টম ক্যাটাগরি লিখুন"}
+                          </button>
+                        </div>
+
+                        {!isCustomMainCategory ? (
+                          <select
+                            value={formCategory}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__CUSTOM_MAIN__") {
+                                setIsCustomMainCategory(true);
+                                setCustomCategoryName("");
+                              } else {
+                                setFormCategory(val);
+                              }
+                            }}
+                            className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                          >
+                            {availableMainCategories.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {formatCategoryDisplayLabel(cat, "bn")}
+                              </option>
+                            ))}
+                            <option value="__CUSTOM_MAIN__">➕ নতুন কাস্টম ক্যাটাগরি লিখুন (Add Custom)...</option>
+                          </select>
+                        ) : (
+                          <div className="space-y-1.5 p-3 rounded-xl bg-zinc-900 border border-emerald-500/60">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-emerald-400">
+                                নতুন প্রধান ক্যাটাগরির নাম লিখুন:
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setIsCustomMainCategory(false)}
+                                className="text-[11px] text-zinc-400 hover:text-zinc-200"
+                              >
+                                ✕ বিদ্যমান তালিকা
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              required
+                              value={customCategoryName}
+                              onChange={(e) => {
+                                setCustomCategoryName(e.target.value);
+                                setFormCategory(e.target.value);
+                              }}
+                              placeholder="e.g. Traditional Craft / হস্তশিল্প ও উপহার"
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* SUB-CATEGORY SELECTION */}
+                    {categoryClassification === "sub" && (
+                      <div className="space-y-3 pt-1">
+                        {/* 1. Parent Category Selector */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-zinc-300 font-medium">১. মূল ক্যাটাগরি (Parent Category) *</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCustomParentCategory(!isCustomParentCategory);
+                                if (!isCustomParentCategory) {
+                                  setCustomParentCategoryName("");
+                                }
+                              }}
+                              className="text-emerald-400 hover:text-emerald-300 underline text-xs cursor-pointer font-medium"
+                            >
+                              {isCustomParentCategory ? "বিদ্যমান প্যারেন্ট তালিকা" : "➕ নতুন প্যারেন্ট ক্যাটাগরি"}
+                            </button>
+                          </div>
+
+                          {!isCustomParentCategory ? (
+                            <select
+                              value={formParentCategory}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === "__CUSTOM_PARENT__") {
+                                  setIsCustomParentCategory(true);
+                                  setCustomParentCategoryName("");
+                                } else {
+                                  setFormParentCategory(val);
+                                }
+                              }}
+                              className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                            >
+                              {availableMainCategories.map((parent) => (
+                                <option key={parent} value={parent}>
+                                  {formatCategoryDisplayLabel(parent, "bn")}
+                                </option>
+                              ))}
+                              <option value="__CUSTOM_PARENT__">➕ অন্য নতুন প্যারেন্ট তৈরি করুন...</option>
+                            </select>
+                          ) : (
+                            <div className="space-y-1.5 p-3 rounded-xl bg-zinc-900 border border-emerald-500/60">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-emerald-400">
+                                  নতুন প্যারেন্ট ক্যাটাগরির নাম:
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsCustomParentCategory(false)}
+                                  className="text-[11px] text-zinc-400 hover:text-zinc-200"
+                                >
+                                  ✕ বিদ্যমান তালিকা
+                                </button>
+                              </div>
+                              <input
+                                type="text"
+                                required
+                                value={customParentCategoryName}
+                                onChange={(e) => {
+                                  setCustomParentCategoryName(e.target.value);
+                                  setFormParentCategory(e.target.value);
+                                }}
+                                placeholder="e.g. Groceries & Food, Fashion, অথবা নতুন নাম..."
+                                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 2. Sub-category Selection & Custom Input */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-zinc-300 font-medium">২. সাব-ক্যাটাগরি নাম (Sub-Category) *</span>
+                            <span className="text-[10px] text-zinc-400">বাটন চাপুন বা নিচে নাম লিখুন</span>
+                          </div>
+
+                          {/* Quick suggestion chips for subcategory */}
+                          {currentSubcategorySuggestions.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 py-1">
+                              {currentSubcategorySuggestions.map((sub) => {
+                                const isSelected = formCategory.toLowerCase().trim() === sub.toLowerCase().trim();
+                                return (
+                                  <button
+                                    key={sub}
+                                    type="button"
+                                    onClick={() => {
+                                      setFormCategory(sub);
+                                      setCustomCategoryName(sub);
+                                    }}
+                                    className={`text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
+                                      isSelected
+                                        ? "bg-emerald-600 text-white border-emerald-500 font-bold shadow-xs"
+                                        : "bg-zinc-800 text-zinc-300 border-zinc-700 hover:border-emerald-500/50 hover:text-white"
+                                    }`}
+                                  >
+                                    {formatCategoryDisplayLabel(sub, "bn")}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
                           <input
                             type="text"
                             required
-                            value={customCategoryName}
-                            onChange={(e) => setCustomCategoryName(e.target.value)}
-                            placeholder="e.g. Winter Wear / অর্গানিক ফুড"
-                            className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                            value={formCategory}
+                            onChange={(e) => {
+                              setFormCategory(e.target.value);
+                              setCustomCategoryName(e.target.value);
+                            }}
+                            placeholder="e.g. Honey, Spices, Panjabi, বা যেকোনো কাস্টম সাব-ক্যাটাগরি..."
+                            className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:ring-1 focus:ring-emerald-500"
                           />
-                          <p className="text-[10px] text-zinc-400">
-                            ক্যাটাগরিটি সাইটে স্বয়ংক্রিয়ভাবে পেজ হিসেবে যুক্ত হবে: <code className="text-emerald-300">/{categoryToSlug(customCategoryName || "category-name")}</code>
-                          </p>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
+                    {/* Live Breadcrumb Preview */}
+                    <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center justify-between text-xs flex-wrap gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-zinc-400 text-[11px]">সংরক্ষণ রূপরেখা:</span>
+                        {categoryClassification === "sub" ? (
+                          <div className="flex items-center gap-1 font-bold text-emerald-400 text-xs">
+                            <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded text-[11px]">
+                              {isCustomParentCategory
+                                ? customParentCategoryName || "নতুন প্যারেন্ট"
+                                : formParentCategory || "Groceries & Food"}
+                            </span>
+                            <span className="text-zinc-500">›</span>
+                            <span className="bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded text-[11px]">
+                              {formCategory || "সাব-ক্যাটাগরি"}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="font-bold text-emerald-300 bg-emerald-950 border border-emerald-500/40 px-2.5 py-0.5 rounded text-[11px]">
+                            🏢 {isCustomMainCategory
+                              ? customCategoryName || "নতুন প্রধান ক্যাটাগরি"
+                              : formCategory || "প্রধান ক্যাটাগরি"}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 font-mono">
+                        URL: <code className="text-emerald-300">/{categoryToSlug(formCategory || "category")}</code>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stock and Pricing Grid */}
+                  <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
                     <div>
-                      <label className="block font-semibold text-zinc-300 mb-1">Inventory Stock *</label>
+                      <label className="block font-semibold text-zinc-300 mb-1 text-xs">স্টক (Stock) *</label>
                       <input
                         type="number"
                         required
                         value={formStock}
                         onChange={(e) => setFormStock(e.target.value)}
-                        className="w-full px-3.5 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white focus:ring-1 focus:ring-emerald-500"
+                        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-xs focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-semibold text-zinc-300 mb-1">Sale Price (৳ BDT) *</label>
+                      <label className="block font-semibold text-zinc-300 mb-1 text-xs">মূল্য (Price ৳) *</label>
                       <input
                         type="number"
                         step="0.01"
@@ -3753,19 +4809,19 @@ function doPost(e) {
                         value={formPrice}
                         onChange={(e) => setFormPrice(e.target.value)}
                         placeholder="350"
-                        className="w-full px-3.5 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white focus:ring-1 focus:ring-emerald-500"
+                        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-xs focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-zinc-300 mb-1">Regular Price (৳ BDT)</label>
+                      <label className="block font-semibold text-zinc-300 mb-1 text-xs">পূর্বমূল্য (Regular ৳)</label>
                       <input
                         type="number"
                         step="0.01"
                         value={formRegularPrice}
                         onChange={(e) => setFormRegularPrice(e.target.value)}
-                        placeholder="199.00"
-                        className="w-full px-3.5 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white focus:ring-1 focus:ring-emerald-500"
+                        placeholder="450"
+                        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-xs focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
                   </div>

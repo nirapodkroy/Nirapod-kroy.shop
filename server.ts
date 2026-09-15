@@ -40,6 +40,7 @@ interface Product {
   price: number;
   regularPrice?: number;
   category: string;
+  parentCategory?: string;
   stock: number;
   imageUrl: string;
   images?: string[];
@@ -98,7 +99,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     description: "১০০% খাঁটি কাঠের ঘানিতে ভাঙা দেশি সরিষার তেল। ঝাঁঝালো সুবাস, কেমিক্যাল ও ভেজালমুক্ত প্রাকৃতিক তেল।",
     price: 340,
     regularPrice: 380,
-    category: "Groceries",
+    category: "Oil & Ghee",
     stock: 45,
     imageUrl: "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=800&q=80",
     images: [
@@ -117,7 +118,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     description: "সুন্দরবনের গভীর জঙ্গল থেকে সংগৃহীত প্রাকৃতিক চাকের কাঁচা মধু। কোনো ধরনের প্রক্রিয়াজাতকরণ ও চিনিমুক্ত।",
     price: 580,
     regularPrice: 650,
-    category: "Groceries",
+    category: "Honey",
     stock: 30,
     imageUrl: "https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&w=800&q=80",
     images: [
@@ -136,7 +137,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     description: "দিনাজপুরের বিখ্যাত চিকন ও সুবাসিত চিনিগুঁড়া চাল। বিরিয়ানি, পোলাও ও পায়েস রান্নার জন্য আদর্শ।",
     price: 690,
     regularPrice: 750,
-    category: "Groceries",
+    category: "Rice",
     stock: 50,
     imageUrl: "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=800&q=80",
     images: [
@@ -154,7 +155,7 @@ const DEFAULT_PRODUCTS: Product[] = [
     description: "গ্রামের দেশি গাভীর খাঁটি দুধের মাখন থেকে তৈরি সুস্বাদু ও দানাদার গাওয়া ঘি।",
     price: 720,
     regularPrice: 820,
-    category: "Groceries",
+    category: "Oil & Ghee",
     stock: 25,
     imageUrl: "https://images.unsplash.com/photo-1631451095765-2c91616fc9e6?auto=format&fit=crop&w=800&q=80",
     images: [
@@ -172,12 +173,68 @@ const DEFAULT_PRODUCTS: Product[] = [
     description: "কাঠবাদাম, কাজুবাদাম, পেস্তাবাদাম, আখরোট ও প্রিমিয়াম কিসমিসের পুষ্টিকর স্বাস্থ্যকর সংমিশ্রণ।",
     price: 790,
     regularPrice: 920,
-    category: "Groceries",
+    category: "Nuts & Seeds",
     stock: 35,
     imageUrl: "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=800&q=80",
     rating: 4.9,
     ratingCount: 110,
     badge: "পুষ্টিকর",
+    featured: false
+  },
+  {
+    id: "prod-groc-6",
+    title: "মদিনার প্রিমিয়াম মারিয়াম ও আজওয়া খেজুর (Premium Dates, 1kg)",
+    description: "সৌদি আরবের মদিনা মনোয়ারা থেকে সরাসরি আমদানিকৃত নরম, মিষ্টি ও স্বাস্থ্যসম্মত প্রিমিয়াম খেজুর।",
+    price: 950,
+    regularPrice: 1100,
+    category: "Dates",
+    stock: 40,
+    imageUrl: "https://images.unsplash.com/photo-1549488344-cbb6c34cf08b?auto=format&fit=crop&w=800&q=80",
+    rating: 5.0,
+    ratingCount: 160,
+    badge: "আমদানিকৃত",
+    featured: true
+  },
+  {
+    id: "prod-groc-7",
+    title: "খাঁটি দেশি হলুদ ও মরিচ গুঁড়া কম্বো (Pure Spices Combo, 2x250g)",
+    description: "কোনো প্রকার কৃত্রিম রঙ বা ভেজাল ছাড়া বাছাইকৃত সেরা মানের দেশি শুকনা মরিচ ও হলুদের খাঁটি গুঁড়া।",
+    price: 360,
+    regularPrice: 420,
+    category: "Spices",
+    stock: 50,
+    imageUrl: "https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=800&q=80",
+    rating: 4.8,
+    ratingCount: 85,
+    badge: "১০০% খাঁটি",
+    featured: false
+  },
+  {
+    id: "prod-groc-8",
+    title: "শ্রীমঙ্গলের প্রিমিয়াম ব্ল্যাক টি (Sreemangal Premium CTC Tea, 400g)",
+    description: "শ্রীমঙ্গলের সেরা চা বাগান থেকে সংগৃহীত সতেজ পাতা দিয়ে তৈরি গাঢ় লিকার ও দারুণ সুবাসের প্রিমিয়াম চা।",
+    price: 260,
+    regularPrice: 300,
+    category: "Beverage",
+    stock: 60,
+    imageUrl: "https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=800&q=80",
+    rating: 4.9,
+    ratingCount: 130,
+    badge: "সেরা লিকার",
+    featured: true
+  },
+  {
+    id: "prod-groc-9",
+    title: "খাঁটি লাল গমের আটা ও দেশি মসুর ডাল কম্বো (Atta 5kg + Lentil 1kg)",
+    description: "পুষ্টিগুণে ভরপুর স্বাস্থ্যসম্মত লাল গমের ভুসিযুক্ত আটা এবং চকচকে দেশি মসুর ডালের সাশ্রয়ী ফ্যামিলি প্যাক।",
+    price: 520,
+    regularPrice: 580,
+    category: "Flours & Lentils",
+    stock: 30,
+    imageUrl: "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=800&q=80",
+    rating: 4.8,
+    ratingCount: 90,
+    badge: "ফ্যামিলি প্যাক",
     featured: false
   },
 
@@ -610,12 +667,29 @@ interface Subscriber {
   subscribedAt: string;
 }
 
+interface UserTrackingEntry {
+  id: string;
+  time: string;
+  page: string;
+  ip: string;
+  location: string;
+  device: string;
+  os: string;
+  browser: string;
+  timeSpent: string;
+  referrer: string;
+  screen: string;
+  sessionId: string;
+  updatedAt?: number;
+}
+
 // Data state
 interface StoreState {
   products: Product[];
   orders: Order[];
   customers: Customer[];
   subscribers?: Subscriber[];
+  userTracking?: UserTrackingEntry[];
   webhookUrl: string;
   customTotalRevenue?: number;
 }
@@ -625,6 +699,7 @@ let storeState: StoreState = {
   orders: INITIAL_ORDERS,
   customers: INITIAL_CUSTOMERS,
   subscribers: [],
+  userTracking: [],
   webhookUrl: googleSheetWebhookUrl
 };
 
@@ -850,6 +925,68 @@ async function syncNewsletterToGoogleSheets(email: string, source = "Website Foo
   }
 }
 
+// Helper: dispatch user tracking page view or duration update to Google Sheets webhook
+async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHeartbeat = false): Promise<boolean> {
+  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return false;
+  }
+
+  try {
+    const payload = {
+      action: "user_tracking",
+      type: "user_tracking",
+      sheetTab: "user traking",
+      targetSheet: "user traking",
+      targetTab: "user traking",
+      alternativeSheet: "user tracking",
+      sessionId: entry.sessionId,
+      isHeartbeat: Boolean(isHeartbeat),
+      timeSpent: entry.timeSpent,
+      page: entry.page,
+      ip: entry.ip,
+      location: entry.location,
+      device: entry.device,
+      os: entry.os,
+      browser: entry.browser,
+      referrer: entry.referrer,
+      screen: entry.screen,
+      time: entry.time,
+      sheetRow: [
+        entry.time,
+        entry.page,
+        entry.ip,
+        entry.location,
+        entry.device,
+        entry.os,
+        entry.browser,
+        entry.timeSpent,
+        entry.referrer,
+        entry.screen,
+        entry.sessionId
+      ]
+    };
+
+    const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + "tab=user+traking&target=user_traking&type=user_tracking&action=user_tracking";
+    console.log(`[Google Sheets User Tracking] Dispatching ${entry.page} (${entry.timeSpent}) for session ${entry.sessionId} to ${urlWithParams}`);
+    const res = await fetch(urlWithParams, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+        "User-Agent": "NirapodKroy-Ecommerce/1.0"
+      },
+      body: JSON.stringify(payload)
+    });
+    const responseText = await res.text().catch(() => "");
+    console.log(`[Google Sheets User Tracking Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
+    return res.ok || responseText.includes('"status":"success"');
+  } catch (err) {
+    console.warn(`[Google Sheets User Tracking Sync Error]:`, err);
+    return false;
+  }
+}
+
 // Middleware: Admin Auth Check
 function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
@@ -1057,11 +1194,25 @@ app.get("/api/products", (req, res) => {
   }
 
   if (category && category !== "All") {
-    const isOffer = String(category).toLowerCase() === "offer zone" || String(category).toLowerCase() === "offers" || String(category).toLowerCase() === "offer-zone";
+    const catLower = String(category).toLowerCase().trim();
+    const isOffer = catLower === "offer zone" || catLower === "offers" || catLower === "offer-zone";
+    const isGrocery = catLower === "groceries & food" || catLower === "groceries" || catLower === "grocery" || catLower === "food" || catLower === "মুদি ও খাদ্য" || catLower === "মুদি";
+    const grocerySubcategories = ["honey", "oil & ghee", "dates", "spices", "nuts & seeds", "beverage", "rice", "flours & lentils"];
+
     if (isOffer) {
       list = list.filter(p => p.isOfferZone || p.category.toLowerCase() === "offer zone" || (p.regularPrice && p.regularPrice > p.price) || (p.badge && (p.badge.toLowerCase().includes("off") || p.badge.toLowerCase().includes("ছাড়") || p.badge.toLowerCase().includes("offer") || p.badge.toLowerCase().includes("deal"))));
+    } else if (isGrocery) {
+      list = list.filter(p => {
+        const pCat = p.category.toLowerCase().trim();
+        const pParent = (p.parentCategory || "").toLowerCase().trim();
+        return pCat === "groceries & food" || pCat === "groceries" || grocerySubcategories.includes(pCat) || pParent === "groceries & food" || pParent === "groceries";
+      });
     } else {
-      list = list.filter(p => p.category.toLowerCase() === String(category).toLowerCase());
+      list = list.filter(p => {
+        const pCat = p.category.toLowerCase().trim();
+        const pParent = (p.parentCategory || "").toLowerCase().trim();
+        return pCat === catLower || pParent === catLower;
+      });
     }
   }
 
@@ -1094,7 +1245,7 @@ app.get("/api/products/:id", (req, res) => {
 // POST /api/products (Admin only)
 app.post("/api/products", requireAdmin, (req, res) => {
   const {
-    title, description, price, regularPrice, category, stock, imageUrl, images, badge, featured,
+    title, description, price, regularPrice, category, parentCategory, stock, imageUrl, images, badge, featured,
     isActive, isAffiliate, affiliateUrl, affiliateSource, affiliateButtonText,
     isOfferZone, offerDiscountNote
   } = req.body;
@@ -1120,6 +1271,7 @@ app.post("/api/products", requireAdmin, (req, res) => {
     price: Number(price) || 0,
     regularPrice: regularPrice ? Number(regularPrice) : undefined,
     category: category.trim(),
+    parentCategory: parentCategory ? String(parentCategory).trim() : undefined,
     stock: stock !== undefined ? Number(stock) : 20,
     imageUrl: primaryImg,
     images: finalImages,
@@ -1169,7 +1321,7 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
 
   const existing = storeState.products[idx];
   const {
-    title, description, price, regularPrice, category, stock, imageUrl, images, badge, featured, rating,
+    title, description, price, regularPrice, category, parentCategory, stock, imageUrl, images, badge, featured, rating,
     isActive, isAffiliate, affiliateUrl, affiliateSource, affiliateButtonText,
     isOfferZone, offerDiscountNote
   } = req.body;
@@ -1203,6 +1355,7 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
     price: price !== undefined ? Number(price) : existing.price,
     regularPrice: regularPrice !== undefined ? (regularPrice ? Number(regularPrice) : undefined) : existing.regularPrice,
     category: category !== undefined ? category.trim() : existing.category,
+    parentCategory: parentCategory !== undefined ? (parentCategory ? String(parentCategory).trim() : undefined) : existing.parentCategory,
     stock: stock !== undefined ? Number(stock) : existing.stock,
     imageUrl: newImageUrl,
     images: finalImages,
@@ -1914,15 +2067,204 @@ app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
       }
     }
 
+    // Also import tracking records if present in sheet response
+    let importedTracking = 0;
+    if (liveData.tracking && Array.isArray(liveData.tracking)) {
+      if (!storeState.userTracking) storeState.userTracking = [];
+      for (const t of liveData.tracking) {
+        if (t.sessionId && !storeState.userTracking.some(et => et.sessionId === t.sessionId)) {
+          storeState.userTracking.push({
+            id: t.sessionId,
+            time: t.time || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+            page: t.page || "হোমপেজ (Home)",
+            ip: t.ip || "Unknown",
+            location: t.location || "Bangladesh",
+            device: t.device || "Desktop / PC",
+            os: t.os || "Windows 10/11",
+            browser: t.browser || "Chrome",
+            timeSpent: t.timeSpent || "সক্রিয় রয়েছে (Active)...",
+            referrer: t.referrer || "সরাসরি (Direct)",
+            screen: t.screen || "1920x1080",
+            sessionId: t.sessionId,
+            updatedAt: Date.now()
+          });
+          importedTracking++;
+        }
+      }
+    }
+
     saveState();
     return res.json({
       success: true,
-      message: `গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে! (${importedOrders} টি নতুন অর্ডার, ${importedSubscribers} জন নতুন সাবস্ক্রাইবার)`,
+      message: `গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে! (${importedOrders} টি অর্ডার, ${importedSubscribers} জন সাবস্ক্রাইবার, ${importedTracking} টি ভিজিটর লগ)`,
       importedOrders,
-      importedSubscribers
+      importedSubscribers,
+      importedTracking
     });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || "গুগল শিট সিঙ্ক এরর" });
+  }
+});
+
+// ==========================================
+// USER TRACKING ROUTES
+// ==========================================
+
+// 1. Client tracking beacon (POST /api/track)
+app.post("/api/track", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const page = String(body.page || "হোমপেজ (Home)").trim();
+    const sessionId = String(body.sessionId || `v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}_root`).trim();
+    const isHeartbeat = Boolean(body.isHeartbeat);
+    const timeSpent = String(body.timeSpent || (isHeartbeat ? "সক্রিয় রয়েছে (Active)..." : "সক্রিয় রয়েছে (Active)...")).trim();
+
+    // Determine client IP
+    let clientIp = String(body.clientIp || "").trim();
+    if (!clientIp || clientIp === "Unknown" || clientIp.startsWith("127.") || clientIp === "::1") {
+      const forwarded = (req.headers["x-forwarded-for"] as string)?.split(",")[0].trim();
+      const realIp = (req.headers["x-real-ip"] as string)?.trim();
+      const socketIp = req.socket.remoteAddress?.trim();
+      clientIp = forwarded || realIp || socketIp || "Unknown";
+      if (clientIp.startsWith("::ffff:")) clientIp = clientIp.replace("::ffff:", "");
+    }
+
+    const location = String(body.location || "Bangladesh").trim();
+    const device = String(body.device || "Desktop / PC").trim();
+    const os = String(body.os || "Windows 10/11").trim();
+    const browser = String(body.browser || "Chrome").trim();
+    const screen = String(body.screen || "1920x1080").trim();
+    const referrer = String(body.referrer || "সরাসরি (Direct)").trim();
+    const time = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+
+    if (!storeState.userTracking) {
+      storeState.userTracking = [];
+    }
+
+    const existingIndex = storeState.userTracking.findIndex(t => t.sessionId === sessionId);
+    let currentEntry: UserTrackingEntry;
+
+    if (existingIndex >= 0) {
+      storeState.userTracking[existingIndex].timeSpent = timeSpent;
+      storeState.userTracking[existingIndex].updatedAt = Date.now();
+      currentEntry = storeState.userTracking[existingIndex];
+    } else {
+      currentEntry = {
+        id: sessionId,
+        time,
+        page,
+        ip: clientIp,
+        location,
+        device,
+        os,
+        browser,
+        timeSpent,
+        referrer,
+        screen,
+        sessionId,
+        updatedAt: Date.now()
+      };
+      storeState.userTracking.unshift(currentEntry);
+      // Cap in-memory history to recent 300 entries
+      if (storeState.userTracking.length > 300) {
+        storeState.userTracking = storeState.userTracking.slice(0, 300);
+      }
+    }
+
+    // Asynchronously dispatch to Google Sheets tab "user tracking"
+    syncTrackingToGoogleSheets(currentEntry, isHeartbeat).catch(() => {});
+
+    return res.json({ success: true, sessionId, timeSpent });
+  } catch (err: any) {
+    console.warn("Tracking endpoint error:", err);
+    return res.status(500).json({ error: "Tracking failed" });
+  }
+});
+
+// 2. Admin: Get live user tracking stats & logs (GET /api/admin/tracking)
+app.get("/api/admin/tracking", requireAdmin, (_req, res) => {
+  const trackingList = storeState.userTracking || [];
+  const now = Date.now();
+  // Active visitors in the last 2 minutes
+  const activeNow = trackingList.filter(t => t.updatedAt && (now - t.updatedAt < 120000)).length;
+
+  const pageCounts: Record<string, number> = {};
+  const deviceCounts: Record<string, number> = {};
+  const browserCounts: Record<string, number> = {};
+
+  trackingList.forEach(t => {
+    pageCounts[t.page] = (pageCounts[t.page] || 0) + 1;
+    deviceCounts[t.device] = (deviceCounts[t.device] || 0) + 1;
+    browserCounts[t.browser] = (browserCounts[t.browser] || 0) + 1;
+  });
+
+  return res.json({
+    success: true,
+    totalVisits: trackingList.length,
+    activeNow: Math.max(activeNow, 1),
+    tracking: trackingList,
+    pageStats: pageCounts,
+    deviceStats: deviceCounts,
+    browserStats: browserCounts,
+    sheetTab: "user tracking"
+  });
+});
+
+// 3. Admin: Send test tracking entry to Google Sheet tab "user tracking" (POST /api/admin/tracking/test)
+app.post("/api/admin/tracking/test", requireAdmin, async (req, res) => {
+  const testSessionId = `v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}_test`;
+  const testEntry: UserTrackingEntry = {
+    id: testSessionId,
+    time: new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+    page: "হোমপেজ (Home)",
+    ip: "103.171.251.14",
+    location: "Bangladesh",
+    device: "Desktop / PC",
+    os: "Windows 10/11",
+    browser: "Chrome",
+    timeSpent: "সক্রিয় রয়েছে (Active)...",
+    referrer: "সরাসরি (Direct)",
+    screen: "1920x1080",
+    sessionId: testSessionId,
+    updatedAt: Date.now()
+  };
+
+  if (!storeState.userTracking) storeState.userTracking = [];
+  storeState.userTracking.unshift(testEntry);
+
+  const synced = await syncTrackingToGoogleSheets(testEntry, false);
+  return res.json({
+    success: true,
+    synced,
+    message: synced
+      ? "গুগল শিটের 'user traking' ট্যাবে সফলভাবে টেস্ট ডেটা পাঠানো হয়েছে!"
+      : "সার্ভারে লগ হয়েছে, কিন্তু গুগল শিটে পৌঁছায়নি। দয়া করে অ্যাপস স্ক্রিপ্ট ও ওয়েবহুক ইউআরএল পরীক্ষা করুন।",
+    entry: testEntry
+  });
+});
+
+// 4. Admin: Request Apps Script to clean tracking rows out of "order sheet" tab (POST /api/admin/clean-order-sheet)
+app.post("/api/admin/clean-order-sheet", requireAdmin, async (req, res) => {
+  const targetUrl = req.body.url || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return res.status(400).json({ error: "গুগল শিট ওয়েবহুক পাওয়া যায়নি।" });
+  }
+
+  try {
+    const fetchUrl = targetUrl + (targetUrl.includes("?") ? "&" : "?") + "action=clean_order_sheet";
+    const resp = await fetch(fetchUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "clean_order_sheet" })
+    });
+    const result: any = await resp.json().catch(() => ({}));
+    return res.json({
+      success: true,
+      message: result.message || "অর্ডার শিট সফলভাবে ক্লিন করা হয়েছে এবং ট্র্যাকিং ডেটা 'user traking' ট্যাবে সরিয়ে নেওয়া হয়েছে!",
+      details: result
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || "ক্লিন অপারেশন সম্পন্ন করা সম্ভব হয়নি।" });
   }
 });
 

@@ -5,6 +5,7 @@ export interface Product {
   price: number;
   regularPrice?: number;
   category: string;
+  parentCategory?: string;
   stock: number;
   imageUrl: string;
   images?: string[];
@@ -91,3 +92,19 @@ export interface Toast {
 
 export type Theme = 'light' | 'dark';
 export type Language = 'bn' | 'en';
+
+export interface UserTrackingEntry {
+  id: string;
+  time: string;
+  page: string;
+  ip: string;
+  location: string;
+  device: string;
+  os: string;
+  browser: string;
+  timeSpent: string;
+  referrer: string;
+  screen: string;
+  sessionId: string;
+  updatedAt?: number;
+}
