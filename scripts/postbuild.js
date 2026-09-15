@@ -17,15 +17,13 @@ try {
       fs.writeFileSync(distIndexFile, indexHtmlContent);
     }
 
-    // 2. Sync index.html to root and docs
-    fs.writeFileSync(path.join(root, 'index.html'), indexHtmlContent);
+    // 2. Sync index.html to docs
     if (!fs.existsSync(docs)) fs.mkdirSync(docs, { recursive: true });
     fs.writeFileSync(path.join(docs, 'index.html'), indexHtmlContent);
 
-    // 3. Sync 404.html in dist, docs, and root for GitHub Pages client-side routing
+    // 3. Sync 404.html in dist and docs for GitHub Pages client-side routing
     fs.writeFileSync(path.join(dist, '404.html'), indexHtmlContent);
     fs.writeFileSync(path.join(docs, '404.html'), indexHtmlContent);
-    fs.writeFileSync(path.join(root, '404.html'), indexHtmlContent);
   }
 
   // 4. Sync dist to docs (for users with Pages set to /docs folder)
@@ -133,6 +131,10 @@ try {
   // This guarantees that direct visits like https://nirapodkroy.shop/baby-and-kids or any future category return HTTP 200 on GitHub Pages
   if (indexHtmlContent) {
     const baseMap = {
+      'offer-zone': { bn: 'অফার জোন', en: 'Offer Zone' },
+      'offers': { bn: 'অফার জোন', en: 'Offer Zone' },
+      'offer': { bn: 'অফার জোন', en: 'Offer Zone' },
+      'deals': { bn: 'অফার জোন', en: 'Offer Zone' },
       'baby-and-kids': { bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
       'baby-kids': { bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },
       'kids': { bn: 'শিশু ও খেলনা', en: 'Baby & Kids' },

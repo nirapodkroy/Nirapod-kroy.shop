@@ -48,6 +48,8 @@ interface Product {
   badge?: string;
   featured?: boolean;
   isActive?: boolean;
+  isOfferZone?: boolean;
+  offerDiscountNote?: string;
   isAffiliate?: boolean;
   affiliateUrl?: string;
   affiliateSource?: string;
@@ -615,6 +617,7 @@ interface StoreState {
   customers: Customer[];
   subscribers?: Subscriber[];
   webhookUrl: string;
+  customTotalRevenue?: number;
 }
 
 let storeState: StoreState = {
@@ -1054,7 +1057,12 @@ app.get("/api/products", (req, res) => {
   }
 
   if (category && category !== "All") {
-    list = list.filter(p => p.category.toLowerCase() === String(category).toLowerCase());
+    const isOffer = String(category).toLowerCase() === "offer zone" || String(category).toLowerCase() === "offers" || String(category).toLowerCase() === "offer-zone";
+    if (isOffer) {
+      list = list.filter(p => p.isOfferZone || p.category.toLowerCase() === "offer zone" || (p.regularPrice && p.regularPrice > p.price) || (p.badge && (p.badge.toLowerCase().includes("off") || p.badge.toLowerCase().includes("ছাড়") || p.badge.toLowerCase().includes("offer") || p.badge.toLowerCase().includes("deal"))));
+    } else {
+      list = list.filter(p => p.category.toLowerCase() === String(category).toLowerCase());
+    }
   }
 
   if (search) {
@@ -1087,7 +1095,8 @@ app.get("/api/products/:id", (req, res) => {
 app.post("/api/products", requireAdmin, (req, res) => {
   const {
     title, description, price, regularPrice, category, stock, imageUrl, images, badge, featured,
-    isActive, isAffiliate, affiliateUrl, affiliateSource, affiliateButtonText
+    isActive, isAffiliate, affiliateUrl, affiliateSource, affiliateButtonText,
+    isOfferZone, offerDiscountNote
   } = req.body;
   
   if (!title || price === undefined || !category) {
@@ -1122,7 +1131,9 @@ app.post("/api/products", requireAdmin, (req, res) => {
     isAffiliate: Boolean(isAffiliate || affiliateUrl),
     affiliateUrl: affiliateUrl ? String(affiliateUrl).trim() : undefined,
     affiliateSource: affiliateSource ? String(affiliateSource).trim() : undefined,
-    affiliateButtonText: affiliateButtonText ? String(affiliateButtonText).trim() : undefined
+    affiliateButtonText: affiliateButtonText ? String(affiliateButtonText).trim() : undefined,
+    isOfferZone: Boolean(isOfferZone),
+    offerDiscountNote: offerDiscountNote ? String(offerDiscountNote).trim() : undefined
   };
 
   storeState.products.unshift(newProduct);
@@ -1159,7 +1170,8 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
   const existing = storeState.products[idx];
   const {
     title, description, price, regularPrice, category, stock, imageUrl, images, badge, featured, rating,
-    isActive, isAffiliate, affiliateUrl, affiliateSource, affiliateButtonText
+    isActive, isAffiliate, affiliateUrl, affiliateSource, affiliateButtonText,
+    isOfferZone, offerDiscountNote
   } = req.body;
 
   let finalImages = Array.isArray(existing.images) && existing.images.length > 0
@@ -1201,13 +1213,33 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
     isAffiliate: isAffiliate !== undefined ? Boolean(isAffiliate) : (affiliateUrl !== undefined ? Boolean(affiliateUrl) : existing.isAffiliate),
     affiliateUrl: affiliateUrl !== undefined ? (affiliateUrl ? String(affiliateUrl).trim() : undefined) : existing.affiliateUrl,
     affiliateSource: affiliateSource !== undefined ? (affiliateSource ? String(affiliateSource).trim() : undefined) : existing.affiliateSource,
-    affiliateButtonText: affiliateButtonText !== undefined ? (affiliateButtonText ? String(affiliateButtonText).trim() : undefined) : existing.affiliateButtonText
+    affiliateButtonText: affiliateButtonText !== undefined ? (affiliateButtonText ? String(affiliateButtonText).trim() : undefined) : existing.affiliateButtonText,
+    isOfferZone: isOfferZone !== undefined ? Boolean(isOfferZone) : existing.isOfferZone,
+    offerDiscountNote: offerDiscountNote !== undefined ? (offerDiscountNote ? String(offerDiscountNote).trim() : undefined) : existing.offerDiscountNote
   };
 
   storeState.products[idx] = updated;
   saveState();
 
   res.json({ success: true, product: updated });
+});
+
+// PUT /api/products/:id/toggle-offer-zone (Admin quick toggle offer zone inclusion)
+app.put("/api/products/:id/toggle-offer-zone", requireAdmin, (req, res) => {
+  const idx = storeState.products.findIndex(p => p.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Product not found" });
+  }
+
+  const current = storeState.products[idx];
+  const newOfferZone = !current.isOfferZone;
+  storeState.products[idx] = {
+    ...current,
+    isOfferZone: newOfferZone
+  };
+  saveState();
+
+  res.json({ success: true, product: storeState.products[idx], isOfferZone: newOfferZone });
 });
 
 // DELETE /api/products/:id (Admin only)
@@ -1645,7 +1677,9 @@ app.delete("/api/admin/customers/:id", requireAdmin, (req, res) => {
 
 // GET /api/admin/stats
 app.get("/api/admin/stats", requireAdmin, (_req, res) => {
-  const totalRevenue = storeState.orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+  const calculatedRevenue = storeState.orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+  const totalRevenue = typeof storeState.customTotalRevenue === "number" ? storeState.customTotalRevenue : calculatedRevenue;
+  const isCustomRevenue = typeof storeState.customTotalRevenue === "number";
   const totalOrders = storeState.orders.length;
   const totalProducts = storeState.products.length;
   const lowStockProducts = storeState.products.filter(p => p.stock <= 10).length;
@@ -1654,11 +1688,40 @@ app.get("/api/admin/stats", requireAdmin, (_req, res) => {
   res.json({
     stats: {
       totalRevenue,
+      calculatedRevenue,
+      isCustomRevenue,
+      customTotalRevenue: storeState.customTotalRevenue,
       totalOrders,
       totalProducts,
       lowStockProducts,
       syncedGoogleSheetsCount
     }
+  });
+});
+
+// PUT /api/admin/revenue (Admin customize or reset total revenue)
+app.put("/api/admin/revenue", requireAdmin, (req, res) => {
+  const { customTotalRevenue, reset } = req.body;
+  if (reset) {
+    delete storeState.customTotalRevenue;
+  } else if (customTotalRevenue !== undefined && !isNaN(Number(customTotalRevenue))) {
+    storeState.customTotalRevenue = Math.max(0, Number(customTotalRevenue));
+  } else {
+    return res.status(400).json({ error: "Valid revenue amount required" });
+  }
+
+  saveState();
+
+  const calculatedRevenue = storeState.orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+  const totalRevenue = typeof storeState.customTotalRevenue === "number" ? storeState.customTotalRevenue : calculatedRevenue;
+
+  res.json({
+    success: true,
+    totalRevenue,
+    calculatedRevenue,
+    isCustomRevenue: typeof storeState.customTotalRevenue === "number",
+    customTotalRevenue: storeState.customTotalRevenue,
+    message: reset ? "মোট রেভিনিউ স্বয়ংক্রিয় গণনায় রিসেট করা হয়েছে।" : "মোট রেভিনিউ সফলভাবে পরিবর্তন করা হয়েছে!"
   });
 });
 

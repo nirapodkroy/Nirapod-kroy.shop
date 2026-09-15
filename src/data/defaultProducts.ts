@@ -31,11 +31,13 @@ export const DEFAULT_PRODUCTS: Product[] = [
     "imageUrl": "https://images.unsplash.com/photo-1592432678016-e910b452f9a2?auto=format&fit=crop&w=800&q=80",
     "rating": 4.8,
     "ratingCount": 74,
-    "badge": "ইকো ম্যাট",
+    "badge": "স্পেশাল অফার",
     "featured": true,
     "images": [
       "https://images.unsplash.com/photo-1592432678016-e910b452f9a2?auto=format&fit=crop&w=800&q=80"
-    ]
+    ],
+    "isOfferZone": true,
+    "offerDiscountNote": "২৫% মেগা ছাড়! স্টক সীমিত"
   },
   {
     "id": "prod-sprt-2",
@@ -48,11 +50,13 @@ export const DEFAULT_PRODUCTS: Product[] = [
     "imageUrl": "https://images.unsplash.com/photo-1598289431512-b97b0917affc?auto=format&fit=crop&w=800&q=80",
     "rating": 4.7,
     "ratingCount": 58,
-    "badge": "হোম জিম",
+    "badge": "হট ডিল",
     "featured": false,
     "images": [
       "https://images.unsplash.com/photo-1598289431512-b97b0917affc?auto=format&fit=crop&w=800&q=80"
-    ]
+    ],
+    "isOfferZone": true,
+    "offerDiscountNote": "২১% ধামাকা ছাড়! ৫-পিস সেট"
   },
   {
     "id": "prod-book-1",
@@ -65,11 +69,13 @@ export const DEFAULT_PRODUCTS: Product[] = [
     "imageUrl": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80",
     "rating": 4.9,
     "ratingCount": 140,
-    "badge": "বেস্টসেলার",
+    "badge": "বেস্টসেলার অফার",
     "featured": true,
     "images": [
       "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80"
-    ]
+    ],
+    "isOfferZone": true,
+    "offerDiscountNote": "১৮% স্পেশাল ছাড়! ৩টি বই কম্বো"
   },
   {
     "id": "prod-book-2",
@@ -82,10 +88,12 @@ export const DEFAULT_PRODUCTS: Product[] = [
     "imageUrl": "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=800&q=80",
     "rating": 4.8,
     "ratingCount": 65,
-    "badge": "এক্সিকিউটিভ",
+    "badge": "এক্সক্লুসিভ অফার",
     "featured": false,
     "images": [
       "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?auto=format&fit=crop&w=800&q=80"
-    ]
+    ],
+    "isOfferZone": true,
+    "offerDiscountNote": "২০% ছাড়! লেদার ডায়েরি কম্বো"
   }
 ];

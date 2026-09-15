@@ -10,7 +10,6 @@ import { safeGetLocalStorage, safeSetLocalStorage } from "./utils/storage";
 import { getCategoryFromUrl, updateCategoryUrl } from "./utils/categoryRouting";
 import { Header } from "./components/Header";
 import { HeroSection } from "./components/HeroSection";
-import { CategoryPageBanner } from "./components/CategoryPageBanner";
 import { ProductGrid } from "./components/ProductGrid";
 import { ProductDetailModal } from "./components/ProductDetailModal";
 import { CartDrawer } from "./components/CartDrawer";
@@ -231,7 +230,7 @@ const StoreContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-emerald-500 selection:text-white transition-colors duration-200">
+    <div className="min-h-screen flex flex-col bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-emerald-500 selection:text-white transition-colors duration-200">
       {/* Toast Notification Layer */}
       <ToastContainer />
 
@@ -248,21 +247,12 @@ const StoreContent: React.FC = () => {
       />
 
       <main className="flex-1">
-        {selectedCategory === "All" ? (
+        {selectedCategory === "All" && (
           /* Full Hero Carousel shown on Home Page */
           <HeroSection onExploreClick={handleExploreClick} onDealsClick={handleDealsClick} />
-        ) : (
-          /* Dedicated Category Page Banner with Breadcrumb, Title, Total Count & Share Link */
-          <CategoryPageBanner
-            category={selectedCategory}
-            totalProducts={products.filter((p) => p.category.toLowerCase() === selectedCategory.toLowerCase()).length}
-            onBackToHome={() => handleSelectCategory("All")}
-            onSelectCategory={handleSelectCategory}
-            categories={dynamicCategories}
-          />
         )}
 
-        {/* Product Catalog Grid */}
+        {/* Product Catalog Grid - Handles both Home and dedicated single Category Page seamlessly */}
         <ProductGrid
           products={products}
           isLoading={isLoading}

@@ -259,6 +259,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const getCategoryName = (cat: string): string => {
     const c = cat.toLowerCase().trim();
     if (c === "all") return language === "bn" ? "সব পণ্য (Home)" : "All Products";
+    if (c === "offer zone" || c === "offer-zone" || c === "offers" || c === "offer") return language === "bn" ? "🔥 অফার জোন" : "🔥 Offer Zone";
     if (c === "groceries") return language === "bn" ? "মুদি ও খাদ্য" : "Groceries & Food";
     if (c === "honey") return language === "bn" ? "মধু ও সুইটনার" : "Honey";
     if (c === "oil & ghee" || c === "oil" || c === "ghee") return language === "bn" ? "তেল ও ঘি" : "Oil & Ghee";

@@ -6,6 +6,7 @@ const ORDERS_KEY = "auracart_orders";
 const PRODUCTS_KEY = "nirapod_products_cache";
 const SETTINGS_KEY = "nirapod_admin_settings";
 const ADMIN_TOKEN_KEY = "nirapod_admin_token";
+const REVENUE_KEY = "nirapod_custom_revenue";
 export const SUBSCRIBERS_KEY = "nirapod_subscribers";
 
 export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4/exec";
@@ -559,7 +560,12 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     let list = getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
 
     if (category && category !== "All") {
-      list = list.filter(p => p.category.toLowerCase() === category.toLowerCase());
+      const isOffer = category.toLowerCase() === "offer zone" || category.toLowerCase() === "offers" || category.toLowerCase() === "offer-zone";
+      if (isOffer) {
+        list = list.filter(p => p.isOfferZone || p.category.toLowerCase() === "offer zone" || (p.regularPrice && p.regularPrice > p.price) || (p.badge && (p.badge.toLowerCase().includes("off") || p.badge.toLowerCase().includes("ছাড়") || p.badge.toLowerCase().includes("offer") || p.badge.toLowerCase().includes("deal"))));
+      } else {
+        list = list.filter(p => p.category.toLowerCase() === category.toLowerCase());
+      }
     }
     if (search) {
       const q = search.toLowerCase();
@@ -598,7 +604,9 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       isAffiliate: Boolean(body.isAffiliate),
       affiliateUrl: body.affiliateUrl,
       affiliateSource: body.affiliateSource,
-      affiliateButtonText: body.affiliateButtonText
+      affiliateButtonText: body.affiliateButtonText,
+      isOfferZone: Boolean(body.isOfferZone),
+      offerDiscountNote: body.offerDiscountNote
     };
     products.unshift(newProduct);
     setSafeStorage(PRODUCTS_KEY, products);
@@ -607,16 +615,29 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
   }
 
   if (path.startsWith("/api/products/")) {
-    const id = path.replace("/api/products/", "").replace("/toggle-active", "");
+    const isToggleActive = path.endsWith("/toggle-active");
+    const isToggleOfferZone = path.endsWith("/toggle-offer-zone");
+    const id = path.replace("/api/products/", "").replace("/toggle-active", "").replace("/toggle-offer-zone", "");
     const products = getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
 
-    if (path.endsWith("/toggle-active") && (method === "PATCH" || method === "PUT")) {
+    if (isToggleActive && (method === "PATCH" || method === "PUT")) {
       const prod = products.find(p => p.id === id);
       if (prod) {
         prod.isActive = prod.isActive === false ? true : false;
         setSafeStorage(PRODUCTS_KEY, products);
         setSafeStorage("nirapod_products_modified", String(Date.now()));
         return createJsonResponse({ success: true, product: prod, isActive: prod.isActive });
+      }
+      return createJsonResponse({ error: "পণ্য পাওয়া যায়নি" }, 404);
+    }
+
+    if (isToggleOfferZone && (method === "PATCH" || method === "PUT")) {
+      const prod = products.find(p => p.id === id);
+      if (prod) {
+        prod.isOfferZone = !prod.isOfferZone;
+        setSafeStorage(PRODUCTS_KEY, products);
+        setSafeStorage("nirapod_products_modified", String(Date.now()));
+        return createJsonResponse({ success: true, product: prod, isOfferZone: prod.isOfferZone });
       }
       return createJsonResponse({ error: "পণ্য পাওয়া যায়নি" }, 404);
     }
@@ -761,16 +782,57 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
   if (path === "/api/admin/stats") {
     const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
     const products = getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
-    const totalRevenue = orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+    const customRev = getSafeStorage<{ customTotalRevenue?: number | null }>(REVENUE_KEY, {});
+    const calculatedRevenue = orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+    const hasCustom = typeof customRev.customTotalRevenue === "number";
+    const totalRevenue = hasCustom ? (customRev.customTotalRevenue as number) : calculatedRevenue;
+
     return createJsonResponse({
       stats: {
         totalRevenue,
+        calculatedRevenue,
+        isCustomRevenue: hasCustom,
+        customTotalRevenue: customRev.customTotalRevenue,
         totalOrders: orders.length,
         totalProducts: products.length,
         lowStockProducts: products.filter(p => p.stock <= 10).length,
         syncedGoogleSheetsCount: orders.filter(o => o.syncedToGoogleSheet).length
       }
     });
+  }
+
+  // Admin Custom Total Revenue (PUT or POST /api/admin/revenue)
+  if (path === "/api/admin/revenue" && (method === "PUT" || method === "POST")) {
+    const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
+    const calculatedRevenue = orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+    const { customTotalRevenue, reset } = body;
+
+    if (reset) {
+      setSafeStorage(REVENUE_KEY, {});
+      return createJsonResponse({
+        success: true,
+        totalRevenue: calculatedRevenue,
+        calculatedRevenue,
+        isCustomRevenue: false,
+        customTotalRevenue: undefined,
+        message: "মোট রেভিনিউ স্বয়ংক্রিয় গণনায় রিসেট করা হয়েছে।"
+      });
+    }
+
+    if (customTotalRevenue !== undefined && !isNaN(Number(customTotalRevenue))) {
+      const val = Math.max(0, Number(customTotalRevenue));
+      setSafeStorage(REVENUE_KEY, { customTotalRevenue: val });
+      return createJsonResponse({
+        success: true,
+        totalRevenue: val,
+        calculatedRevenue,
+        isCustomRevenue: true,
+        customTotalRevenue: val,
+        message: "মোট রেভিনিউ সফলভাবে পরিবর্তন করা হয়েছে!"
+      });
+    }
+
+    return createJsonResponse({ error: "সঠিক রেভিনিউ পরিমাণ প্রদান করুন" }, 400);
   }
 
   if (path === "/api/admin/settings") {

@@ -1,7 +1,8 @@
 import React, { useState, useRef } from "react";
-import { ShieldCheck, Heart, CreditCard, Send, CheckCircle2, PhoneCall, Loader2 } from "lucide-react";
+import { ShieldCheck, Heart, CreditCard, Send, CheckCircle2, PhoneCall, Loader2, Lock } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 import { handleLocalApi } from "../lib/mockApi";
 
 interface FooterProps {
@@ -11,6 +12,7 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
   const { language, t, getCategoryName } = useLanguage();
   const { addToast } = useToast();
+  const { setIsAdminModalOpen, adminToken } = useAuth();
   const [subscribed, setSubscribed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailInput, setEmailInput] = useState("");
@@ -277,10 +279,21 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
 
         {/* Bottom Bar: Copyright & Payment Methods */}
         <div className="mt-12 pt-6 border-t border-zinc-200/60 dark:border-zinc-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-          <div className="text-zinc-400 text-center sm:text-left">
+          <div className="text-zinc-400 text-center sm:text-left flex items-center justify-center sm:justify-start gap-2 flex-wrap">
             <span>
               © {new Date().getFullYear()} Nirapod Kroy (নিরাপদ ক্রয়) — {t("copyright")}
             </span>
+            <span className="text-zinc-600 hidden sm:inline">•</span>
+            <button
+              type="button"
+              id="footer-admin-btn"
+              onClick={() => setIsAdminModalOpen(true)}
+              className="text-zinc-400 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors inline-flex items-center gap-1 cursor-pointer font-medium"
+              title="অ্যাডমিন প্যানেল (Admin Access)"
+            >
+              <Lock className="w-3 h-3" />
+              <span>{adminToken ? "অ্যাডমিন ড্যাশবোর্ড" : "অ্যাডমিন"}</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-center">

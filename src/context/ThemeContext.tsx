@@ -13,12 +13,14 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
     try {
-      const saved = safeGetLocalStorage("auracart_theme") as Theme;
-      if (saved === "light" || saved === "dark") return saved;
-      if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      // Check if user manually saved their preferred theme
+      const isManual = safeGetLocalStorage("auracart_theme_manual");
+      if (isManual === "true") {
+        const saved = safeGetLocalStorage("auracart_theme") as Theme;
+        if (saved === "light" || saved === "dark") return saved;
       }
     } catch {}
+    // Strictly default to "light" (pure clean white background)
     return "light";
   });
 
@@ -30,16 +32,22 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } else {
         root.classList.remove("dark");
       }
-      safeSetLocalStorage("auracart_theme", theme);
     } catch {}
   }, [theme]);
 
   const toggleTheme = () => {
-    setThemeState(prev => (prev === "dark" ? "light" : "dark"));
+    setThemeState(prev => {
+      const nextTheme = prev === "dark" ? "light" : "dark";
+      safeSetLocalStorage("auracart_theme", nextTheme);
+      safeSetLocalStorage("auracart_theme_manual", "true");
+      return nextTheme;
+    });
   };
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
+    safeSetLocalStorage("auracart_theme", newTheme);
+    safeSetLocalStorage("auracart_theme_manual", "true");
   };
 
   return (

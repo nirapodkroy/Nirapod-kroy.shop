@@ -43,7 +43,10 @@ import {
   CheckCircle,
   Github,
   GitBranch,
-  Mail
+  Mail,
+  Tag,
+  Percent,
+  Sparkles
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { BASE_CATEGORIES, categoryToSlug } from "../data/categories";
@@ -114,21 +117,47 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   // Admin Products State (Includes inactive products)
   const [adminProducts, setAdminProducts] = useState<Product[]>(products);
   const [productSearchTerm, setProductSearchTerm] = useState("");
-  const [productStatusFilter, setProductStatusFilter] = useState<"all" | "active" | "inactive" | "affiliate">("all");
+  const [productStatusFilter, setProductStatusFilter] = useState<"all" | "active" | "inactive" | "offer_zone" | "affiliate">("all");
   const [productToDelete, setProductToDelete] = useState<{ id: string; title: string } | null>(null);
   const [isPublishingLive, setIsPublishingLive] = useState(false);
   const [lastPublishedTime, setLastPublishedTime] = useState<string | null>(null);
+
+  // Editable Revenue State
+  const [isEditingRevenue, setIsEditingRevenue] = useState(false);
+  const [customRevenueInput, setCustomRevenueInput] = useState("");
+  const [isSavingRevenue, setIsSavingRevenue] = useState(false);
 
   // Fallback-resilient fetch helper for admin actions
   const safeAdminFetch = async (input: string, init?: RequestInit): Promise<Response> => {
     try {
       const res = await fetch(input, init);
       const contentType = res.headers.get("content-type") || "";
-      if (res.status !== 404 && res.status !== 502 && res.status !== 503 && !contentType.includes("text/html")) {
+      if (res.ok && !contentType.includes("text/html")) {
         return res;
       }
-    } catch {}
-    return handleLocalApi(String(input), init);
+      if (
+        res.status !== 401 &&
+        res.status !== 403 &&
+        res.status !== 404 &&
+        res.status !== 500 &&
+        res.status !== 502 &&
+        res.status !== 503 &&
+        !contentType.includes("text/html")
+      ) {
+        return res;
+      }
+    } catch (e) {
+      console.warn(`Admin fetch network error on ${input}, switching to local store:`, e);
+    }
+    try {
+      return await handleLocalApi(String(input), init);
+    } catch (fallbackErr) {
+      console.error(`Local API fallback error on ${input}:`, fallbackErr);
+      return new Response(JSON.stringify({ error: "Local API failure" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
   };
 
   // Product Form Modal State (Add / Edit)
@@ -147,6 +176,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [formBadge, setFormBadge] = useState("");
   const [formFeatured, setFormFeatured] = useState(false);
   const [formIsActive, setFormIsActive] = useState(true);
+  const [formIsOfferZone, setFormIsOfferZone] = useState(false);
+  const [formOfferDiscountNote, setFormOfferDiscountNote] = useState("");
   const [formIsAffiliate, setFormIsAffiliate] = useState(false);
   const [formAffiliateUrl, setFormAffiliateUrl] = useState("");
   const [formAffiliateSource, setFormAffiliateSource] = useState("");
@@ -411,71 +442,93 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const fetchAdminData = async () => {
     if (!adminToken) return;
 
+    // 1. Stats
     try {
-      // 1. Stats
       const statsRes = await safeAdminFetch("/api/admin/stats", {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
       if (statsRes.ok) {
         const statsData = await statsRes.json();
-        setStats(statsData.stats);
+        if (statsData?.stats) setStats(statsData.stats);
       }
+    } catch (e) {
+      console.warn("Admin stats fetch fallback:", e);
+    }
 
-      // 2. Orders
-      setIsLoadingOrders(true);
+    // 2. Orders
+    setIsLoadingOrders(true);
+    try {
       const ordersRes = await safeAdminFetch("/api/admin/orders", {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
       if (ordersRes.ok) {
         const ordersData = await ordersRes.json();
-        setOrders(ordersData.orders || []);
+        setOrders(ordersData?.orders || []);
       }
+    } catch (e) {
+      console.warn("Admin orders fetch fallback:", e);
+    } finally {
+      setIsLoadingOrders(false);
+    }
 
-      // 2.1 Customers
-      setIsLoadingCustomers(true);
+    // 2.1 Customers
+    setIsLoadingCustomers(true);
+    try {
       const custRes = await safeAdminFetch("/api/admin/customers", {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
       if (custRes.ok) {
         const custData = await custRes.json();
-        setCustomers(custData.customers || []);
+        setCustomers(custData?.customers || []);
       }
+    } catch (e) {
+      console.warn("Admin customers fetch fallback:", e);
+    } finally {
+      setIsLoadingCustomers(false);
+    }
 
-      // 2.2 Subscribers
-      setIsLoadingSubscribers(true);
+    // 2.2 Subscribers
+    setIsLoadingSubscribers(true);
+    try {
       const subsRes = await safeAdminFetch("/api/admin/subscribers", {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
       if (subsRes.ok) {
         const subsData = await subsRes.json();
-        setSubscribers(subsData.subscribers || []);
+        setSubscribers(subsData?.subscribers || []);
       }
+    } catch (e) {
+      console.warn("Admin subscribers fetch fallback:", e);
+    } finally {
+      setIsLoadingSubscribers(false);
+    }
 
-      // 3. Settings
+    // 3. Settings
+    try {
       const settingsRes = await safeAdminFetch("/api/admin/settings", {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
       if (settingsRes.ok) {
         const sData = await settingsRes.json();
-        setWebhookUrl(sData.webhookUrl || "");
+        setWebhookUrl(sData?.webhookUrl || "");
       }
+    } catch (e) {
+      console.warn("Admin settings fetch fallback:", e);
+    }
 
-      // 4. Products (All products including inactive)
+    // 4. Products (All products including inactive)
+    try {
       const prodsRes = await safeAdminFetch("/api/admin/products", {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
       if (prodsRes.ok) {
         const pData = await prodsRes.json();
-        if (Array.isArray(pData.products)) {
+        if (Array.isArray(pData?.products)) {
           setAdminProducts(pData.products);
         }
       }
-    } catch (err) {
-      console.error("Failed to load admin data:", err);
-    } finally {
-      setIsLoadingOrders(false);
-      setIsLoadingCustomers(false);
-      setIsLoadingSubscribers(false);
+    } catch (e) {
+      console.warn("Admin products fetch fallback:", e);
     }
   };
 
@@ -886,6 +939,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setFormBadge("New");
     setFormFeatured(false);
     setFormIsActive(true);
+    setFormIsOfferZone(false);
+    setFormOfferDiscountNote("");
     setFormIsAffiliate(false);
     setFormAffiliateUrl("");
     setFormAffiliateSource("");
@@ -922,6 +977,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setFormBadge(prod.badge || "");
     setFormFeatured(Boolean(prod.featured));
     setFormIsActive(prod.isActive !== false);
+    setFormIsOfferZone(Boolean(prod.isOfferZone));
+    setFormOfferDiscountNote(prod.offerDiscountNote || "");
     setFormIsAffiliate(Boolean(prod.isAffiliate));
     setFormAffiliateUrl(prod.affiliateUrl || "");
     setFormAffiliateSource(prod.affiliateSource || "");
@@ -996,6 +1053,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         badge: formBadge.trim() || undefined,
         featured: formFeatured,
         isActive: formIsActive,
+        isOfferZone: formIsOfferZone,
+        offerDiscountNote: formOfferDiscountNote ? formOfferDiscountNote.trim() : undefined,
         isAffiliate: formIsAffiliate,
         affiliateUrl: formIsAffiliate ? formAffiliateUrl.trim() : undefined,
         affiliateSource: formIsAffiliate ? (formAffiliateSource.trim() || "Online Partner") : undefined,
@@ -1149,6 +1208,126 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     } catch (err) {
       console.error(err);
       fetchAdminData();
+    }
+  };
+
+  // Toggle Offer Zone status instantly with one-click save
+  const handleToggleOfferZone = async (id: string, currentlyInOfferZone: boolean) => {
+    const nextState = !currentlyInOfferZone;
+
+    // 1. Instant optimistic update in admin list and public store cache
+    const updated = adminProducts.map((p) => (p.id === id ? { ...p, isOfferZone: nextState } : p));
+    setAdminProducts(updated);
+    try {
+      const publicCatalog = updated.filter((p) => p.isActive !== false);
+      localStorage.setItem("nirapod_products_cache", JSON.stringify(publicCatalog));
+      localStorage.setItem("nirapod_products_modified", String(Date.now()));
+      window.dispatchEvent(new CustomEvent("nirapod-catalog-updated"));
+    } catch {}
+
+    addToast(
+      nextState
+        ? "পণ্যটি অফার জোনে (Offer Zone) সফলভাবে যোগ করা হয়েছে! (মূল পেজেও থাকবে)"
+        : "পণ্যটি অফার জোন থেকে সরানো হয়েছে (মূল ক্যাটাগরিতে যথারীতি থাকবে)।",
+      "success"
+    );
+
+    try {
+      const res = await safeAdminFetch(`/api/products/${id}/toggle-offer-zone`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+
+      // Auto sync to live
+      safeAdminFetch("/api/admin/publish-live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ products: updated })
+      }).catch(() => {});
+
+      if (res.ok) {
+        onProductsUpdated();
+      }
+    } catch (err) {
+      console.error(err);
+      fetchAdminData();
+    }
+  };
+
+  // Open Revenue Edit Modal
+  const handleOpenEditRevenue = () => {
+    setCustomRevenueInput(stats?.totalRevenue !== undefined ? String(stats.totalRevenue) : "0");
+    setIsEditingRevenue(true);
+  };
+
+  // Save Custom Total Revenue
+  const handleSaveRevenue = async () => {
+    const num = Number(customRevenueInput);
+    if (isNaN(num) || num < 0) {
+      addToast("সঠিক রেভিনিউ টাকার পরিমাণ দিন", "warning");
+      return;
+    }
+    setIsSavingRevenue(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/revenue", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ customTotalRevenue: num })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStats(prev => prev ? {
+          ...prev,
+          totalRevenue: data.totalRevenue,
+          isCustomRevenue: true,
+          customTotalRevenue: data.totalRevenue,
+          calculatedRevenue: data.calculatedRevenue
+        } : null);
+        addToast(data.message || "মোট রেভিনিউ সফলভাবে পরিবর্তন করা হয়েছে!", "success");
+        setIsEditingRevenue(false);
+      } else {
+        addToast("রেভিনিউ পরিবর্তন করা যায়নি", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      addToast("রেভিনিউ সেভ করতে সমস্যা হয়েছে", "error");
+    } finally {
+      setIsSavingRevenue(false);
+    }
+  };
+
+  // Reset Custom Revenue to Auto Calculation
+  const handleResetRevenue = async () => {
+    setIsSavingRevenue(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/revenue", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ reset: true })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStats(prev => prev ? {
+          ...prev,
+          totalRevenue: data.totalRevenue,
+          isCustomRevenue: false,
+          customTotalRevenue: undefined,
+          calculatedRevenue: data.calculatedRevenue
+        } : null);
+        addToast(data.message || "মোট রেভিনিউ স্বয়ংক্রিয় গণনায় রিসেট করা হয়েছে।", "info");
+        setIsEditingRevenue(false);
+      }
+    } catch (err) {
+      console.error(err);
+      addToast("রিসেট ব্যর্থ হয়েছে", "error");
+    } finally {
+      setIsSavingRevenue(false);
     }
   };
 
@@ -1746,12 +1925,13 @@ function doPost(e) {
           ) : (
             /* 2. AUTHENTICATED ADMIN DASHBOARD */
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              {/* Tab Navigation */}
-              <div className="shrink-0 px-4 sm:px-6 py-2.5 bg-zinc-950/60 border-b border-zinc-800 flex items-center justify-between gap-4 overflow-x-auto no-scrollbar">
-                <div className="flex items-center gap-2">
+              {/* Tab Navigation & Action Bar */}
+              <div className="shrink-0 px-3 sm:px-6 py-2.5 bg-zinc-950/80 border-b border-zinc-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 sm:gap-4">
+                {/* Scrollable Tabs */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
                   <button
                     onClick={() => setActiveTab("dashboard")}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
                       activeTab === "dashboard"
                         ? "bg-zinc-800 text-white shadow-sm"
                         : "text-zinc-400 hover:text-white"
@@ -1762,7 +1942,7 @@ function doPost(e) {
                   </button>
                   <button
                     onClick={() => setActiveTab("products")}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
                       activeTab === "products"
                         ? "bg-zinc-800 text-white shadow-sm"
                         : "text-zinc-400 hover:text-white"
@@ -1773,7 +1953,7 @@ function doPost(e) {
                   </button>
                   <button
                     onClick={() => setActiveTab("orders")}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
                       activeTab === "orders"
                         ? "bg-zinc-800 text-white shadow-sm"
                         : "text-zinc-400 hover:text-white"
@@ -1784,7 +1964,7 @@ function doPost(e) {
                   </button>
                   <button
                     onClick={() => setActiveTab("customers")}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
                       activeTab === "customers"
                         ? "bg-zinc-800 text-white shadow-sm"
                         : "text-zinc-400 hover:text-white"
@@ -1795,7 +1975,7 @@ function doPost(e) {
                   </button>
                   <button
                     onClick={() => setActiveTab("subscribers")}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
                       activeTab === "subscribers"
                         ? "bg-zinc-800 text-white shadow-sm"
                         : "text-zinc-400 hover:text-white"
@@ -1806,7 +1986,7 @@ function doPost(e) {
                   </button>
                   <button
                     onClick={() => setActiveTab("sheets")}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
                       activeTab === "sheets"
                         ? "bg-zinc-800 text-white shadow-sm"
                         : "text-zinc-400 hover:text-white"
@@ -1817,7 +1997,7 @@ function doPost(e) {
                   </button>
                   <button
                     onClick={() => setActiveTab("github")}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
                       activeTab === "github"
                         ? "bg-zinc-800 text-white shadow-sm"
                         : "text-zinc-400 hover:text-white"
@@ -1828,7 +2008,8 @@ function doPost(e) {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* Quick Actions (Always Visible, Never Hidden) */}
+                <div className="flex items-center justify-end gap-2 shrink-0 pt-1.5 md:pt-0 border-t md:border-t-0 border-zinc-800/80">
                   <button
                     onClick={handlePushToGithub}
                     disabled={isPushingToGithub}
@@ -1849,7 +2030,7 @@ function doPost(e) {
                   </button>
                   <button
                     onClick={fetchAdminData}
-                    className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
                     title="Refresh Dashboard Data"
                   >
                     <RefreshCw className="w-4 h-4" />
@@ -1863,15 +2044,42 @@ function doPost(e) {
                 {activeTab === "dashboard" && (
                   <div className="space-y-6">
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700/60">
+                      {/* Total Revenue Card (Editable) */}
+                      <div className="p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700/60 hover:border-zinc-600 transition-all relative group">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-zinc-400">Total Revenue</span>
-                          <DollarSign className="w-4 h-4 text-emerald-400" />
+                          <span className="text-xs font-semibold text-zinc-400">Total Revenue (মোট আয়)</span>
+                          <button
+                            type="button"
+                            onClick={handleOpenEditRevenue}
+                            className="p-1 px-2 rounded-lg bg-zinc-900/80 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 transition-all flex items-center gap-1 text-[11px] font-bold cursor-pointer"
+                            title="মোট রেভিনিউ আপনার ইচ্ছামতো পরিবর্তন করুন"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            <span>এডিট</span>
+                          </button>
                         </div>
-                        <p className="mt-2 text-2xl font-extrabold text-white font-display">
-                          ${stats?.totalRevenue ? stats.totalRevenue.toFixed(2) : "0.00"}
+                        <p className="mt-2 text-2xl font-extrabold text-emerald-400 font-display">
+                          ৳{(stats?.totalRevenue ?? 0).toLocaleString()}
                         </p>
-                        <p className="text-[11px] text-zinc-500 mt-1">Confirmed store sales</p>
+                        <div className="flex items-center justify-between gap-1.5 mt-1.5 text-[11px] text-zinc-400 flex-wrap">
+                          <span>
+                            {stats?.isCustomRevenue ? (
+                              <span className="text-amber-400 font-semibold">✏️ কাস্টম সেট করা</span>
+                            ) : (
+                              "অর্ডার থেকে স্বয়ংক্রিয়"
+                            )}
+                          </span>
+                          {stats?.isCustomRevenue && (
+                            <button
+                              type="button"
+                              onClick={handleResetRevenue}
+                              disabled={isSavingRevenue}
+                              className="text-[10px] text-amber-300 underline hover:text-amber-200 cursor-pointer"
+                            >
+                              রিসেট
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700/60">
@@ -2126,6 +2334,17 @@ function doPost(e) {
                         </button>
                         <button
                           type="button"
+                          onClick={() => setProductStatusFilter("offer_zone")}
+                          className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                            productStatusFilter === "offer_zone"
+                              ? "bg-amber-500 text-zinc-950 font-bold border border-amber-400"
+                              : "bg-zinc-900/60 text-amber-300 hover:text-amber-200 border border-amber-500/30"
+                          }`}
+                        >
+                          🔥 অফার জোন ({adminProducts.filter((p) => p.isOfferZone || (p.regularPrice && p.regularPrice > p.price)).length})
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setProductStatusFilter("affiliate")}
                           className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                             productStatusFilter === "affiliate"
@@ -2148,6 +2367,7 @@ function doPost(e) {
                               <th className="p-3.5">Category</th>
                               <th className="p-3.5">Price</th>
                               <th className="p-3.5 text-center">Website Status</th>
+                              <th className="p-3.5 text-center">Offer Zone</th>
                               <th className="p-3.5">Stock / Type</th>
                               <th className="p-3.5">Badge</th>
                               <th className="p-3.5 text-right">Actions</th>
@@ -2166,6 +2386,9 @@ function doPost(e) {
                                 if (!matchesSearch) return false;
                                 if (productStatusFilter === "active") return prod.isActive !== false;
                                 if (productStatusFilter === "inactive") return prod.isActive === false;
+                                if (productStatusFilter === "offer_zone") {
+                                  return Boolean(prod.isOfferZone || (prod.regularPrice && prod.regularPrice > prod.price));
+                                }
                                 if (productStatusFilter === "affiliate") return Boolean(prod.isAffiliate);
                                 return true;
                               })
@@ -2187,8 +2410,13 @@ function doPost(e) {
                                         className="w-10 h-10 rounded-lg object-cover bg-zinc-900 shrink-0 border border-zinc-700"
                                       />
                                       <div className="min-w-0 max-w-xs">
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
                                           <p className="font-semibold text-white truncate">{prod.title}</p>
+                                          {prod.isOfferZone && (
+                                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                              Offer
+                                            </span>
+                                          )}
                                           {prod.isAffiliate && (
                                             <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                                               Affiliate
@@ -2212,7 +2440,14 @@ function doPost(e) {
                                       </div>
                                     </td>
                                     <td className="p-3.5 text-zinc-300">{prod.category}</td>
-                                    <td className="p-3.5 font-bold text-white">৳{prod.price.toLocaleString()}</td>
+                                    <td className="p-3.5 font-bold text-white">
+                                      <span>৳{prod.price.toLocaleString()}</span>
+                                      {prod.regularPrice && prod.regularPrice > prod.price && (
+                                        <span className="block text-[10px] text-zinc-500 line-through">
+                                          ৳{prod.regularPrice.toLocaleString()}
+                                        </span>
+                                      )}
+                                    </td>
                                     
                                     {/* Active / Inactive Status Toggle Button */}
                                     <td className="p-3.5 text-center">
@@ -2232,6 +2467,23 @@ function doPost(e) {
                                           }`}
                                         />
                                         <span>{isActive ? "Active (লাইভ)" : "Inactive (লুকানো)"}</span>
+                                      </button>
+                                    </td>
+
+                                    {/* Offer Zone Toggle Button */}
+                                    <td className="p-3.5 text-center">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleOfferZone(prod.id, Boolean(prod.isOfferZone))}
+                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                                          prod.isOfferZone
+                                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/50 hover:bg-amber-500/30"
+                                            : "bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700 hover:text-zinc-200"
+                                        }`}
+                                        title={prod.isOfferZone ? "অফার জোন থেকে সরাতে ক্লিক করুন (মূল ক্যাটাগরিতে যথারীতি থাকবে)" : "অফার জোনে নিতে ক্লিক করুন (মূল ক্যাটাগরির পাশাপাশি অফার জোনেও দেখাবে)"}
+                                      >
+                                        <Tag className={`w-3 h-3 ${prod.isOfferZone ? "text-amber-400 fill-amber-400/30" : "text-zinc-500"}`} />
+                                        <span>{prod.isOfferZone ? "অফারে সক্রিয়" : "+ অফারে নিন"}</span>
                                       </button>
                                     </td>
 
@@ -2299,6 +2551,9 @@ function doPost(e) {
                           if (!matchesSearch) return false;
                           if (productStatusFilter === "active") return prod.isActive !== false;
                           if (productStatusFilter === "inactive") return prod.isActive === false;
+                          if (productStatusFilter === "offer_zone") {
+                            return Boolean(prod.isOfferZone || (prod.regularPrice && prod.regularPrice > prod.price));
+                          }
                           if (productStatusFilter === "affiliate") return Boolean(prod.isAffiliate);
                           return true;
                         })
@@ -2322,6 +2577,11 @@ function doPost(e) {
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <h4 className="font-semibold text-white text-xs truncate">{prod.title}</h4>
+                                    {prod.isOfferZone && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                        Offer
+                                      </span>
+                                    )}
                                     {prod.isAffiliate && (
                                       <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                                         Affiliate
@@ -2330,29 +2590,50 @@ function doPost(e) {
                                   </div>
                                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                                     <span className="text-[12px] font-bold text-emerald-400">৳{prod.price.toLocaleString()}</span>
+                                    {prod.regularPrice && prod.regularPrice > prod.price && (
+                                      <span className="text-[10px] text-zinc-500 line-through">
+                                        ৳{prod.regularPrice.toLocaleString()}
+                                      </span>
+                                    )}
                                     <span className="text-[10px] text-zinc-400 bg-zinc-700/50 px-1.5 py-0.5 rounded">{prod.category}</span>
                                     <span className="text-[10px] text-zinc-400 font-mono">স্টক: {prod.stock}</span>
                                   </div>
 
-                                  {/* Mobile Active / Inactive Switch & Action Buttons */}
+                                  {/* Mobile Active / Inactive Switch & Offer Zone & Action Buttons */}
                                   <div className="mt-3 pt-2.5 border-t border-zinc-700/50 flex items-center justify-between gap-2 flex-wrap">
-                                    {/* Quick Active / Inactive Toggle */}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleToggleActive(prod.id, isActive)}
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
-                                        isActive
-                                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                                          : "bg-zinc-800 text-zinc-400 border border-zinc-700"
-                                      }`}
-                                    >
-                                      <span
-                                        className={`w-2 h-2 rounded-full ${
-                                          isActive ? "bg-emerald-400 animate-pulse" : "bg-zinc-500"
+                                    {/* Quick Status and Offer Toggles */}
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleActive(prod.id, isActive)}
+                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                                          isActive
+                                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                            : "bg-zinc-800 text-zinc-400 border border-zinc-700"
                                         }`}
-                                      />
-                                      <span>{isActive ? "Active (লাইভ)" : "Inactive (লুকানো)"}</span>
-                                    </button>
+                                      >
+                                        <span
+                                          className={`w-1.5 h-1.5 rounded-full ${
+                                            isActive ? "bg-emerald-400 animate-pulse" : "bg-zinc-500"
+                                          }`}
+                                        />
+                                        <span>{isActive ? "Active" : "Inactive"}</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleOfferZone(prod.id, Boolean(prod.isOfferZone))}
+                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                                          prod.isOfferZone
+                                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/50"
+                                            : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                                        }`}
+                                        title={prod.isOfferZone ? "অফার জোন থেকে সরান" : "অফার জোনে যোগ করুন"}
+                                      >
+                                        <Tag className={`w-3 h-3 ${prod.isOfferZone ? "text-amber-400 fill-amber-400/30" : "text-zinc-500"}`} />
+                                        <span>{prod.isOfferZone ? "Offer Active" : "+ অফার"}</span>
+                                      </button>
+                                    </div>
 
                                     {/* Action Buttons */}
                                     <div className="flex items-center gap-1.5">
@@ -3893,6 +4174,57 @@ function doPost(e) {
                     </button>
                   </div>
 
+                  {/* 2. Offer Zone Deal Switch & Tag */}
+                  <div className="p-3.5 rounded-2xl bg-amber-950/20 border border-amber-500/30 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-400">
+                          <Tag className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-xs text-white flex items-center gap-1.5">
+                            <span>অফার জোন (Offer Zone) এ দেখান</span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              /offer-zone
+                            </span>
+                          </p>
+                          <p className="text-[11px] text-amber-200/70">
+                            পণ্যটি মূল ক্যাটাগরির পাশাপাশি অফার জোন পেজেও বিশেষ ডিলে প্রদর্শিত হবে
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormIsOfferZone(!formIsOfferZone)}
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                          formIsOfferZone ? "bg-amber-500" : "bg-zinc-700"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            formIsOfferZone ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {formIsOfferZone && (
+                      <div className="pt-2 border-t border-amber-500/20 space-y-1">
+                        <label className="block text-[11px] font-semibold text-zinc-300">
+                          অফার ডিসকাউন্ট নোট বা স্পেশাল ব্যাজ (ঐচ্ছিক)
+                        </label>
+                        <input
+                          type="text"
+                          value={formOfferDiscountNote}
+                          onChange={(e) => setFormOfferDiscountNote(e.target.value)}
+                          placeholder="যেমন: ২০% ছাড়, ধামাকা অফার, স্পেশাল ডিল"
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   {/* 2. Affiliate / External Product Direct Link Section */}
                   <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/30 space-y-3">
                     <div className="flex items-center justify-between">
@@ -4181,6 +4513,105 @@ function doPost(e) {
                   >
                     Delete Subscriber
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Custom Total Revenue Editor Modal */}
+          {isEditingRevenue && (
+            <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+              <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl animate-in fade-in zoom-in duration-150">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shrink-0">
+                      <DollarSign className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-base text-white">মোট রেভিনিউ পরিবর্তন</h4>
+                      <p className="text-[11px] text-zinc-400">Custom Total Revenue Setting</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingRevenue(false)}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                      মোট রেভিনিউ পরিমাণ (টাকা / ৳ BDT) *
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-2.5 text-zinc-400 font-bold">৳</span>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={customRevenueInput}
+                        onChange={(e) => setCustomRevenueInput(e.target.value)}
+                        placeholder="e.g. 50000"
+                        className="w-full pl-8 pr-3.5 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-white font-bold text-base focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-1.5">
+                      💡 আপনি এখানে যেকোনো সংখ্যা লিখে সেভ করতে পারেন। ড্যাশবোর্ডে ও স্ট্যাটে এই মান প্রদর্শিত হবে।
+                    </p>
+                  </div>
+
+                  {stats && (
+                    <div className="p-3 rounded-xl bg-zinc-800/60 border border-zinc-700/80 text-xs text-zinc-300 space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">বর্তমান স্ট্যাটাস:</span>
+                        <span className="font-semibold text-white">
+                          {stats.isCustomRevenue ? "✏️ কাস্টম সেট করা" : "স্বয়ংক্রিয় (অর্ডার অনুযায়ী)"}
+                        </span>
+                      </div>
+                      {stats.calculatedRevenue !== undefined && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-400">অর্ডার থেকে স্বাভাবিক হিসাব:</span>
+                          <span className="font-mono text-zinc-300">৳{stats.calculatedRevenue.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 flex-wrap border-t border-zinc-800">
+                  {stats?.isCustomRevenue ? (
+                    <button
+                      type="button"
+                      onClick={handleResetRevenue}
+                      disabled={isSavingRevenue}
+                      className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      স্বয়ংক্রিয় গণনায় রিসেট
+                    </button>
+                  ) : (
+                    <div />
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingRevenue(false)}
+                      className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveRevenue}
+                      disabled={isSavingRevenue}
+                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/30 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      {isSavingRevenue ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

@@ -19,13 +19,15 @@ import {
   Package,
   LogOut,
   ChevronRight,
+  ChevronLeft,
   ShieldCheck,
   Zap,
   PhoneCall,
   FileText,
   BadgePercent,
   Info,
-  Home
+  Home,
+  Lock
 } from "lucide-react";
 
 interface HeaderProps {
@@ -51,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { theme, toggleTheme } = useTheme();
   const { itemCount, setIsCartOpen } = useCart();
-  const { currentUser, logoutCustomer, setIsAuthModalOpen, setAuthModalTab, setIsProfileModalOpen } = useAuth();
+  const { currentUser, logoutCustomer, setIsAuthModalOpen, setAuthModalTab, setIsProfileModalOpen, setIsAdminModalOpen, adminToken } = useAuth();
   const { language, setLanguage, toggleLanguage, t, getCategoryName } = useLanguage();
 
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -65,6 +67,16 @@ export const Header: React.FC<HeaderProps> = ({
   const categoryScrollRef = useRef<HTMLDivElement>(null);
   const aroDropdownRef = useRef<HTMLDivElement>(null);
   const searchCatDropdownRef = useRef<HTMLDivElement>(null);
+
+  const scrollCategories = (direction: "left" | "right") => {
+    if (categoryScrollRef.current) {
+      const amount = 240;
+      categoryScrollRef.current.scrollBy({
+        left: direction === "left" ? -amount : amount,
+        behavior: "smooth"
+      });
+    }
+  };
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -84,6 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
   const getCategoryDropdownLabel = (cat: string, lang: string): string => {
     const c = cat.toLowerCase().trim();
     if (c === "all") return lang === "bn" ? "সব পণ্য (All)" : "All Products";
+    if (c === "offer zone" || c === "offers" || c === "offer-zone" || c === "offer") return lang === "bn" ? "🔥 অফার জোন (Offer Zone)" : "🔥 Offer Zone";
     if (c === "groceries") return lang === "bn" ? "মুদি ও খাদ্য (Groceries)" : "Groceries";
     if (c === "electronics") return lang === "bn" ? "ইলেকট্রনিক্স (Electronics)" : "Electronics";
     if (c === "fashion") return lang === "bn" ? "পোশাক ও ফ্যাশন (Fashion)" : "Fashion";
@@ -198,6 +211,16 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="Toggle theme"
             >
               {theme === "dark" ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-zinc-300" />}
+            </button>
+
+            {/* Admin Panel Access Button */}
+            <button
+              onClick={() => setIsAdminModalOpen(true)}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 text-[11px] font-semibold border border-emerald-600/40 hover:border-emerald-500 transition-colors cursor-pointer"
+              title="অ্যাডমিন প্যানেল"
+            >
+              <Lock className="w-3 h-3 text-emerald-400" />
+              <span>{adminToken ? (language === "bn" ? "অ্যাডমিন" : "Admin") : (language === "bn" ? "অ্যাডমিন" : "Admin")}</span>
             </button>
           </div>
         </div>
@@ -506,12 +529,24 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Secondary Bar: Dark Green / Teal Bar (Unclipped overflow & clean controls) */}
+      {/* Secondary Bar: Dark Green / Teal Bar (Smooth horizontal scrolling with visible category names & arrows) */}
       <div className="bg-[#0b2923] text-white border-b border-[#071f1a] relative z-40 overflow-visible">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative overflow-visible">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 relative overflow-visible flex items-center gap-1">
+          {/* Left scroll chevron for desktop & tablet */}
+          <button
+            type="button"
+            onClick={() => scrollCategories("left")}
+            className="hidden sm:flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white shrink-0 cursor-pointer transition-colors"
+            title={language === "bn" ? "বামে স্ক্রোল করুন" : "Scroll Left"}
+            aria-label="Scroll categories left"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {/* Horizontally scrollable category list */}
           <div
             ref={categoryScrollRef}
-            className="flex items-center gap-2 py-2 overflow-visible relative"
+            className="flex items-center gap-1.5 sm:gap-2 py-2 overflow-x-auto category-scrollbar scroll-smooth flex-1 select-none"
           >
             {/* 1. Home / হোম (Homepage & All Products) */}
             <button
@@ -522,9 +557,9 @@ export const Header: React.FC<HeaderProps> = ({
                 setSearchQuery("");
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className={`px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 selectedCategory === "All" && !searchQuery
-                  ? "bg-emerald-600 text-white font-bold shadow-xs"
+                  ? "bg-emerald-600 text-white font-bold shadow-xs ring-1 ring-emerald-400/40"
                   : "text-zinc-200 hover:text-white hover:bg-white/10"
               }`}
               title={language === "bn" ? "হোম পেজ ও সকল পণ্য" : "Home & All Products"}
@@ -533,95 +568,149 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{language === "bn" ? "হোম" : "Home"}</span>
             </button>
 
-            {/* 2. Offer Zone */}
+            {/* 2. Offer Zone (Navigates directly to /offer-zone page) */}
             <button
+              type="button"
+              id="header-subnav-offerzone-btn"
               onClick={() => {
-                handleCategoryClick("All");
-                const deals = document.getElementById("catalog-section");
-                if (deals) deals.scrollIntoView({ behavior: "smooth" });
+                handleCategoryClick("Offer Zone");
               }}
-              className="px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap text-amber-300 hover:text-amber-200 hover:bg-white/10 flex items-center gap-1 cursor-pointer transition-colors"
+              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                selectedCategory.toLowerCase() === "offer zone" || selectedCategory.toLowerCase() === "offer-zone"
+                  ? "bg-amber-500 text-zinc-950 font-black shadow-md ring-2 ring-amber-300"
+                  : "bg-amber-400/15 text-amber-300 hover:text-amber-200 hover:bg-amber-400/25 border border-amber-400/30"
+              }`}
+              title={language === "bn" ? "🔥 অফার জোন ও স্পেশাল ছাড়" : "🔥 Offer Zone & Deals"}
             >
-              <BadgePercent className="w-3.5 h-3.5" />
+              <BadgePercent className="w-3.5 h-3.5 text-amber-300" />
               <span>{language === "bn" ? "অফার জোন" : "Offer Zone"}</span>
             </button>
 
-            {/* 3. আরও (Aro) Dropdown - Contains ALL categories inside it, floating cleanly above the page */}
-            <div className="relative overflow-visible" ref={aroDropdownRef}>
-              <button
-                type="button"
-                id="header-subnav-aro-btn"
-                onClick={() => setIsAroDropdownOpen((prev) => !prev)}
-                className={`px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
-                  isAroDropdownOpen
-                    ? "bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-300/40"
-                    : "text-zinc-200 hover:text-white hover:bg-white/10"
-                }`}
-                title={language === "bn" ? "সকল ক্যাটাগরি মেনু" : "All Categories Menu"}
-                aria-expanded={isAroDropdownOpen}
-              >
-                <span>{language === "bn" ? "আরও" : "More Categories"}</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isAroDropdownOpen ? "rotate-180" : ""}`} />
-              </button>
+            {/* 3. All Individual Categories Directly Visible & Clickable */}
+            {categories
+              .filter((c) => c !== "All" && c !== "Offer Zone")
+              .map((cat) => {
+                const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => handleCategoryClick(cat)}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
+                      isSelected
+                        ? "bg-emerald-600 text-white font-bold shadow-xs ring-1 ring-emerald-400/40"
+                        : "text-zinc-200 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <span>{getCategoryName(cat)}</span>
+                  </button>
+                );
+              })}
+          </div>
 
-              {/* Dropdown containing ALL categories - completely unclipped and floating above hero */}
-              {isAroDropdownOpen && (
-                <div className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-2 z-[9999] animate-fadeIn max-h-[72vh] overflow-y-auto">
-                  <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                      {language === "bn" ? "সকল ক্যাটাগরি" : "All Categories"}
-                    </span>
-                    <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
-                      {categories.length} টি
-                    </span>
-                  </div>
+          {/* Right scroll chevron for desktop & tablet */}
+          <button
+            type="button"
+            onClick={() => scrollCategories("right")}
+            className="hidden sm:flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white shrink-0 cursor-pointer transition-colors"
+            title={language === "bn" ? "ডানে স্ক্রোল করুন" : "Scroll Right"}
+            aria-label="Scroll categories right"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
 
-                  <div className="py-1">
-                    {/* All Products Option */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleCategoryClick("All");
-                        setIsAroDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-                        selectedCategory === "All"
-                          ? "bg-blue-600 text-white font-bold"
-                          : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                      }`}
-                    >
-                      <span>{getCategoryDropdownLabel("All", language)}</span>
-                      {selectedCategory === "All" && <span className="text-[10px]">✓</span>}
-                    </button>
+          {/* 4. আরও (Aro) Dropdown - Quick Jump for ALL categories */}
+          <div className="relative overflow-visible shrink-0" ref={aroDropdownRef}>
+            <button
+              type="button"
+              id="header-subnav-aro-btn"
+              onClick={() => setIsAroDropdownOpen((prev) => !prev)}
+              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
+                isAroDropdownOpen
+                  ? "bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-300/40"
+                  : "text-zinc-200 hover:text-white hover:bg-white/10"
+              }`}
+              title={language === "bn" ? "সকল ক্যাটাগরি মেনু" : "All Categories Menu"}
+              aria-expanded={isAroDropdownOpen}
+            >
+              <span>{language === "bn" ? "আরও" : "More"}</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isAroDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
 
-                    {/* All Category Items */}
-                    {categories
-                      .filter((c) => c !== "All")
-                      .map((cat) => {
-                        const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
-                        return (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() => {
-                              handleCategoryClick(cat);
-                              setIsAroDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-                              isSelected
-                                ? "bg-blue-600 text-white font-bold"
-                                : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                            }`}
-                          >
-                            <span>{getCategoryDropdownLabel(cat, language)}</span>
-                            {isSelected && <span className="text-[10px]">✓</span>}
-                          </button>
-                        );
-                      })}
-                  </div>
+            {/* Dropdown containing ALL categories - completely unclipped and floating above hero */}
+            {isAroDropdownOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-64 sm:w-72 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-2 z-[9999] animate-fadeIn max-h-[72vh] overflow-y-auto">
+                <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                    {language === "bn" ? "সকল ক্যাটাগরি" : "All Categories"}
+                  </span>
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
+                    {categories.length} টি
+                  </span>
                 </div>
-              )}
-            </div>
+
+                <div className="py-1">
+                  {/* All Products Option */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCategoryClick("All");
+                      setIsAroDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                      selectedCategory === "All"
+                        ? "bg-emerald-600 text-white font-bold"
+                        : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    <span>{getCategoryDropdownLabel("All", language)}</span>
+                    {selectedCategory === "All" && <span className="text-[10px]">✓</span>}
+                  </button>
+
+                  {/* Offer Zone Option */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCategoryClick("Offer Zone");
+                      setIsAroDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                      selectedCategory === "Offer Zone"
+                        ? "bg-amber-500 text-zinc-950 font-bold"
+                        : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                    }`}
+                  >
+                    <span>{getCategoryDropdownLabel("Offer Zone", language)}</span>
+                    {selectedCategory === "Offer Zone" && <span className="text-[10px]">✓</span>}
+                  </button>
+
+                  {/* All Category Items */}
+                  {categories
+                    .filter((c) => c !== "All" && c !== "Offer Zone")
+                    .map((cat) => {
+                      const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            handleCategoryClick(cat);
+                            setIsAroDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                            isSelected
+                              ? "bg-emerald-600 text-white font-bold"
+                              : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                          }`}
+                        >
+                          <span>{getCategoryDropdownLabel(cat, language)}</span>
+                          {isSelected && <span className="text-[10px]">✓</span>}
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -762,6 +851,31 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Package className="w-4 h-4 text-emerald-500" />
                   <span>{language === "bn" ? "আমার পূর্ববর্তী অর্ডার" : "Order History"}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsMoreOpen(false);
+                    setIsAdminModalOpen(true);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2.5 transition-colors cursor-pointer border border-emerald-500/20"
+                >
+                  <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>{language === "bn" ? "অ্যাডমিন প্যানেল" : "Admin Panel"}</span>
+                </button>
+
+                {/* Theme / Mode Switcher */}
+                <button
+                  onClick={toggleTheme}
+                  className="w-full px-3 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer border border-zinc-200 dark:border-zinc-700"
+                >
+                  <div className="flex items-center gap-2.5">
+                    {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-zinc-600 dark:text-zinc-300" />}
+                    <span>{language === "bn" ? "মোড পরিবর্তন (থিম)" : "Color Mode (Theme)"}</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
+                    {theme === "dark" ? (language === "bn" ? "ডার্ক মোড" : "Dark") : (language === "bn" ? "সাদা মোড" : "Light")}
+                  </span>
                 </button>
               </div>
             </div>

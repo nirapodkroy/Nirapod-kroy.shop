@@ -8,6 +8,7 @@
 
 export const BASE_CATEGORIES: string[] = [
   "All",
+  "Offer Zone",
   "Honey",
   "Oil & Ghee",
   "Dates",
@@ -30,6 +31,7 @@ export const BASE_CATEGORIES: string[] = [
 // Standard slug map for base categories
 export const CATEGORY_SLUG_MAP: Record<string, string> = {
   "All": "",
+  "Offer Zone": "offer-zone",
   "Honey": "honey",
   "Oil & Ghee": "oil-and-ghee",
   "Dates": "dates",
@@ -51,6 +53,17 @@ export const CATEGORY_SLUG_MAP: Record<string, string> = {
 
 // Common aliases for flexible URL matching (including Bengali transliterations and Unicode)
 export const SLUG_ALIASES: Record<string, string> = {
+  // Offer Zone / Deals
+  "offer-zone": "Offer Zone",
+  "offer": "Offer Zone",
+  "offers": "Offer Zone",
+  "deals": "Offer Zone",
+  "deal": "Offer Zone",
+  "offerzone": "Offer Zone",
+  "অফার": "Offer Zone",
+  "অফার-জোন": "Offer Zone",
+  "অফারজোন": "Offer Zone",
+
   // Baby & Kids
   "baby-and-kids": "Baby & Kids",
   "baby-kids": "Baby & Kids",

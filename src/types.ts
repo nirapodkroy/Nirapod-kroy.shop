@@ -17,6 +17,8 @@ export interface Product {
   affiliateUrl?: string;
   affiliateSource?: string;
   affiliateButtonText?: string;
+  isOfferZone?: boolean;
+  offerDiscountNote?: string;
 }
 
 export interface CartItem {
@@ -71,6 +73,9 @@ export interface OrderTickerItem {
 
 export interface AdminStats {
   totalRevenue: number;
+  calculatedRevenue?: number;
+  isCustomRevenue?: boolean;
+  customTotalRevenue?: number;
   totalOrders: number;
   totalProducts: number;
   lowStockProducts: number;
