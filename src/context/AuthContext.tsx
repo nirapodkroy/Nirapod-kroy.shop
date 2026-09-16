@@ -235,16 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCustomerToken(data.token);
       safeSetLocalStorage("auracart_customer", JSON.stringify(data.user));
       safeSetLocalStorage("auracart_customer_token", data.token);
-      // ⚡ Immediate direct Google Sheets Webhook sync
-      syncCustomerToGoogleSheets({
-        id: data.user.id,
-        name: data.user.name,
-        email: data.user.email,
-        phone: data.user.phone || phone || "N/A",
-        address: data.user.address || address || "N/A",
-        passwordHash: cleanPass,
-        createdAt: data.user.createdAt || new Date().toISOString()
-      }, cleanPass).catch(() => {});
+      // Note: Server has already synced customer registration cleanly to Google Sheets Customers tab
       addToast(`Account created! Welcome, ${data.user.name}`, "success");
       setIsAuthModalOpen(false);
       return true;

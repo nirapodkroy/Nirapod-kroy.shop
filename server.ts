@@ -1691,10 +1691,8 @@ app.post("/api/orders", async (req, res) => {
       createdAt: new Date().toISOString()
     };
     storeState.customers.push(existingCust);
-    // Also sync new customer profile to Google Sheets
-    syncCustomerToGoogleSheets(existingCust, "(Order Customer)").catch(err => {
-      console.warn("[Google Sheets] Background auto-customer sync warning:", err);
-    });
+    // Order customers are stored locally only - NOT synced to Google Sheets "Customers" tab.
+    // The "Customers" tab is strictly reserved for user account registrations.
   } else {
     // Update phone/address if previously missing
     if (!existingCust.phone && customerPhone) existingCust.phone = customerPhone.trim();

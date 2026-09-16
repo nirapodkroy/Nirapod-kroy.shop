@@ -163,10 +163,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       setConfirmedOrder(finalConfirmedOrder);
       clearCart();
 
-      // If backend was not reached (pure client fallback), dispatch to Google Sheets once
-      if (usedLocalFallback) {
-        syncOrderToGoogleSheets(finalConfirmedOrder).catch(() => {});
-      }
+      // Dispatch order directly to Google Sheets "order sheet" tab from client browser
+      syncOrderToGoogleSheets(finalConfirmedOrder).catch(() => {});
 
       addToast(
         language === "bn"

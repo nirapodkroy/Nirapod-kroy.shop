@@ -170,7 +170,10 @@ export function getGoogleSheetsWebhookUrl(): string {
   return GOOGLE_SHEETS_WEBHOOK_URL;
 }
 
-// Low-level dispatcher to Server API (with automatic fallback to Google Sheets Webhook)
+// Throttle map to ensure Google Sheets isn't flooded while guaranteeing instant visit logging
+const lastSheetDispatchMap = new Map<string, number>();
+
+// Dispatcher to Server API and direct Google Sheets Webhook
 async function dispatchTrackingEvent(payload: {
   sessionId: string;
   page: string;
@@ -187,25 +190,27 @@ async function dispatchTrackingEvent(payload: {
 }) {
   const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
   
-  // 1. Primary: Server API dispatch (Fast 10ms response, backend syncs cleanly to Google Sheets without hammering)
-  let serverDispatched = false;
+  // 1. Notify server API for admin live dashboard
   try {
-    const res = await fetch("/api/track", {
+    fetch("/api/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       keepalive: true
-    });
-    if (res.ok) {
-      serverDispatched = true;
-      return;
-    }
-  } catch {
-    serverDispatched = false;
-  }
+    }).catch(() => {});
+  } catch {}
 
-  // 2. Fallback: Only if /api/track fails or runs in static-only mode, send directly to Google Sheets Webhook ONCE
-  if (!serverDispatched) {
+  // 2. Direct client-side dispatch to Google Sheets Webhook (works on mobile and desktop without server proxy blocking)
+  // - Always dispatch for initial visit (!isHeartbeat)
+  // - For ongoing heartbeats, throttle to once every 45s per session or on final exit
+  const lastSync = lastSheetDispatchMap.get(payload.sessionId) || 0;
+  const now = Date.now();
+  const isFinal = payload.timeSpent.includes("মিনিট") || payload.timeSpent.includes("সেকেন্ড");
+  const shouldSyncSheet = !payload.isHeartbeat || isFinal || (now - lastSync >= 45000);
+
+  if (shouldSyncSheet) {
+    lastSheetDispatchMap.set(payload.sessionId, now);
+
     const sheetPayload = {
       action: "user_tracking",
       type: "user_tracking",
@@ -242,24 +247,28 @@ async function dispatchTrackingEvent(payload: {
 
     const jsonBody = JSON.stringify(sheetPayload);
     const baseWebhookUrl = getGoogleSheetsWebhookUrl();
-    const targetWebhookUrl = baseWebhookUrl + (baseWebhookUrl.includes("?") ? "&" : "?") + 
-      "tab=user+traking&target=user_traking&type=user_tracking&action=user_tracking&sessionId=" + encodeURIComponent(payload.sessionId);
+    if (baseWebhookUrl && baseWebhookUrl.startsWith("http")) {
+      const targetWebhookUrl = baseWebhookUrl + (baseWebhookUrl.includes("?") ? "&" : "?") + 
+        "tab=user+traking&target=user_traking&altTab=user+tracking&type=user_tracking&action=user_tracking&sessionId=" + encodeURIComponent(payload.sessionId);
 
-    try {
-      if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-        const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
-        if (navigator.sendBeacon(targetWebhookUrl, blob)) {
-          return;
+      let sent = false;
+      try {
+        if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+          const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
+          sent = navigator.sendBeacon(targetWebhookUrl, blob);
         }
+      } catch {}
+
+      if (!sent) {
+        fetch(targetWebhookUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: jsonBody,
+          keepalive: true
+        }).catch(() => {});
       }
-      fetch(targetWebhookUrl, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: jsonBody,
-        keepalive: true
-      }).catch(() => {});
-    } catch {}
+    }
   }
 }
 

@@ -2019,13 +2019,29 @@ function doPost(e) {
       (data.sheetRow && data.sheetRow.length === 4 && String(data.sheetRow[1]).indexOf("@") !== -1)
     );
 
-    // ৩. গ্রাহক রেজিস্ট্রেশন চেক
-    var isCustomer = Boolean(
+    // ৩. অর্ডার চেক (গ্রাহক নিবন্ধনের আগেই অর্ডার আলাদাভাবে চিহ্নিত করা)
+    var isOrder = Boolean(
+      data.action === "new_order" ||
+      data.action === "order" ||
+      data.type === "order" ||
+      data.orderId ||
+      String(data.sheetTab || data.targetSheet || "").toLowerCase().indexOf("order") !== -1 ||
+      (e && e.parameter && (
+        String(e.parameter.tab || "").toLowerCase().indexOf("order") !== -1 ||
+        String(e.parameter.action || "").toLowerCase().indexOf("order") !== -1 ||
+        String(e.parameter.type || "").toLowerCase().indexOf("order") !== -1 ||
+        e.parameter.orderId
+      )) ||
+      (data.sheetRow && data.sheetRow.length === 10)
+    );
+
+    // ৪. গ্রাহক রেজিস্ট্রেশন চেক (অর্ডার কখনোই গ্রাহক রেজিস্ট্রেশন নয়)
+    var isCustomer = !isOrder && Boolean(
       data.action === "customer_registration" || 
       data.type === "customer" ||
       (e && e.parameter && (e.parameter.type === "customer" || e.parameter.action === "customer_registration")) ||
-      (data.sheetRow && data.sheetRow.length === 7 && (String(data.sheetRow[0]).toLowerCase().indexOf("cust-") !== -1 || String(data.sheetRow[4]).indexOf("@") !== -1)) ||
-      Boolean(data.customerId && (data.name || data.email))
+      (data.sheetRow && data.sheetRow.length === 7 && String(data.sheetRow[0]).toLowerCase().indexOf("cust-") !== -1) ||
+      Boolean(data.customerId && (data.password || data.registeredAt))
     );
 
     // ===============================================
@@ -2215,7 +2231,7 @@ function doPost(e) {
 
       var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Customer_Order_Tracking", "Orders", "অর্ডার"], "order") || 
                        ss.getSheetByName("order sheet") || 
-                       ss.getSheets()[0];
+                       ss.insertSheet("order sheet");
       if (orderSheet.getLastRow() === 0) {
         orderSheet.appendRow([
           "Order ID", "Date/Time", "Customer Name", "Customer Email", 
