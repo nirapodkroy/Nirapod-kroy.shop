@@ -101,9 +101,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
         syncedToGoogleSheet: false
       };
 
-      // ⚡ Immediate 0ms direct Google Sheets Webhook dispatch
-      syncOrderToGoogleSheets(fullOrderForSync).catch(() => {});
-
       const payload = {
         orderId: clientOrderId,
         customerName: customerName.trim(),
@@ -116,6 +113,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       };
 
       let res: Response;
+      let usedLocalFallback = false;
       try {
         res = await fetch("/api/orders", {
           method: "POST",
@@ -127,6 +125,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
           throw new Error("Local fallback");
         }
       } catch {
+        usedLocalFallback = true;
         res = await handleLocalApi("/api/orders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -138,6 +137,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       try {
         data = await res.json();
       } catch {
+        usedLocalFallback = true;
         res = await handleLocalApi("/api/orders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -162,9 +162,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
 
       setConfirmedOrder(finalConfirmedOrder);
       clearCart();
-      if (finalConfirmedOrder.id !== clientOrderId) {
+
+      // If backend was not reached (pure client fallback), dispatch to Google Sheets once
+      if (usedLocalFallback) {
         syncOrderToGoogleSheets(finalConfirmedOrder).catch(() => {});
       }
+
       addToast(
         language === "bn"
           ? "অর্ডার সফলভাবে সম্পন্ন হয়েছে! নিরাপদ ক্রয়ে কেনাকাটার জন্য ধন্যবাদ।"

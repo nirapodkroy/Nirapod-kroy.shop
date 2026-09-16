@@ -771,6 +771,9 @@ saveState();
 // Active admin sessions in memory (sessionToken -> timestamp)
 const adminSessions = new Map<string, number>();
 
+// Session throttle for Google Sheets tracking dispatch (sessionId -> lastSyncTimestamp)
+const trackingSyncThrottle = new Map<string, number>();
+
 // Helper: dispatch order to Google Sheets webhook
 async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promise<boolean> {
   const targetUrl = webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
@@ -778,6 +781,9 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
     console.log(`[Google Sheets] Webhook URL not set. Order ${order.id} saved locally.`);
     return false;
   }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
     const itemsList = order.items && Array.isArray(order.items) ? order.items : [];
@@ -827,6 +833,7 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
     const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",
+      signal: controller.signal,
       headers: {
         "Content-Type": "text/plain;charset=utf-8",
         "User-Agent": "NirapodKroy-Ecommerce/1.0"
@@ -834,11 +841,13 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
       body: JSON.stringify(payload)
     });
 
+    clearTimeout(timeoutId);
     const responseText = await res.text().catch(() => "");
     console.log(`[Google Sheets] Webhook response status: ${res.status}, body: ${responseText.slice(0, 100)}`);
     return res.ok || responseText.includes('"status":"success"') || res.status === 302 || res.status === 200;
   } catch (err) {
-    console.error(`[Google Sheets] Failed to post order ${order.id} to webhook:`, err);
+    clearTimeout(timeoutId);
+    console.warn(`[Google Sheets Sync Warning]:`, err);
     return false;
   }
 }
@@ -882,15 +891,20 @@ async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: stri
       `tab=Customers&target=Customers&type=customer&action=customer_registration&customerId=${encodeURIComponent(customer.id)}&name=${encodeURIComponent(customer.name || "")}&phone=${encodeURIComponent(customer.phone || "")}&email=${encodeURIComponent(customer.email)}`;
 
     console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${urlWithParams}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
     const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",
+      signal: controller.signal,
       headers: {
         "Content-Type": "text/plain;charset=utf-8",
         "User-Agent": "NirapodKroy-Ecommerce/1.0"
       },
       body: JSON.stringify(payload)
     });
+    clearTimeout(timeoutId);
     const responseText = await res.text().catch(() => "");
     console.log(`[Google Sheets Customer Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
     return res.ok || responseText.includes('"status":"success"');
@@ -906,6 +920,9 @@ async function syncNewsletterToGoogleSheets(email: string, source = "Website Foo
   if (!targetUrl || !targetUrl.startsWith("http")) {
     return false;
   }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
 
   try {
     const subDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
@@ -931,16 +948,19 @@ async function syncNewsletterToGoogleSheets(email: string, source = "Website Foo
     const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",
+      signal: controller.signal,
       headers: {
         "Content-Type": "text/plain;charset=utf-8",
         "User-Agent": "NirapodKroy-Ecommerce/1.0"
       },
       body: JSON.stringify(payload)
     });
+    clearTimeout(timeoutId);
     const responseText = await res.text().catch(() => "");
     console.log(`[Google Sheets Newsletter Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
     return res.ok || responseText.includes('"status":"success"');
   } catch (err) {
+    clearTimeout(timeoutId);
     console.warn(`[Google Sheets Newsletter Sync Error]:`, err);
     return false;
   }
@@ -952,6 +972,9 @@ async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHeartbeat 
   if (!targetUrl || !targetUrl.startsWith("http")) {
     return false;
   }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
 
   try {
     const payload = {
@@ -993,16 +1016,19 @@ async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHeartbeat 
     const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",
+      signal: controller.signal,
       headers: {
         "Content-Type": "text/plain;charset=utf-8",
         "User-Agent": "NirapodKroy-Ecommerce/1.0"
       },
       body: JSON.stringify(payload)
     });
+    clearTimeout(timeoutId);
     const responseText = await res.text().catch(() => "");
     console.log(`[Google Sheets User Tracking Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
     return res.ok || responseText.includes('"status":"success"');
   } catch (err) {
+    clearTimeout(timeoutId);
     console.warn(`[Google Sheets User Tracking Sync Error]:`, err);
     return false;
   }
@@ -2184,7 +2210,18 @@ app.post("/api/track", async (req, res) => {
     }
 
     // Asynchronously dispatch to Google Sheets tab "user tracking"
-    syncTrackingToGoogleSheets(currentEntry, isHeartbeat).catch(() => {});
+    // FAST TRACK: New visitors & initial visits dispatch to Google Sheets immediately (<1s)!
+    // Ongoing duration updates are throttled to at most once every 60s per session,
+    // which prevents queue buildup on Google Apps Script and guarantees instant responses!
+    const isNewSession = existingIndex < 0;
+    const lastSyncTime = trackingSyncThrottle.get(sessionId) || 0;
+    const isFinalDuration = timeSpent.includes("মিনিট") || timeSpent.includes("সেকেন্ড");
+    const shouldSyncToSheet = isNewSession || (!isHeartbeat) || isFinalDuration || (Date.now() - lastSyncTime > 60000);
+
+    if (shouldSyncToSheet) {
+      trackingSyncThrottle.set(sessionId, Date.now());
+      syncTrackingToGoogleSheets(currentEntry, isHeartbeat).catch(() => {});
+    }
 
     return res.json({ success: true, sessionId, timeSpent });
   } catch (err: any) {

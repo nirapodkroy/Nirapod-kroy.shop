@@ -187,7 +187,9 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
     if (typeof navigator !== "undefined" && navigator.sendBeacon) {
       try {
         const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
-        navigator.sendBeacon(urlWithParams, blob);
+        if (navigator.sendBeacon(urlWithParams, blob)) {
+          return true;
+        }
       } catch {}
     }
 
@@ -244,7 +246,9 @@ export async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPa
     if (typeof navigator !== "undefined" && navigator.sendBeacon) {
       try {
         const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
-        navigator.sendBeacon(urlWithParams, blob);
+        if (navigator.sendBeacon(urlWithParams, blob)) {
+          return true;
+        }
       } catch {}
     }
 
@@ -294,7 +298,9 @@ export async function syncNewsletterToGoogleSheets(email: string, source = "Webs
     if (typeof navigator !== "undefined" && navigator.sendBeacon) {
       try {
         const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
-        navigator.sendBeacon(urlWithParams, blob);
+        if (navigator.sendBeacon(urlWithParams, blob)) {
+          return true;
+        }
       } catch {}
     }
 
@@ -357,7 +363,9 @@ export async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHea
     if (typeof navigator !== "undefined" && navigator.sendBeacon && isHeartbeat) {
       try {
         const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
-        navigator.sendBeacon(urlWithParams, blob);
+        if (navigator.sendBeacon(urlWithParams, blob)) {
+          return true;
+        }
       } catch {}
     }
 

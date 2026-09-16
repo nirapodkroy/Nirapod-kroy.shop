@@ -30,9 +30,6 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
-      // ⚡ Immediate direct Google Sheets Webhook dispatch (0ms latency)
-      syncNewsletterToGoogleSheets(cleanEmail, "Website Footer").catch(() => {});
-
       let serverSynced = false;
       // 1. Try server endpoint (which will dispatch ONCE to Google Sheets)
       try {
@@ -55,6 +52,7 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: cleanEmail, source: "Website Footer" })
         }).catch(() => null);
+        syncNewsletterToGoogleSheets(cleanEmail, "Website Footer").catch(() => {});
       }
 
       setSubscribed(true);

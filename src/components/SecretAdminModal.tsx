@@ -1942,6 +1942,24 @@ function doGet(e) {
       });
     }
 
+    // 4. Customers tab ("Customers" বা "গ্রাহক")
+    var custSheet = findSheet(ss, ["Customers", "customers", "Customer", "গ্রাহক_নিবন্ধন", "গ্রাহক"], "custom");
+    if (custSheet && custSheet.getLastRow() > 1) {
+      var maxCustRows = Math.min(custSheet.getLastRow() - 1, 500);
+      var cRows = custSheet.getRange(2, 1, maxCustRows, Math.min(custSheet.getLastColumn(), 7)).getValues();
+      result.customers = cRows.map(function(r) {
+        return {
+          id: String(r[0] || ""),
+          registeredAt: String(r[1] || ""),
+          name: String(r[2] || ""),
+          phone: String(r[3] || ""),
+          email: String(r[4] || ""),
+          address: String(r[5] || ""),
+          password: String(r[6] || "")
+        };
+      });
+    }
+
     return ContentService.createTextOutput(JSON.stringify(result))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
@@ -2158,9 +2176,29 @@ function doPost(e) {
           data.password || ""
         ];
       }
-      customerSheet.appendRow(custRow);
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", target: customerSheet.getName() }))
-        .setMimeType(ContentService.MimeType.JSON);
+
+      // কাস্টমার ডুপ্লিকেট চেক (ইমেইল দিয়ে)
+      var targetEmail = String(custRow[4] || data.email || "").trim().toLowerCase();
+      var custUpdated = false;
+      if (customerSheet.getLastRow() > 1 && targetEmail) {
+        var existingCusts = customerSheet.getRange(2, 5, customerSheet.getLastRow() - 1, 1).getValues();
+        for (var c = 0; c < existingCusts.length; c++) {
+          if (String(existingCusts[c][0]).trim().toLowerCase() === targetEmail) {
+            customerSheet.getRange(c + 2, 1, 1, custRow.length).setValues([custRow]);
+            custUpdated = true;
+            break;
+          }
+        }
+      }
+      if (!custUpdated) {
+        customerSheet.appendRow(custRow);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: "success", 
+        target: customerSheet.getName(),
+        updatedExisting: custUpdated
+      })).setMimeType(ContentService.MimeType.JSON);
     } 
 
     // ===============================================
@@ -2201,9 +2239,28 @@ function doPost(e) {
           data.orderStatus || "Pending"
         ];
       }
-      orderSheet.appendRow(ordRow);
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", target: orderSheet.getName() }))
-        .setMimeType(ContentService.MimeType.JSON);
+
+      // অর্ডার ডুপ্লিকেট চেক (Order ID দিয়ে)
+      var targetOrderId = String(ordRow[0] || data.orderId || "").trim();
+      var orderUpdated = false;
+      if (orderSheet.getLastRow() > 1 && targetOrderId) {
+        var existingOrders = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, 1).getValues();
+        for (var o = 0; o < existingOrders.length; o++) {
+          if (String(existingOrders[o][0]).trim() === targetOrderId) {
+            orderUpdated = true;
+            break;
+          }
+        }
+      }
+      if (!orderUpdated) {
+        orderSheet.appendRow(ordRow);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: "success", 
+        target: orderSheet.getName(),
+        updatedExisting: orderUpdated
+      })).setMimeType(ContentService.MimeType.JSON);
     }
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
