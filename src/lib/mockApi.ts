@@ -122,40 +122,63 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
   const target = webhookUrl || settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!target || !target.startsWith("http")) return false;
 
-  const itemsFormatted = order.items.map(i => `${i.title} (x${i.quantity} @ ৳${i.price})`).join(", ");
+  const itemsList = order.items && Array.isArray(order.items) ? order.items : [];
+  const itemsFormatted = itemsList.length > 0 
+    ? itemsList.map(i => `${i.title || "Item"} (x${i.quantity || 1} @ ৳${i.price || 0})`).join(", ")
+    : "Ordered Items";
+
+  const orderTime = order.createdAt 
+    ? new Date(order.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
+    : new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+
   const payload = {
     action: "new_order",
+    type: "order",
+    sheetTab: "order sheet",
+    targetSheet: "order sheet",
     orderId: order.id,
-    timestamp: order.createdAt,
-    orderDate: new Date(order.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
-    customerName: order.customerName,
-    customerEmail: order.customerEmail,
-    customerPhone: order.customerPhone,
-    shippingAddress: order.shippingAddress,
+    timestamp: order.createdAt || new Date().toISOString(),
+    orderDate: orderTime,
+    customerName: order.customerName || "Customer",
+    customerEmail: order.customerEmail || "",
+    customerPhone: order.customerPhone || "",
+    shippingAddress: order.shippingAddress || "",
     orderedItems: itemsFormatted,
-    totalPrice: `৳${order.totalPrice}`,
-    paymentMethod: order.paymentMethod,
-    orderStatus: order.status,
+    totalPrice: `৳${order.totalPrice || 0}`,
+    paymentMethod: order.paymentMethod || "Cash on Delivery",
+    orderStatus: order.status || "Pending",
     sheetRow: [
       order.id,
-      new Date(order.createdAt).toLocaleString(),
-      order.customerName,
-      order.customerEmail,
-      order.customerPhone,
-      order.shippingAddress,
+      orderTime,
+      order.customerName || "Customer",
+      order.customerEmail || "",
+      order.customerPhone || "",
+      order.shippingAddress || "",
       itemsFormatted,
-      `৳${order.totalPrice}`,
-      order.paymentMethod,
-      order.status
+      `৳${order.totalPrice || 0}`,
+      order.paymentMethod || "Cash on Delivery",
+      order.status || "Pending"
     ]
   };
 
+  const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
+    `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}`;
+
   try {
-    await fetch(target, {
+    const jsonBody = JSON.stringify(payload);
+    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+      try {
+        const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
+        navigator.sendBeacon(urlWithParams, blob);
+      } catch {}
+    }
+
+    await fetch(urlWithParams, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
+      body: jsonBody,
+      keepalive: true
     });
     return true;
   } catch (err) {
@@ -169,20 +192,26 @@ export async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPa
   const target = settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!target || !target.startsWith("http")) return false;
 
+  const regDate = customer.createdAt 
+    ? new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
+    : new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+
   const payload = {
     action: "customer_registration",
     type: "customer",
+    sheetTab: "Customers",
+    targetSheet: "Customers",
     customerId: customer.id,
-    name: customer.name,
+    name: customer.name || "Customer",
     phone: customer.phone || "N/A",
     email: customer.email,
     address: customer.address || "N/A",
     password: rawPassword || customer.passwordHash || "",
-    registeredAt: new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+    registeredAt: regDate,
     sheetRow: [
       customer.id,
-      new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
-      customer.name,
+      regDate,
+      customer.name || "Customer",
       customer.phone || "N/A",
       customer.email,
       customer.address || "N/A",
@@ -190,12 +219,24 @@ export async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPa
     ]
   };
 
+  const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
+    `tab=Customers&target=Customers&type=customer&action=customer_registration&customerId=${encodeURIComponent(customer.id)}&name=${encodeURIComponent(customer.name || "")}&phone=${encodeURIComponent(customer.phone || "")}&email=${encodeURIComponent(customer.email)}`;
+
   try {
-    await fetch(target, {
+    const jsonBody = JSON.stringify(payload);
+    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+      try {
+        const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
+        navigator.sendBeacon(urlWithParams, blob);
+      } catch {}
+    }
+
+    await fetch(urlWithParams, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
+      body: jsonBody,
+      keepalive: true
     });
     return true;
   } catch (err) {
@@ -211,31 +252,42 @@ export async function syncNewsletterToGoogleSheets(email: string, source = "Webs
   if (!target || !target.startsWith("http")) return false;
 
   const subDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+  const cleanEmail = email.trim().toLowerCase();
   const payload = {
     action: "subscribe",
     subAction: "newsletter_subscription",
     sheetTab: "subscribe",
     targetSheet: "subscribe",
     type: "subscriber",
-    email: email.trim().toLowerCase(),
+    email: cleanEmail,
     date: subDate,
     source,
     sheetRow: [
       subDate,
-      email.trim().toLowerCase(),
+      cleanEmail,
       source,
       "Active"
     ]
   };
 
-  const urlWithParams = target + (target.includes("?") ? "&" : "?") + "tab=subscribe&type=subscriber&action=subscribe";
+  const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
+    `tab=subscribe&target=subscribe&type=subscriber&action=subscribe&email=${encodeURIComponent(cleanEmail)}&source=${encodeURIComponent(source)}`;
 
   try {
+    const jsonBody = JSON.stringify(payload);
+    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+      try {
+        const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
+        navigator.sendBeacon(urlWithParams, blob);
+      } catch {}
+    }
+
     await fetch(urlWithParams, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
+      body: jsonBody,
+      keepalive: true
     });
     return true;
   } catch (err) {
@@ -244,7 +296,7 @@ export async function syncNewsletterToGoogleSheets(email: string, source = "Webs
   }
 }
 
-// Background sync user tracking to Google Sheets ("user tracking" tab)
+// Background sync user tracking to Google Sheets ("user traking" tab)
 export async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHeartbeat = false): Promise<boolean> {
   const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
   const target = settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
@@ -253,8 +305,8 @@ export async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHea
   const payload = {
     action: "user_tracking",
     type: "user_tracking",
-    sheetTab: "user tracking",
-    targetSheet: "user tracking",
+    sheetTab: "user traking",
+    targetSheet: "user traking",
     sessionId: entry.sessionId,
     isHeartbeat: Boolean(isHeartbeat),
     timeSpent: entry.timeSpent,
@@ -282,14 +334,24 @@ export async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHea
     ]
   };
 
-  const urlWithParams = target + (target.includes("?") ? "&" : "?") + "tab=user+tracking&type=user_tracking&action=user_tracking";
+  const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
+    `tab=user+traking&target=user_traking&type=user_tracking&action=user_tracking&sessionId=${encodeURIComponent(entry.sessionId)}`;
 
   try {
+    const jsonBody = JSON.stringify(payload);
+    if (typeof navigator !== "undefined" && navigator.sendBeacon && isHeartbeat) {
+      try {
+        const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
+        navigator.sendBeacon(urlWithParams, blob);
+      } catch {}
+    }
+
     await fetch(urlWithParams, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
+      body: jsonBody,
+      keepalive: true
     });
     return true;
   } catch (err) {
@@ -510,7 +572,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     }
     setSafeStorage(PRODUCTS_KEY, products);
 
-    const orderId = "NK-" + Math.floor(100000 + Math.random() * 900000);
+    const orderId = (body.orderId && String(body.orderId).trim()) || ("NK-" + Math.floor(100000 + Math.random() * 900000));
     const newOrder: Order = {
       id: orderId,
       customerName: String(customerName).trim(),

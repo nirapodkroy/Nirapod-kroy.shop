@@ -3,7 +3,7 @@ import { ShieldCheck, Heart, CreditCard, Send, CheckCircle2, PhoneCall, Loader2,
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
-import { handleLocalApi } from "../lib/mockApi";
+import { handleLocalApi, syncNewsletterToGoogleSheets } from "../lib/mockApi";
 
 interface FooterProps {
   onCategorySelect: (cat: string) => void;
@@ -30,6 +30,9 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
+      // ⚡ Immediate direct Google Sheets Webhook dispatch (0ms latency)
+      syncNewsletterToGoogleSheets(cleanEmail, "Website Footer").catch(() => {});
+
       let serverSynced = false;
       // 1. Try server endpoint (which will dispatch ONCE to Google Sheets)
       try {

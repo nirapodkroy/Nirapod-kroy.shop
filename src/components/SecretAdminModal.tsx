@@ -1631,15 +1631,32 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   // Save Webhook URL
   const handleSaveWebhook = async () => {
     setIsSavingWebhook(true);
+    const cleanUrl = webhookUrl.trim();
     try {
-      const res = await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
-        },
-        body: JSON.stringify({ webhookUrl })
-      });
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("nirapod_admin_settings", JSON.stringify({ webhookUrl: cleanUrl }));
+      }
+
+      let res: Response;
+      try {
+        res = await fetch("/api/admin/settings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ webhookUrl: cleanUrl })
+        });
+      } catch {
+        res = await handleLocalApi("/api/admin/settings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ webhookUrl: cleanUrl })
+        });
+      }
 
       if (res.ok) {
         addToast("Google Sheets Webhook URL updated successfully", "success");
@@ -1988,8 +2005,9 @@ function doPost(e) {
     var isCustomer = Boolean(
       data.action === "customer_registration" || 
       data.type === "customer" ||
-      (e && e.parameter && e.parameter.type === "customer") ||
-      (data.sheetRow && data.sheetRow.length === 7 && String(data.sheetRow[0]).indexOf("CUST-") !== -1)
+      (e && e.parameter && (e.parameter.type === "customer" || e.parameter.action === "customer_registration")) ||
+      (data.sheetRow && data.sheetRow.length === 7 && (String(data.sheetRow[0]).toLowerCase().indexOf("cust-") !== -1 || String(data.sheetRow[4]).indexOf("@") !== -1)) ||
+      Boolean(data.customerId && (data.name || data.email))
     );
 
     // ===============================================
@@ -2128,9 +2146,19 @@ function doPost(e) {
         ]);
         customerSheet.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#d1e7dd");
       }
-      if (data.sheetRow) {
-        customerSheet.appendRow(data.sheetRow);
+      var custRow = data.sheetRow;
+      if (!custRow || custRow.length < 7) {
+        custRow = [
+          data.customerId || ("cust-" + new Date().getTime()),
+          data.registeredAt || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+          data.name || "Customer",
+          data.phone || "N/A",
+          data.email || "",
+          data.address || "N/A",
+          data.password || ""
+        ];
       }
+      customerSheet.appendRow(custRow);
       return ContentService.createTextOutput(JSON.stringify({ status: "success", target: customerSheet.getName() }))
         .setMimeType(ContentService.MimeType.JSON);
     } 
@@ -2158,9 +2186,22 @@ function doPost(e) {
         ]);
         orderSheet.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#e6f4ea");
       }
-      if (data.sheetRow) {
-        orderSheet.appendRow(data.sheetRow);
+      var ordRow = data.sheetRow;
+      if (!ordRow || ordRow.length < 10) {
+        ordRow = [
+          data.orderId || ("NK-" + new Date().getTime()),
+          data.orderDate || data.timestamp || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+          data.customerName || "Customer",
+          data.customerEmail || "",
+          data.customerPhone || "",
+          data.shippingAddress || "",
+          data.orderedItems || "",
+          data.totalPrice || "৳0",
+          data.paymentMethod || "Cash on Delivery",
+          data.orderStatus || "Pending"
+        ];
       }
+      orderSheet.appendRow(ordRow);
       return ContentService.createTextOutput(JSON.stringify({ status: "success", target: orderSheet.getName() }))
         .setMimeType(ContentService.MimeType.JSON);
     }

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { CustomerUser } from "../types";
 import { useToast } from "./ToastContext";
-import { handleLocalApi } from "../lib/mockApi";
+import { handleLocalApi, syncCustomerToGoogleSheets } from "../lib/mockApi";
 import {
   safeGetLocalStorage,
   safeSetLocalStorage,
@@ -235,6 +235,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCustomerToken(data.token);
       safeSetLocalStorage("auracart_customer", JSON.stringify(data.user));
       safeSetLocalStorage("auracart_customer_token", data.token);
+      // ⚡ Immediate direct Google Sheets Webhook sync
+      syncCustomerToGoogleSheets({
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        phone: data.user.phone || phone || "N/A",
+        address: data.user.address || address || "N/A",
+        passwordHash: cleanPass,
+        createdAt: data.user.createdAt || new Date().toISOString()
+      }, cleanPass).catch(() => {});
       addToast(`Account created! Welcome, ${data.user.name}`, "success");
       setIsAuthModalOpen(false);
       return true;
@@ -251,6 +261,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentUser(fallbackUser);
       setCustomerToken("usr_" + Date.now().toString(36));
       safeSetLocalStorage("auracart_customer", JSON.stringify(fallbackUser));
+      // ⚡ Immediate direct Google Sheets Webhook sync
+      syncCustomerToGoogleSheets({
+        id: fallbackUser.id,
+        name: fallbackUser.name,
+        email: fallbackUser.email,
+        phone: fallbackUser.phone || "N/A",
+        address: fallbackUser.address || "N/A",
+        passwordHash: cleanPass,
+        createdAt: fallbackUser.createdAt
+      }, cleanPass).catch(() => {});
       addToast(`Account created! Welcome, ${fallbackUser.name}`, "success");
       setIsAuthModalOpen(false);
       return true;

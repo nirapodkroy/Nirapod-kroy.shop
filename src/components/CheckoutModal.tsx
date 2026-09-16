@@ -78,18 +78,39 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
     setIsSubmitting(true);
 
     try {
-      const payload = {
+      const clientOrderId = "NK-" + Math.floor(100000 + Math.random() * 900000);
+      const orderedItemList = items.map(item => ({
+        productId: item.product.id,
+        title: item.product.title,
+        price: item.product.price,
+        quantity: item.quantity,
+        imageUrl: item.product.imageUrl
+      }));
+
+      const fullOrderForSync = {
+        id: clientOrderId,
         customerName: customerName.trim(),
         customerEmail: customerEmail.trim().toLowerCase(),
         customerPhone: customerPhone.trim(),
         shippingAddress: shippingAddress.trim(),
-        items: items.map(item => ({
-          productId: item.product.id,
-          title: item.product.title,
-          price: item.product.price,
-          quantity: item.quantity,
-          imageUrl: item.product.imageUrl
-        })),
+        items: orderedItemList,
+        totalPrice: finalTotal,
+        paymentMethod,
+        status: "Pending" as const,
+        createdAt: new Date().toISOString(),
+        syncedToGoogleSheet: false
+      };
+
+      // ⚡ Immediate 0ms direct Google Sheets Webhook dispatch
+      syncOrderToGoogleSheets(fullOrderForSync).catch(() => {});
+
+      const payload = {
+        orderId: clientOrderId,
+        customerName: customerName.trim(),
+        customerEmail: customerEmail.trim().toLowerCase(),
+        customerPhone: customerPhone.trim(),
+        shippingAddress: shippingAddress.trim(),
+        items: orderedItemList,
         paymentMethod,
         notes: orderNotes.trim()
       };
@@ -132,10 +153,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       }
 
       // Order placed successfully!
-      setConfirmedOrder(data.order);
+      const finalConfirmedOrder = {
+        ...fullOrderForSync,
+        ...(data.order || {}),
+        id: data.order?.id || clientOrderId,
+        items: (data.order?.items && data.order.items.length > 0) ? data.order.items : orderedItemList
+      };
+
+      setConfirmedOrder(finalConfirmedOrder);
       clearCart();
-      // Ensure immediate direct Google Sheets sync
-      syncOrderToGoogleSheets(data.order).catch(() => {});
+      if (finalConfirmedOrder.id !== clientOrderId) {
+        syncOrderToGoogleSheets(finalConfirmedOrder).catch(() => {});
+      }
       addToast(
         language === "bn"
           ? "অর্ডার সফলভাবে সম্পন্ন হয়েছে! নিরাপদ ক্রয়ে কেনাকাটার জন্য ধন্যবাদ।"
@@ -147,10 +176,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       console.warn("Direct order fallback execution:", err);
       // Emergency local order confirmation
       const emergencyOrder = {
-        id: "ORD-" + Math.floor(100000 + Math.random() * 900000),
+        id: "NK-" + Math.floor(100000 + Math.random() * 900000),
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
-        customerEmail: customerEmail.trim(),
+        customerEmail: customerEmail.trim().toLowerCase(),
         shippingAddress: shippingAddress.trim(),
         items: items.map(item => ({
           productId: item.product.id,
@@ -162,10 +191,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
         totalPrice: finalTotal,
         paymentMethod,
         status: "Pending" as const,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        syncedToGoogleSheet: false
       };
       setConfirmedOrder(emergencyOrder);
       clearCart();
+      syncOrderToGoogleSheets(emergencyOrder).catch(() => {});
       addToast(
         language === "bn"
           ? "অর্ডার সফলভাবে সম্পন্ন হয়েছে! নিরাপদ ক্রয়ে কেনাকাটার জন্য ধন্যবাদ।"

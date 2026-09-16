@@ -772,47 +772,59 @@ saveState();
 const adminSessions = new Map<string, number>();
 
 // Helper: dispatch order to Google Sheets webhook
-async function syncOrderToGoogleSheets(order: Order, webhookUrl: string): Promise<boolean> {
-  const targetUrl = webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl;
+async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promise<boolean> {
+  const targetUrl = webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!targetUrl || !targetUrl.startsWith("http")) {
     console.log(`[Google Sheets] Webhook URL not set. Order ${order.id} saved locally.`);
     return false;
   }
 
   try {
-    const itemsFormatted = order.items.map(i => `${i.title} (x${i.quantity} @ $${i.price})`).join(", ");
+    const itemsList = order.items && Array.isArray(order.items) ? order.items : [];
+    const itemsFormatted = itemsList.length > 0
+      ? itemsList.map(i => `${i.title || "Item"} (x${i.quantity || 1} @ ৳${i.price || 0})`).join(", ")
+      : "Ordered Items";
     
+    const orderTime = order.createdAt 
+      ? new Date(order.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
+      : new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+
     // Payload formatted for standard Google Apps Script Webhook
     const payload = {
       action: "new_order",
+      type: "order",
+      sheetTab: "order sheet",
+      targetSheet: "order sheet",
       orderId: order.id,
-      timestamp: order.createdAt,
-      orderDate: new Date(order.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
-      customerName: order.customerName,
-      customerEmail: order.customerEmail,
-      customerPhone: order.customerPhone,
-      shippingAddress: order.shippingAddress,
+      timestamp: order.createdAt || new Date().toISOString(),
+      orderDate: orderTime,
+      customerName: order.customerName || "Customer",
+      customerEmail: order.customerEmail || "",
+      customerPhone: order.customerPhone || "",
+      shippingAddress: order.shippingAddress || "",
       orderedItems: itemsFormatted,
-      totalPrice: `$${order.totalPrice.toFixed(2)}`,
-      paymentMethod: order.paymentMethod,
-      orderStatus: order.status,
-      // Array format ready for sheet row append
+      totalPrice: `৳${order.totalPrice || 0}`,
+      paymentMethod: order.paymentMethod || "Cash on Delivery",
+      orderStatus: order.status || "Pending",
       sheetRow: [
         order.id,
-        new Date(order.createdAt).toLocaleString(),
-        order.customerName,
-        order.customerEmail,
-        order.customerPhone,
-        order.shippingAddress,
+        orderTime,
+        order.customerName || "Customer",
+        order.customerEmail || "",
+        order.customerPhone || "",
+        order.shippingAddress || "",
         itemsFormatted,
-        `$${order.totalPrice.toFixed(2)}`,
-        order.paymentMethod,
-        order.status
+        `৳${order.totalPrice || 0}`,
+        order.paymentMethod || "Cash on Delivery",
+        order.status || "Pending"
       ]
     };
 
-    console.log(`[Google Sheets] Dispatching order ${order.id} to ${targetUrl}`);
-    const res = await fetch(targetUrl, {
+    const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
+      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}`;
+
+    console.log(`[Google Sheets] Dispatching order ${order.id} to ${urlWithParams}`);
+    const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",
       headers: {
@@ -833,26 +845,32 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl: string): Promis
 
 // Helper: dispatch customer registration to Google Sheets webhook
 async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: string): Promise<boolean> {
-  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl;
+  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!targetUrl || !targetUrl.startsWith("http")) {
     return false;
   }
 
   try {
+    const regDate = customer.createdAt 
+      ? new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
+      : new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+
     const payload = {
       action: "customer_registration",
       type: "customer",
+      sheetTab: "Customers",
+      targetSheet: "Customers",
       customerId: customer.id,
-      name: customer.name,
+      name: customer.name || "Customer",
       phone: customer.phone || "N/A",
       email: customer.email,
       address: customer.address || "N/A",
       password: rawPassword || customer.passwordHash || "",
-      registeredAt: new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+      registeredAt: regDate,
       sheetRow: [
         customer.id,
-        new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
-        customer.name,
+        regDate,
+        customer.name || "Customer",
         customer.phone || "N/A",
         customer.email,
         customer.address || "N/A",
@@ -860,8 +878,11 @@ async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: stri
       ]
     };
 
-    console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${targetUrl}`);
-    const res = await fetch(targetUrl, {
+    const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
+      `tab=Customers&target=Customers&type=customer&action=customer_registration&customerId=${encodeURIComponent(customer.id)}&name=${encodeURIComponent(customer.name || "")}&phone=${encodeURIComponent(customer.phone || "")}&email=${encodeURIComponent(customer.email)}`;
+
+    console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${urlWithParams}`);
+    const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",
       headers: {
@@ -1612,7 +1633,7 @@ app.post("/api/orders", async (req, res) => {
     });
   }
 
-  const orderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
+  const orderId = (req.body.orderId && String(req.body.orderId).trim()) || ("NK-" + Math.floor(100000 + Math.random() * 900000));
   const newOrder: Order = {
     id: orderId,
     customerName: customerName.trim(),
@@ -1667,19 +1688,10 @@ app.post("/api/orders", async (req, res) => {
     console.error("Async Google Sheet webhook sync failed:", err);
   });
 
-  // Privacy-conscious response
   res.status(201).json({
     success: true,
     orderId: newOrder.id,
-    order: {
-      id: newOrder.id,
-      customerName: newOrder.customerName,
-      customerEmail: newOrder.customerEmail,
-      totalPrice: newOrder.totalPrice,
-      itemCount: newOrder.items.length,
-      status: newOrder.status,
-      createdAt: newOrder.createdAt
-    }
+    order: newOrder
   });
 });
 

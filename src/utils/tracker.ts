@@ -149,6 +149,22 @@ export async function getClientGeo(): Promise<GeoData> {
 // Google Sheets Apps Script Webhook (Nirapod Kroy Live Master Database)
 export const GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4/exec";
 
+// Dynamically resolve target webhook URL (supports admin configuration saved in settings)
+export function getGoogleSheetsWebhookUrl(): string {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const raw = localStorage.getItem("nirapod_admin_settings");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.webhookUrl && typeof parsed.webhookUrl === "string" && parsed.webhookUrl.trim().startsWith("http")) {
+          return parsed.webhookUrl.trim();
+        }
+      }
+    }
+  } catch {}
+  return GOOGLE_SHEETS_WEBHOOK_URL;
+}
+
 // Low-level dispatcher to Google Sheets Webhook and optional Server API
 async function dispatchTrackingEvent(payload: {
   sessionId: string;
@@ -202,22 +218,23 @@ async function dispatchTrackingEvent(payload: {
   };
 
   const jsonBody = JSON.stringify(sheetPayload);
-  const targetWebhookUrl = GOOGLE_SHEETS_WEBHOOK_URL + (GOOGLE_SHEETS_WEBHOOK_URL.includes("?") ? "&" : "?") + "tab=user+traking&target=user_traking&type=user_tracking&action=user_tracking";
+  const baseWebhookUrl = getGoogleSheetsWebhookUrl();
+  const targetWebhookUrl = baseWebhookUrl + (baseWebhookUrl.includes("?") ? "&" : "?") + 
+    "tab=user+traking&target=user_traking&type=user_tracking&action=user_tracking&sessionId=" + encodeURIComponent(payload.sessionId);
 
   // A. Direct Webhook Dispatch (Works on GitHub Pages static site & standalone client)
   try {
-    if (typeof navigator !== "undefined" && navigator.sendBeacon && payload.isHeartbeat) {
+    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
       const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
       navigator.sendBeacon(targetWebhookUrl, blob);
-    } else {
-      fetch(targetWebhookUrl, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: jsonBody,
-        keepalive: true
-      }).catch(() => {});
     }
+    fetch(targetWebhookUrl, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: jsonBody,
+      keepalive: true
+    }).catch(() => {});
   } catch {}
 
   // B. Server API dispatch (Works when Express backend is running)
