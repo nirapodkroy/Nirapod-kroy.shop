@@ -3,7 +3,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLanguage } from "../context/LanguageContext";
-import { handleLocalApi } from "../lib/mockApi";
+import { handleLocalApi, syncOrderToGoogleSheets } from "../lib/mockApi";
 import {
   X,
   ShieldCheck,
@@ -134,6 +134,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       // Order placed successfully!
       setConfirmedOrder(data.order);
       clearCart();
+      // Ensure immediate direct Google Sheets sync
+      syncOrderToGoogleSheets(data.order).catch(() => {});
       addToast(
         language === "bn"
           ? "অর্ডার সফলভাবে সম্পন্ন হয়েছে! নিরাপদ ক্রয়ে কেনাকাটার জন্য ধন্যবাদ।"

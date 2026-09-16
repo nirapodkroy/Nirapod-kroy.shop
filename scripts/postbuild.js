@@ -7,23 +7,29 @@ const docs = path.join(root, 'docs');
 const assets = path.join(root, 'assets');
 
 try {
-  // 1. Ensure <base href="/" /> is present in dist/index.html
+  // 1. Ensure <base href="/" /> is present in dist/index.html and assets are absolute
   let indexHtmlContent = '';
   const distIndexFile = path.join(dist, 'index.html');
   if (fs.existsSync(distIndexFile)) {
     indexHtmlContent = fs.readFileSync(distIndexFile, 'utf-8');
     if (!indexHtmlContent.includes('<base href="/"')) {
       indexHtmlContent = indexHtmlContent.replace('<head>', '<head>\n    <base href="/" />');
-      fs.writeFileSync(distIndexFile, indexHtmlContent);
     }
+    // Ensure absolute paths for assets so subpaths like /offer-zone never fail
+    indexHtmlContent = indexHtmlContent
+      .replace(/src="\.\/assets\//g, 'src="/assets/')
+      .replace(/href="\.\/assets\//g, 'href="/assets/');
+
+    fs.writeFileSync(distIndexFile, indexHtmlContent);
 
     // 2. Sync index.html to docs
     if (!fs.existsSync(docs)) fs.mkdirSync(docs, { recursive: true });
     fs.writeFileSync(path.join(docs, 'index.html'), indexHtmlContent);
 
-    // 3. Sync 404.html in dist and docs for GitHub Pages client-side routing
+    // 3. Sync 404.html in dist, docs, and root for GitHub Pages client-side routing
     fs.writeFileSync(path.join(dist, '404.html'), indexHtmlContent);
     fs.writeFileSync(path.join(docs, '404.html'), indexHtmlContent);
+    fs.writeFileSync(path.join(root, '404.html'), indexHtmlContent);
   }
 
   // 4. Sync dist to docs (for users with Pages set to /docs folder)

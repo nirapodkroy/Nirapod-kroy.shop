@@ -146,7 +146,10 @@ export async function getClientGeo(): Promise<GeoData> {
   return cachedGeo;
 }
 
-// Low-level dispatcher to API and Google Sheets Webhook
+// Google Sheets Apps Script Webhook (Nirapod Kroy Live Master Database)
+export const GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4/exec";
+
+// Low-level dispatcher to Google Sheets Webhook and optional Server API
 async function dispatchTrackingEvent(payload: {
   sessionId: string;
   page: string;
@@ -161,25 +164,71 @@ async function dispatchTrackingEvent(payload: {
   screen: string;
   referrer: string;
 }) {
-  const jsonBody = JSON.stringify(payload);
+  const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+  
+  // 1. Prepare Google Sheets Webhook Payload for "user traking" / "user tracking" tab
+  const sheetPayload = {
+    action: "user_tracking",
+    type: "user_tracking",
+    sheetTab: "user traking",
+    targetSheet: "user traking",
+    targetTab: "user traking",
+    alternativeSheet: "user tracking",
+    sessionId: payload.sessionId,
+    isHeartbeat: Boolean(payload.isHeartbeat),
+    timeSpent: payload.timeSpent,
+    page: payload.page,
+    ip: payload.clientIp,
+    location: payload.location,
+    device: payload.device,
+    os: payload.os,
+    browser: payload.browser,
+    referrer: payload.referrer,
+    screen: payload.screen,
+    time: timestamp,
+    sheetRow: [
+      timestamp,
+      payload.page,
+      payload.clientIp,
+      payload.location,
+      payload.device,
+      payload.os,
+      payload.browser,
+      payload.timeSpent,
+      payload.referrer,
+      payload.screen,
+      payload.sessionId
+    ]
+  };
 
-  // 1. Send to server endpoint
+  const jsonBody = JSON.stringify(sheetPayload);
+  const targetWebhookUrl = GOOGLE_SHEETS_WEBHOOK_URL + (GOOGLE_SHEETS_WEBHOOK_URL.includes("?") ? "&" : "?") + "tab=user+traking&target=user_traking&type=user_tracking&action=user_tracking";
+
+  // A. Direct Webhook Dispatch (Works on GitHub Pages static site & standalone client)
   try {
     if (typeof navigator !== "undefined" && navigator.sendBeacon && payload.isHeartbeat) {
-      const blob = new Blob([jsonBody], { type: "application/json" });
-      const sent = navigator.sendBeacon("/api/track", blob);
-      if (sent) return;
+      const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
+      navigator.sendBeacon(targetWebhookUrl, blob);
+    } else {
+      fetch(targetWebhookUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: jsonBody,
+        keepalive: true
+      }).catch(() => {});
     }
+  } catch {}
 
-    await fetch("/api/track", {
+  // B. Server API dispatch (Works when Express backend is running)
+  try {
+    fetch("/api/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: jsonBody,
+      body: JSON.stringify(payload),
       keepalive: true
     }).catch(() => {});
-  } catch (err) {
-    // Silent fail for network glitches
-  }
+  } catch {}
 }
 
 /**
@@ -215,24 +264,42 @@ export function trackPageView(pageTitle: string, pageSlug = "root"): () => void 
   };
   currentTrackingSession = sessionObj;
 
-  // Send Initial Page Visit Record
+  // Send Immediate Page Visit Record (0ms response to Google Sheets)
+  const initialGeo = cachedGeo || { ip: "Unknown", location: "Bangladesh" };
+  dispatchTrackingEvent({
+    sessionId,
+    page: pageTitle,
+    pageSlug: cleanSlug,
+    isHeartbeat: false,
+    timeSpent: "সক্রিয় রয়েছে (Active)...",
+    clientIp: initialGeo.ip,
+    location: initialGeo.location,
+    device,
+    os,
+    browser,
+    screen,
+    referrer
+  });
+
+  // Then fetch refined geo asynchronously in background
   getClientGeo().then((geo) => {
     if (currentTrackingSession?.sessionId !== sessionId) return;
-
-    dispatchTrackingEvent({
-      sessionId,
-      page: pageTitle,
-      pageSlug: cleanSlug,
-      isHeartbeat: false,
-      timeSpent: "সক্রিয় রয়েছে (Active)...",
-      clientIp: geo.ip,
-      location: geo.location,
-      device,
-      os,
-      browser,
-      screen,
-      referrer
-    });
+    if (geo.ip !== "Unknown" && geo.ip !== initialGeo.ip) {
+      dispatchTrackingEvent({
+        sessionId,
+        page: pageTitle,
+        pageSlug: cleanSlug,
+        isHeartbeat: false,
+        timeSpent: "সক্রিয় রয়েছে (Active)...",
+        clientIp: geo.ip,
+        location: geo.location,
+        device,
+        os,
+        browser,
+        screen,
+        referrer
+      });
+    }
   });
 
   // Heartbeat sequence: update row duration

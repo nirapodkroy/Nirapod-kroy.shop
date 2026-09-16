@@ -64,7 +64,7 @@ var DEFAULT_PRODUCTS = [
     description: "\u09E7\u09E6\u09E6% \u0996\u09BE\u0981\u099F\u09BF \u0995\u09BE\u09A0\u09C7\u09B0 \u0998\u09BE\u09A8\u09BF\u09A4\u09C7 \u09AD\u09BE\u0999\u09BE \u09A6\u09C7\u09B6\u09BF \u09B8\u09B0\u09BF\u09B7\u09BE\u09B0 \u09A4\u09C7\u09B2\u0964 \u099D\u09BE\u0981\u099D\u09BE\u09B2\u09CB \u09B8\u09C1\u09AC\u09BE\u09B8, \u0995\u09C7\u09AE\u09BF\u0995\u09CD\u09AF\u09BE\u09B2 \u0993 \u09AD\u09C7\u099C\u09BE\u09B2\u09AE\u09C1\u0995\u09CD\u09A4 \u09AA\u09CD\u09B0\u09BE\u0995\u09C3\u09A4\u09BF\u0995 \u09A4\u09C7\u09B2\u0964",
     price: 340,
     regularPrice: 380,
-    category: "Groceries",
+    category: "Oil & Ghee",
     stock: 45,
     imageUrl: "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=800&q=80",
     images: [
@@ -83,7 +83,7 @@ var DEFAULT_PRODUCTS = [
     description: "\u09B8\u09C1\u09A8\u09CD\u09A6\u09B0\u09AC\u09A8\u09C7\u09B0 \u0997\u09AD\u09C0\u09B0 \u099C\u0999\u09CD\u0997\u09B2 \u09A5\u09C7\u0995\u09C7 \u09B8\u0982\u0997\u09C3\u09B9\u09C0\u09A4 \u09AA\u09CD\u09B0\u09BE\u0995\u09C3\u09A4\u09BF\u0995 \u099A\u09BE\u0995\u09C7\u09B0 \u0995\u09BE\u0981\u099A\u09BE \u09AE\u09A7\u09C1\u0964 \u0995\u09CB\u09A8\u09CB \u09A7\u09B0\u09A8\u09C7\u09B0 \u09AA\u09CD\u09B0\u0995\u09CD\u09B0\u09BF\u09AF\u09BC\u09BE\u099C\u09BE\u09A4\u0995\u09B0\u09A3 \u0993 \u099A\u09BF\u09A8\u09BF\u09AE\u09C1\u0995\u09CD\u09A4\u0964",
     price: 580,
     regularPrice: 650,
-    category: "Groceries",
+    category: "Honey",
     stock: 30,
     imageUrl: "https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&w=800&q=80",
     images: [
@@ -102,7 +102,7 @@ var DEFAULT_PRODUCTS = [
     description: "\u09A6\u09BF\u09A8\u09BE\u099C\u09AA\u09C1\u09B0\u09C7\u09B0 \u09AC\u09BF\u0996\u09CD\u09AF\u09BE\u09A4 \u099A\u09BF\u0995\u09A8 \u0993 \u09B8\u09C1\u09AC\u09BE\u09B8\u09BF\u09A4 \u099A\u09BF\u09A8\u09BF\u0997\u09C1\u0981\u09A1\u09BC\u09BE \u099A\u09BE\u09B2\u0964 \u09AC\u09BF\u09B0\u09BF\u09AF\u09BC\u09BE\u09A8\u09BF, \u09AA\u09CB\u09B2\u09BE\u0993 \u0993 \u09AA\u09BE\u09AF\u09BC\u09C7\u09B8 \u09B0\u09BE\u09A8\u09CD\u09A8\u09BE\u09B0 \u099C\u09A8\u09CD\u09AF \u0986\u09A6\u09B0\u09CD\u09B6\u0964",
     price: 690,
     regularPrice: 750,
-    category: "Groceries",
+    category: "Rice",
     stock: 50,
     imageUrl: "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=800&q=80",
     images: [
@@ -120,7 +120,7 @@ var DEFAULT_PRODUCTS = [
     description: "\u0997\u09CD\u09B0\u09BE\u09AE\u09C7\u09B0 \u09A6\u09C7\u09B6\u09BF \u0997\u09BE\u09AD\u09C0\u09B0 \u0996\u09BE\u0981\u099F\u09BF \u09A6\u09C1\u09A7\u09C7\u09B0 \u09AE\u09BE\u0996\u09A8 \u09A5\u09C7\u0995\u09C7 \u09A4\u09C8\u09B0\u09BF \u09B8\u09C1\u09B8\u09CD\u09AC\u09BE\u09A6\u09C1 \u0993 \u09A6\u09BE\u09A8\u09BE\u09A6\u09BE\u09B0 \u0997\u09BE\u0993\u09AF\u09BC\u09BE \u0998\u09BF\u0964",
     price: 720,
     regularPrice: 820,
-    category: "Groceries",
+    category: "Oil & Ghee",
     stock: 25,
     imageUrl: "https://images.unsplash.com/photo-1631451095765-2c91616fc9e6?auto=format&fit=crop&w=800&q=80",
     images: [
@@ -138,12 +138,68 @@ var DEFAULT_PRODUCTS = [
     description: "\u0995\u09BE\u09A0\u09AC\u09BE\u09A6\u09BE\u09AE, \u0995\u09BE\u099C\u09C1\u09AC\u09BE\u09A6\u09BE\u09AE, \u09AA\u09C7\u09B8\u09CD\u09A4\u09BE\u09AC\u09BE\u09A6\u09BE\u09AE, \u0986\u0996\u09B0\u09CB\u099F \u0993 \u09AA\u09CD\u09B0\u09BF\u09AE\u09BF\u09AF\u09BC\u09BE\u09AE \u0995\u09BF\u09B8\u09AE\u09BF\u09B8\u09C7\u09B0 \u09AA\u09C1\u09B7\u09CD\u099F\u09BF\u0995\u09B0 \u09B8\u09CD\u09AC\u09BE\u09B8\u09CD\u09A5\u09CD\u09AF\u0995\u09B0 \u09B8\u0982\u09AE\u09BF\u09B6\u09CD\u09B0\u09A3\u0964",
     price: 790,
     regularPrice: 920,
-    category: "Groceries",
+    category: "Nuts & Seeds",
     stock: 35,
     imageUrl: "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=800&q=80",
     rating: 4.9,
     ratingCount: 110,
     badge: "\u09AA\u09C1\u09B7\u09CD\u099F\u09BF\u0995\u09B0",
+    featured: false
+  },
+  {
+    id: "prod-groc-6",
+    title: "\u09AE\u09A6\u09BF\u09A8\u09BE\u09B0 \u09AA\u09CD\u09B0\u09BF\u09AE\u09BF\u09AF\u09BC\u09BE\u09AE \u09AE\u09BE\u09B0\u09BF\u09AF\u09BC\u09BE\u09AE \u0993 \u0986\u099C\u0993\u09AF\u09BC\u09BE \u0996\u09C7\u099C\u09C1\u09B0 (Premium Dates, 1kg)",
+    description: "\u09B8\u09CC\u09A6\u09BF \u0986\u09B0\u09AC\u09C7\u09B0 \u09AE\u09A6\u09BF\u09A8\u09BE \u09AE\u09A8\u09CB\u09AF\u09BC\u09BE\u09B0\u09BE \u09A5\u09C7\u0995\u09C7 \u09B8\u09B0\u09BE\u09B8\u09B0\u09BF \u0986\u09AE\u09A6\u09BE\u09A8\u09BF\u0995\u09C3\u09A4 \u09A8\u09B0\u09AE, \u09AE\u09BF\u09B7\u09CD\u099F\u09BF \u0993 \u09B8\u09CD\u09AC\u09BE\u09B8\u09CD\u09A5\u09CD\u09AF\u09B8\u09AE\u09CD\u09AE\u09A4 \u09AA\u09CD\u09B0\u09BF\u09AE\u09BF\u09AF\u09BC\u09BE\u09AE \u0996\u09C7\u099C\u09C1\u09B0\u0964",
+    price: 950,
+    regularPrice: 1100,
+    category: "Dates",
+    stock: 40,
+    imageUrl: "https://images.unsplash.com/photo-1549488344-cbb6c34cf08b?auto=format&fit=crop&w=800&q=80",
+    rating: 5,
+    ratingCount: 160,
+    badge: "\u0986\u09AE\u09A6\u09BE\u09A8\u09BF\u0995\u09C3\u09A4",
+    featured: true
+  },
+  {
+    id: "prod-groc-7",
+    title: "\u0996\u09BE\u0981\u099F\u09BF \u09A6\u09C7\u09B6\u09BF \u09B9\u09B2\u09C1\u09A6 \u0993 \u09AE\u09B0\u09BF\u099A \u0997\u09C1\u0981\u09DC\u09BE \u0995\u09AE\u09CD\u09AC\u09CB (Pure Spices Combo, 2x250g)",
+    description: "\u0995\u09CB\u09A8\u09CB \u09AA\u09CD\u09B0\u0995\u09BE\u09B0 \u0995\u09C3\u09A4\u09CD\u09B0\u09BF\u09AE \u09B0\u0999 \u09AC\u09BE \u09AD\u09C7\u099C\u09BE\u09B2 \u099B\u09BE\u09A1\u09BC\u09BE \u09AC\u09BE\u099B\u09BE\u0987\u0995\u09C3\u09A4 \u09B8\u09C7\u09B0\u09BE \u09AE\u09BE\u09A8\u09C7\u09B0 \u09A6\u09C7\u09B6\u09BF \u09B6\u09C1\u0995\u09A8\u09BE \u09AE\u09B0\u09BF\u099A \u0993 \u09B9\u09B2\u09C1\u09A6\u09C7\u09B0 \u0996\u09BE\u0981\u099F\u09BF \u0997\u09C1\u0981\u09A1\u09BC\u09BE\u0964",
+    price: 360,
+    regularPrice: 420,
+    category: "Spices",
+    stock: 50,
+    imageUrl: "https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=800&q=80",
+    rating: 4.8,
+    ratingCount: 85,
+    badge: "\u09E7\u09E6\u09E6% \u0996\u09BE\u0981\u099F\u09BF",
+    featured: false
+  },
+  {
+    id: "prod-groc-8",
+    title: "\u09B6\u09CD\u09B0\u09C0\u09AE\u0999\u09CD\u0997\u09B2\u09C7\u09B0 \u09AA\u09CD\u09B0\u09BF\u09AE\u09BF\u09DF\u09BE\u09AE \u09AC\u09CD\u09B2\u09CD\u09AF\u09BE\u0995 \u099F\u09BF (Sreemangal Premium CTC Tea, 400g)",
+    description: "\u09B6\u09CD\u09B0\u09C0\u09AE\u0999\u09CD\u0997\u09B2\u09C7\u09B0 \u09B8\u09C7\u09B0\u09BE \u099A\u09BE \u09AC\u09BE\u0997\u09BE\u09A8 \u09A5\u09C7\u0995\u09C7 \u09B8\u0982\u0997\u09C3\u09B9\u09C0\u09A4 \u09B8\u09A4\u09C7\u099C \u09AA\u09BE\u09A4\u09BE \u09A6\u09BF\u09AF\u09BC\u09C7 \u09A4\u09C8\u09B0\u09BF \u0997\u09BE\u09DD \u09B2\u09BF\u0995\u09BE\u09B0 \u0993 \u09A6\u09BE\u09B0\u09C1\u09A3 \u09B8\u09C1\u09AC\u09BE\u09B8\u09C7\u09B0 \u09AA\u09CD\u09B0\u09BF\u09AE\u09BF\u09DF\u09BE\u09AE \u099A\u09BE\u0964",
+    price: 260,
+    regularPrice: 300,
+    category: "Beverage",
+    stock: 60,
+    imageUrl: "https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=800&q=80",
+    rating: 4.9,
+    ratingCount: 130,
+    badge: "\u09B8\u09C7\u09B0\u09BE \u09B2\u09BF\u0995\u09BE\u09B0",
+    featured: true
+  },
+  {
+    id: "prod-groc-9",
+    title: "\u0996\u09BE\u0981\u099F\u09BF \u09B2\u09BE\u09B2 \u0997\u09AE\u09C7\u09B0 \u0986\u099F\u09BE \u0993 \u09A6\u09C7\u09B6\u09BF \u09AE\u09B8\u09C1\u09B0 \u09A1\u09BE\u09B2 \u0995\u09AE\u09CD\u09AC\u09CB (Atta 5kg + Lentil 1kg)",
+    description: "\u09AA\u09C1\u09B7\u09CD\u099F\u09BF\u0997\u09C1\u09A3\u09C7 \u09AD\u09B0\u09AA\u09C1\u09B0 \u09B8\u09CD\u09AC\u09BE\u09B8\u09CD\u09A5\u09CD\u09AF\u09B8\u09AE\u09CD\u09AE\u09A4 \u09B2\u09BE\u09B2 \u0997\u09AE\u09C7\u09B0 \u09AD\u09C1\u09B8\u09BF\u09AF\u09C1\u0995\u09CD\u09A4 \u0986\u099F\u09BE \u098F\u09AC\u0982 \u099A\u0995\u099A\u0995\u09C7 \u09A6\u09C7\u09B6\u09BF \u09AE\u09B8\u09C1\u09B0 \u09A1\u09BE\u09B2\u09C7\u09B0 \u09B8\u09BE\u09B6\u09CD\u09B0\u09AF\u09BC\u09C0 \u09AB\u09CD\u09AF\u09BE\u09AE\u09BF\u09B2\u09BF \u09AA\u09CD\u09AF\u09BE\u0995\u0964",
+    price: 520,
+    regularPrice: 580,
+    category: "Flours & Lentils",
+    stock: 30,
+    imageUrl: "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=800&q=80",
+    rating: 4.8,
+    ratingCount: 90,
+    badge: "\u09AB\u09CD\u09AF\u09BE\u09AE\u09BF\u09B2\u09BF \u09AA\u09CD\u09AF\u09BE\u0995",
     featured: false
   },
   // 2. Electronics & Gadgets
@@ -563,6 +619,7 @@ var storeState = {
   orders: INITIAL_ORDERS,
   customers: INITIAL_CUSTOMERS,
   subscribers: [],
+  userTracking: [],
   webhookUrl: googleSheetWebhookUrl
 };
 function loadState() {
@@ -739,8 +796,9 @@ async function syncNewsletterToGoogleSheets(email, source = "Website Footer") {
         "Active"
       ]
     };
-    console.log(`[Google Sheets] Dispatching newsletter subscriber ${email} to ${targetUrl}`);
-    const res = await fetch(targetUrl, {
+    const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + "tab=subscribe&type=subscriber&action=subscribe";
+    console.log(`[Google Sheets] Dispatching newsletter subscriber ${email} to ${urlWithParams}`);
+    const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",
       headers: {
@@ -754,6 +812,64 @@ async function syncNewsletterToGoogleSheets(email, source = "Website Footer") {
     return res.ok || responseText.includes('"status":"success"');
   } catch (err) {
     console.warn(`[Google Sheets Newsletter Sync Error]:`, err);
+    return false;
+  }
+}
+async function syncTrackingToGoogleSheets(entry, isHeartbeat = false) {
+  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return false;
+  }
+  try {
+    const payload = {
+      action: "user_tracking",
+      type: "user_tracking",
+      sheetTab: "user traking",
+      targetSheet: "user traking",
+      targetTab: "user traking",
+      alternativeSheet: "user tracking",
+      sessionId: entry.sessionId,
+      isHeartbeat: Boolean(isHeartbeat),
+      timeSpent: entry.timeSpent,
+      page: entry.page,
+      ip: entry.ip,
+      location: entry.location,
+      device: entry.device,
+      os: entry.os,
+      browser: entry.browser,
+      referrer: entry.referrer,
+      screen: entry.screen,
+      time: entry.time,
+      sheetRow: [
+        entry.time,
+        entry.page,
+        entry.ip,
+        entry.location,
+        entry.device,
+        entry.os,
+        entry.browser,
+        entry.timeSpent,
+        entry.referrer,
+        entry.screen,
+        entry.sessionId
+      ]
+    };
+    const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + "tab=user+traking&target=user_traking&type=user_tracking&action=user_tracking";
+    console.log(`[Google Sheets User Tracking] Dispatching ${entry.page} (${entry.timeSpent}) for session ${entry.sessionId} to ${urlWithParams}`);
+    const res = await fetch(urlWithParams, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+        "User-Agent": "NirapodKroy-Ecommerce/1.0"
+      },
+      body: JSON.stringify(payload)
+    });
+    const responseText = await res.text().catch(() => "");
+    console.log(`[Google Sheets User Tracking Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
+    return res.ok || responseText.includes('"status":"success"');
+  } catch (err) {
+    console.warn(`[Google Sheets User Tracking Sync Error]:`, err);
     return false;
   }
 }
@@ -921,7 +1037,25 @@ app.get("/api/products", (req, res) => {
     list = list.filter((p) => p.isActive !== false);
   }
   if (category && category !== "All") {
-    list = list.filter((p) => p.category.toLowerCase() === String(category).toLowerCase());
+    const catLower = String(category).toLowerCase().trim();
+    const isOffer = catLower === "offer zone" || catLower === "offers" || catLower === "offer-zone";
+    const isGrocery = catLower === "groceries & food" || catLower === "groceries" || catLower === "grocery" || catLower === "food" || catLower === "\u09AE\u09C1\u09A6\u09BF \u0993 \u0996\u09BE\u09A6\u09CD\u09AF" || catLower === "\u09AE\u09C1\u09A6\u09BF";
+    const grocerySubcategories = ["honey", "oil & ghee", "dates", "spices", "nuts & seeds", "beverage", "rice", "flours & lentils"];
+    if (isOffer) {
+      list = list.filter((p) => p.isOfferZone || p.category.toLowerCase() === "offer zone" || p.regularPrice && p.regularPrice > p.price || p.badge && (p.badge.toLowerCase().includes("off") || p.badge.toLowerCase().includes("\u099B\u09BE\u09DC") || p.badge.toLowerCase().includes("offer") || p.badge.toLowerCase().includes("deal")));
+    } else if (isGrocery) {
+      list = list.filter((p) => {
+        const pCat = p.category.toLowerCase().trim();
+        const pParent = (p.parentCategory || "").toLowerCase().trim();
+        return pCat === "groceries & food" || pCat === "groceries" || grocerySubcategories.includes(pCat) || pParent === "groceries & food" || pParent === "groceries";
+      });
+    } else {
+      list = list.filter((p) => {
+        const pCat = p.category.toLowerCase().trim();
+        const pParent = (p.parentCategory || "").toLowerCase().trim();
+        return pCat === catLower || pParent === catLower;
+      });
+    }
   }
   if (search) {
     const q = String(search).toLowerCase();
@@ -948,6 +1082,7 @@ app.post("/api/products", requireAdmin, (req, res) => {
     price,
     regularPrice,
     category,
+    parentCategory,
     stock,
     imageUrl,
     images,
@@ -957,7 +1092,9 @@ app.post("/api/products", requireAdmin, (req, res) => {
     isAffiliate,
     affiliateUrl,
     affiliateSource,
-    affiliateButtonText
+    affiliateButtonText,
+    isOfferZone,
+    offerDiscountNote
   } = req.body;
   if (!title || price === void 0 || !category) {
     return res.status(400).json({ error: "Title, price, and category are required." });
@@ -972,6 +1109,7 @@ app.post("/api/products", requireAdmin, (req, res) => {
     price: Number(price) || 0,
     regularPrice: regularPrice ? Number(regularPrice) : void 0,
     category: category.trim(),
+    parentCategory: parentCategory ? String(parentCategory).trim() : void 0,
     stock: stock !== void 0 ? Number(stock) : 20,
     imageUrl: primaryImg,
     images: finalImages,
@@ -983,7 +1121,9 @@ app.post("/api/products", requireAdmin, (req, res) => {
     isAffiliate: Boolean(isAffiliate || affiliateUrl),
     affiliateUrl: affiliateUrl ? String(affiliateUrl).trim() : void 0,
     affiliateSource: affiliateSource ? String(affiliateSource).trim() : void 0,
-    affiliateButtonText: affiliateButtonText ? String(affiliateButtonText).trim() : void 0
+    affiliateButtonText: affiliateButtonText ? String(affiliateButtonText).trim() : void 0,
+    isOfferZone: Boolean(isOfferZone),
+    offerDiscountNote: offerDiscountNote ? String(offerDiscountNote).trim() : void 0
   };
   storeState.products.unshift(newProduct);
   saveState();
@@ -1015,6 +1155,7 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
     price,
     regularPrice,
     category,
+    parentCategory,
     stock,
     imageUrl,
     images,
@@ -1025,7 +1166,9 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
     isAffiliate,
     affiliateUrl,
     affiliateSource,
-    affiliateButtonText
+    affiliateButtonText,
+    isOfferZone,
+    offerDiscountNote
   } = req.body;
   let finalImages = Array.isArray(existing.images) && existing.images.length > 0 ? [...existing.images] : [existing.imageUrl];
   if (images !== void 0 && Array.isArray(images)) {
@@ -1047,6 +1190,7 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
     price: price !== void 0 ? Number(price) : existing.price,
     regularPrice: regularPrice !== void 0 ? regularPrice ? Number(regularPrice) : void 0 : existing.regularPrice,
     category: category !== void 0 ? category.trim() : existing.category,
+    parentCategory: parentCategory !== void 0 ? parentCategory ? String(parentCategory).trim() : void 0 : existing.parentCategory,
     stock: stock !== void 0 ? Number(stock) : existing.stock,
     imageUrl: newImageUrl,
     images: finalImages,
@@ -1057,11 +1201,27 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
     isAffiliate: isAffiliate !== void 0 ? Boolean(isAffiliate) : affiliateUrl !== void 0 ? Boolean(affiliateUrl) : existing.isAffiliate,
     affiliateUrl: affiliateUrl !== void 0 ? affiliateUrl ? String(affiliateUrl).trim() : void 0 : existing.affiliateUrl,
     affiliateSource: affiliateSource !== void 0 ? affiliateSource ? String(affiliateSource).trim() : void 0 : existing.affiliateSource,
-    affiliateButtonText: affiliateButtonText !== void 0 ? affiliateButtonText ? String(affiliateButtonText).trim() : void 0 : existing.affiliateButtonText
+    affiliateButtonText: affiliateButtonText !== void 0 ? affiliateButtonText ? String(affiliateButtonText).trim() : void 0 : existing.affiliateButtonText,
+    isOfferZone: isOfferZone !== void 0 ? Boolean(isOfferZone) : existing.isOfferZone,
+    offerDiscountNote: offerDiscountNote !== void 0 ? offerDiscountNote ? String(offerDiscountNote).trim() : void 0 : existing.offerDiscountNote
   };
   storeState.products[idx] = updated;
   saveState();
   res.json({ success: true, product: updated });
+});
+app.put("/api/products/:id/toggle-offer-zone", requireAdmin, (req, res) => {
+  const idx = storeState.products.findIndex((p) => p.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Product not found" });
+  }
+  const current = storeState.products[idx];
+  const newOfferZone = !current.isOfferZone;
+  storeState.products[idx] = {
+    ...current,
+    isOfferZone: newOfferZone
+  };
+  saveState();
+  res.json({ success: true, product: storeState.products[idx], isOfferZone: newOfferZone });
 });
 app.delete("/api/products/:id", requireAdmin, (req, res) => {
   const initialLen = storeState.products.length;
@@ -1410,7 +1570,9 @@ app.delete("/api/admin/customers/:id", requireAdmin, (req, res) => {
   });
 });
 app.get("/api/admin/stats", requireAdmin, (_req, res) => {
-  const totalRevenue = storeState.orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+  const calculatedRevenue = storeState.orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+  const totalRevenue = typeof storeState.customTotalRevenue === "number" ? storeState.customTotalRevenue : calculatedRevenue;
+  const isCustomRevenue = typeof storeState.customTotalRevenue === "number";
   const totalOrders = storeState.orders.length;
   const totalProducts = storeState.products.length;
   const lowStockProducts = storeState.products.filter((p) => p.stock <= 10).length;
@@ -1418,11 +1580,35 @@ app.get("/api/admin/stats", requireAdmin, (_req, res) => {
   res.json({
     stats: {
       totalRevenue,
+      calculatedRevenue,
+      isCustomRevenue,
+      customTotalRevenue: storeState.customTotalRevenue,
       totalOrders,
       totalProducts,
       lowStockProducts,
       syncedGoogleSheetsCount
     }
+  });
+});
+app.put("/api/admin/revenue", requireAdmin, (req, res) => {
+  const { customTotalRevenue, reset } = req.body;
+  if (reset) {
+    delete storeState.customTotalRevenue;
+  } else if (customTotalRevenue !== void 0 && !isNaN(Number(customTotalRevenue))) {
+    storeState.customTotalRevenue = Math.max(0, Number(customTotalRevenue));
+  } else {
+    return res.status(400).json({ error: "Valid revenue amount required" });
+  }
+  saveState();
+  const calculatedRevenue = storeState.orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+  const totalRevenue = typeof storeState.customTotalRevenue === "number" ? storeState.customTotalRevenue : calculatedRevenue;
+  res.json({
+    success: true,
+    totalRevenue,
+    calculatedRevenue,
+    isCustomRevenue: typeof storeState.customTotalRevenue === "number",
+    customTotalRevenue: storeState.customTotalRevenue,
+    message: reset ? "\u09AE\u09CB\u099F \u09B0\u09C7\u09AD\u09BF\u09A8\u09BF\u0989 \u09B8\u09CD\u09AC\u09DF\u0982\u0995\u09CD\u09B0\u09BF\u09DF \u0997\u09A3\u09A8\u09BE\u09DF \u09B0\u09BF\u09B8\u09C7\u099F \u0995\u09B0\u09BE \u09B9\u09DF\u09C7\u099B\u09C7\u0964" : "\u09AE\u09CB\u099F \u09B0\u09C7\u09AD\u09BF\u09A8\u09BF\u0989 \u09B8\u09AB\u09B2\u09AD\u09BE\u09AC\u09C7 \u09AA\u09B0\u09BF\u09AC\u09B0\u09CD\u09A4\u09A8 \u0995\u09B0\u09BE \u09B9\u09DF\u09C7\u099B\u09C7!"
   });
 });
 app.get("/api/admin/settings", requireAdmin, (_req, res) => {
@@ -1475,6 +1661,22 @@ app.post("/api/admin/test-webhook", requireAdmin, async (req, res) => {
     return res.json({ success: true, message: "Webhook successfully reached and responded OK!" });
   }
   return res.status(502).json({ error: "Webhook test failed or returned error. Please check your Apps Script Webhook deployment URL." });
+});
+app.post("/api/admin/test-subscribe-webhook", requireAdmin, async (req, res) => {
+  const targetUrl = req.body.url || req.body.webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return res.status(400).json({ error: "\u098F\u0995\u099F\u09BF \u09B8\u09A0\u09BF\u0995 \u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u0993\u09DF\u09C7\u09AC\u09B9\u09C1\u0995 \u0987\u0989\u0986\u09B0\u098F\u09B2 \u09A6\u09BF\u09A8\u0964" });
+  }
+  const ok = await syncNewsletterToGoogleSheets("test_subscriber@nirapodkroy.shop", "Admin Webhook Test");
+  if (ok) {
+    return res.json({
+      success: true,
+      message: "\u09B8\u09BE\u09AC\u09B8\u09CD\u0995\u09CD\u09B0\u09BE\u0987\u09AC \u099F\u09C7\u09B8\u09CD\u099F \u09B8\u09AB\u09B2 \u09B9\u09DF\u09C7\u099B\u09C7! \u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F\u09C7\u09B0 'subscribe' \u099F\u09CD\u09AF\u09BE\u09AC\u09C7 \u099F\u09C7\u09B8\u09CD\u099F \u09A1\u09C7\u099F\u09BE \u09AF\u09C1\u0995\u09CD\u09A4 \u09B9\u09DF\u09C7\u099B\u09C7\u0964"
+    });
+  }
+  return res.status(502).json({
+    error: "Webhook subscriber test failed. \u0985\u09A8\u09C1\u0997\u09CD\u09B0\u09B9 \u0995\u09B0\u09C7 \u0986\u09AA\u09A8\u09BE\u09B0 Apps Script Webhook \u0987\u0989\u0986\u09B0\u098F\u09B2 \u098F\u09AC\u0982 \u09A1\u09BF\u09AA\u09CD\u09B2\u09DF\u09AE\u09C7\u09A8\u09CD\u099F \u099A\u09C7\u0995 \u0995\u09B0\u09C1\u09A8\u0964"
+  });
 });
 app.post(["/api/newsletter", "/api/subscribe"], async (req, res) => {
   const { email, source } = req.body;
@@ -1567,15 +1769,172 @@ app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
         }
       }
     }
+    let importedTracking = 0;
+    if (liveData.tracking && Array.isArray(liveData.tracking)) {
+      if (!storeState.userTracking) storeState.userTracking = [];
+      for (const t of liveData.tracking) {
+        if (t.sessionId && !storeState.userTracking.some((et) => et.sessionId === t.sessionId)) {
+          storeState.userTracking.push({
+            id: t.sessionId,
+            time: t.time || (/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+            page: t.page || "\u09B9\u09CB\u09AE\u09AA\u09C7\u099C (Home)",
+            ip: t.ip || "Unknown",
+            location: t.location || "Bangladesh",
+            device: t.device || "Desktop / PC",
+            os: t.os || "Windows 10/11",
+            browser: t.browser || "Chrome",
+            timeSpent: t.timeSpent || "\u09B8\u0995\u09CD\u09B0\u09BF\u09DF \u09B0\u09DF\u09C7\u099B\u09C7 (Active)...",
+            referrer: t.referrer || "\u09B8\u09B0\u09BE\u09B8\u09B0\u09BF (Direct)",
+            screen: t.screen || "1920x1080",
+            sessionId: t.sessionId,
+            updatedAt: Date.now()
+          });
+          importedTracking++;
+        }
+      }
+    }
     saveState();
     return res.json({
       success: true,
-      message: `\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u09A5\u09C7\u0995\u09C7 \u09A1\u09C7\u099F\u09BE \u09B8\u09AB\u09B2\u09AD\u09BE\u09AC\u09C7 \u09B8\u09BF\u0999\u09CD\u0995 \u09B9\u09DF\u09C7\u099B\u09C7! (${importedOrders} \u099F\u09BF \u09A8\u09A4\u09C1\u09A8 \u0985\u09B0\u09CD\u09A1\u09BE\u09B0, ${importedSubscribers} \u099C\u09A8 \u09A8\u09A4\u09C1\u09A8 \u09B8\u09BE\u09AC\u09B8\u09CD\u0995\u09CD\u09B0\u09BE\u0987\u09AC\u09BE\u09B0)`,
+      message: `\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u09A5\u09C7\u0995\u09C7 \u09A1\u09C7\u099F\u09BE \u09B8\u09AB\u09B2\u09AD\u09BE\u09AC\u09C7 \u09B8\u09BF\u0999\u09CD\u0995 \u09B9\u09DF\u09C7\u099B\u09C7! (${importedOrders} \u099F\u09BF \u0985\u09B0\u09CD\u09A1\u09BE\u09B0, ${importedSubscribers} \u099C\u09A8 \u09B8\u09BE\u09AC\u09B8\u09CD\u0995\u09CD\u09B0\u09BE\u0987\u09AC\u09BE\u09B0, ${importedTracking} \u099F\u09BF \u09AD\u09BF\u099C\u09BF\u099F\u09B0 \u09B2\u0997)`,
       importedOrders,
-      importedSubscribers
+      importedSubscribers,
+      importedTracking
     });
   } catch (err) {
     return res.status(500).json({ error: err?.message || "\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u09B8\u09BF\u0999\u09CD\u0995 \u098F\u09B0\u09B0" });
+  }
+});
+app.post("/api/track", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const page = String(body.page || "\u09B9\u09CB\u09AE\u09AA\u09C7\u099C (Home)").trim();
+    const sessionId = String(body.sessionId || `v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}_root`).trim();
+    const isHeartbeat = Boolean(body.isHeartbeat);
+    const timeSpent = String(body.timeSpent || (isHeartbeat ? "\u09B8\u0995\u09CD\u09B0\u09BF\u09DF \u09B0\u09DF\u09C7\u099B\u09C7 (Active)..." : "\u09B8\u0995\u09CD\u09B0\u09BF\u09DF \u09B0\u09DF\u09C7\u099B\u09C7 (Active)...")).trim();
+    let clientIp = String(body.clientIp || "").trim();
+    if (!clientIp || clientIp === "Unknown" || clientIp.startsWith("127.") || clientIp === "::1") {
+      const forwarded = req.headers["x-forwarded-for"]?.split(",")[0].trim();
+      const realIp = req.headers["x-real-ip"]?.trim();
+      const socketIp = req.socket.remoteAddress?.trim();
+      clientIp = forwarded || realIp || socketIp || "Unknown";
+      if (clientIp.startsWith("::ffff:")) clientIp = clientIp.replace("::ffff:", "");
+    }
+    const location = String(body.location || "Bangladesh").trim();
+    const device = String(body.device || "Desktop / PC").trim();
+    const os = String(body.os || "Windows 10/11").trim();
+    const browser = String(body.browser || "Chrome").trim();
+    const screen = String(body.screen || "1920x1080").trim();
+    const referrer = String(body.referrer || "\u09B8\u09B0\u09BE\u09B8\u09B0\u09BF (Direct)").trim();
+    const time = (/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+    if (!storeState.userTracking) {
+      storeState.userTracking = [];
+    }
+    const existingIndex = storeState.userTracking.findIndex((t) => t.sessionId === sessionId);
+    let currentEntry;
+    if (existingIndex >= 0) {
+      storeState.userTracking[existingIndex].timeSpent = timeSpent;
+      storeState.userTracking[existingIndex].updatedAt = Date.now();
+      currentEntry = storeState.userTracking[existingIndex];
+    } else {
+      currentEntry = {
+        id: sessionId,
+        time,
+        page,
+        ip: clientIp,
+        location,
+        device,
+        os,
+        browser,
+        timeSpent,
+        referrer,
+        screen,
+        sessionId,
+        updatedAt: Date.now()
+      };
+      storeState.userTracking.unshift(currentEntry);
+      if (storeState.userTracking.length > 300) {
+        storeState.userTracking = storeState.userTracking.slice(0, 300);
+      }
+    }
+    syncTrackingToGoogleSheets(currentEntry, isHeartbeat).catch(() => {
+    });
+    return res.json({ success: true, sessionId, timeSpent });
+  } catch (err) {
+    console.warn("Tracking endpoint error:", err);
+    return res.status(500).json({ error: "Tracking failed" });
+  }
+});
+app.get("/api/admin/tracking", requireAdmin, (_req, res) => {
+  const trackingList = storeState.userTracking || [];
+  const now = Date.now();
+  const activeNow = trackingList.filter((t) => t.updatedAt && now - t.updatedAt < 12e4).length;
+  const pageCounts = {};
+  const deviceCounts = {};
+  const browserCounts = {};
+  trackingList.forEach((t) => {
+    pageCounts[t.page] = (pageCounts[t.page] || 0) + 1;
+    deviceCounts[t.device] = (deviceCounts[t.device] || 0) + 1;
+    browserCounts[t.browser] = (browserCounts[t.browser] || 0) + 1;
+  });
+  return res.json({
+    success: true,
+    totalVisits: trackingList.length,
+    activeNow: Math.max(activeNow, 1),
+    tracking: trackingList,
+    pageStats: pageCounts,
+    deviceStats: deviceCounts,
+    browserStats: browserCounts,
+    sheetTab: "user tracking"
+  });
+});
+app.post("/api/admin/tracking/test", requireAdmin, async (req, res) => {
+  const testSessionId = `v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}_test`;
+  const testEntry = {
+    id: testSessionId,
+    time: (/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+    page: "\u09B9\u09CB\u09AE\u09AA\u09C7\u099C (Home)",
+    ip: "103.171.251.14",
+    location: "Bangladesh",
+    device: "Desktop / PC",
+    os: "Windows 10/11",
+    browser: "Chrome",
+    timeSpent: "\u09B8\u0995\u09CD\u09B0\u09BF\u09DF \u09B0\u09DF\u09C7\u099B\u09C7 (Active)...",
+    referrer: "\u09B8\u09B0\u09BE\u09B8\u09B0\u09BF (Direct)",
+    screen: "1920x1080",
+    sessionId: testSessionId,
+    updatedAt: Date.now()
+  };
+  if (!storeState.userTracking) storeState.userTracking = [];
+  storeState.userTracking.unshift(testEntry);
+  const synced = await syncTrackingToGoogleSheets(testEntry, false);
+  return res.json({
+    success: true,
+    synced,
+    message: synced ? "\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F\u09C7\u09B0 'user traking' \u099F\u09CD\u09AF\u09BE\u09AC\u09C7 \u09B8\u09AB\u09B2\u09AD\u09BE\u09AC\u09C7 \u099F\u09C7\u09B8\u09CD\u099F \u09A1\u09C7\u099F\u09BE \u09AA\u09BE\u09A0\u09BE\u09A8\u09CB \u09B9\u09DF\u09C7\u099B\u09C7!" : "\u09B8\u09BE\u09B0\u09CD\u09AD\u09BE\u09B0\u09C7 \u09B2\u0997 \u09B9\u09DF\u09C7\u099B\u09C7, \u0995\u09BF\u09A8\u09CD\u09A4\u09C1 \u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F\u09C7 \u09AA\u09CC\u0981\u099B\u09BE\u09DF\u09A8\u09BF\u0964 \u09A6\u09DF\u09BE \u0995\u09B0\u09C7 \u0985\u09CD\u09AF\u09BE\u09AA\u09B8 \u09B8\u09CD\u0995\u09CD\u09B0\u09BF\u09AA\u09CD\u099F \u0993 \u0993\u09DF\u09C7\u09AC\u09B9\u09C1\u0995 \u0987\u0989\u0986\u09B0\u098F\u09B2 \u09AA\u09B0\u09C0\u0995\u09CD\u09B7\u09BE \u0995\u09B0\u09C1\u09A8\u0964",
+    entry: testEntry
+  });
+});
+app.post("/api/admin/clean-order-sheet", requireAdmin, async (req, res) => {
+  const targetUrl = req.body.url || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return res.status(400).json({ error: "\u0997\u09C1\u0997\u09B2 \u09B6\u09BF\u099F \u0993\u09DF\u09C7\u09AC\u09B9\u09C1\u0995 \u09AA\u09BE\u0993\u09DF\u09BE \u09AF\u09BE\u09DF\u09A8\u09BF\u0964" });
+  }
+  try {
+    const fetchUrl = targetUrl + (targetUrl.includes("?") ? "&" : "?") + "action=clean_order_sheet";
+    const resp = await fetch(fetchUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "clean_order_sheet" })
+    });
+    const result = await resp.json().catch(() => ({}));
+    return res.json({
+      success: true,
+      message: result.message || "\u0985\u09B0\u09CD\u09A1\u09BE\u09B0 \u09B6\u09BF\u099F \u09B8\u09AB\u09B2\u09AD\u09BE\u09AC\u09C7 \u0995\u09CD\u09B2\u09BF\u09A8 \u0995\u09B0\u09BE \u09B9\u09DF\u09C7\u099B\u09C7 \u098F\u09AC\u0982 \u099F\u09CD\u09B0\u09CD\u09AF\u09BE\u0995\u09BF\u0982 \u09A1\u09C7\u099F\u09BE 'user traking' \u099F\u09CD\u09AF\u09BE\u09AC\u09C7 \u09B8\u09B0\u09BF\u09DF\u09C7 \u09A8\u09C7\u0993\u09DF\u09BE \u09B9\u09DF\u09C7\u099B\u09C7!",
+      details: result
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || "\u0995\u09CD\u09B2\u09BF\u09A8 \u0985\u09AA\u09BE\u09B0\u09C7\u09B6\u09A8 \u09B8\u09AE\u09CD\u09AA\u09A8\u09CD\u09A8 \u0995\u09B0\u09BE \u09B8\u09AE\u09CD\u09AD\u09AC \u09B9\u09DF\u09A8\u09BF\u0964" });
   }
 });
 async function startServer() {
