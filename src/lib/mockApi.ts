@@ -184,14 +184,6 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
 
   try {
     const jsonBody = JSON.stringify(payload);
-    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-      try {
-        const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
-        if (navigator.sendBeacon(urlWithParams, blob)) {
-          return true;
-        }
-      } catch {}
-    }
 
     await fetch(urlWithParams, {
       method: "POST",
@@ -630,7 +622,8 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       };
       customers.push(existingCust);
       setSafeStorage(CUSTOMERS_KEY, customers);
-      syncCustomerToGoogleSheets(existingCust, "(Order Customer)").catch(() => {});
+      // NOTE: Order buyers are stored locally only. Do NOT sync order buyers to Google Sheets "Customers" tab!
+      // The "Customers" tab is strictly reserved for user account registrations.
     } else {
       let modified = false;
       if (!existingCust.phone && customerPhone) { existingCust.phone = String(customerPhone).trim(); modified = true; }

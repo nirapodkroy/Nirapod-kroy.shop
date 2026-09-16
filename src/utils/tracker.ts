@@ -251,23 +251,14 @@ async function dispatchTrackingEvent(payload: {
       const targetWebhookUrl = baseWebhookUrl + (baseWebhookUrl.includes("?") ? "&" : "?") + 
         "tab=user+traking&target=user_traking&altTab=user+tracking&type=user_tracking&action=user_tracking&sessionId=" + encodeURIComponent(payload.sessionId);
 
-      let sent = false;
-      try {
-        if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-          const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
-          sent = navigator.sendBeacon(targetWebhookUrl, blob);
-        }
-      } catch {}
-
-      if (!sent) {
-        fetch(targetWebhookUrl, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: jsonBody,
-          keepalive: true
-        }).catch(() => {});
-      }
+      // Direct client-side fetch with mode: 'no-cors' seamlessly follows Google Apps Script 302 cross-domain redirect
+      fetch(targetWebhookUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: jsonBody,
+        keepalive: true
+      }).catch(() => {});
     }
   }
 }

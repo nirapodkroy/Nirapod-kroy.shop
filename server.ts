@@ -783,7 +783,7 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
   try {
     const itemsList = order.items && Array.isArray(order.items) ? order.items : [];
@@ -892,7 +892,7 @@ async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: stri
 
     console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${urlWithParams}`);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
 
     const res = await fetch(urlWithParams, {
       method: "POST",
@@ -922,7 +922,7 @@ async function syncNewsletterToGoogleSheets(email: string, source = "Website Foo
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
   try {
     const subDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
@@ -974,7 +974,7 @@ async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHeartbeat 
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
   try {
     const payload = {

@@ -121,6 +121,26 @@
   ],
   "orders": [
     {
+      "id": "NK-702377",
+      "customerName": "Md Rahman Test",
+      "customerEmail": "mdrahman.test@example.com",
+      "customerPhone": "01812345678",
+      "shippingAddress": "Banani, Dhaka",
+      "items": [
+        {
+          "title": "Product",
+          "price": 1250,
+          "quantity": 1,
+          "imageUrl": ""
+        }
+      ],
+      "totalPrice": 1250,
+      "paymentMethod": "Cash on Delivery",
+      "status": "Pending",
+      "createdAt": "2026-09-16T09:16:22.152Z",
+      "syncedToGoogleSheet": true
+    },
+    {
       "id": "NK-985676",
       "customerName": "Md Arif",
       "customerEmail": "arif@example.com",
@@ -138,7 +158,7 @@
       "paymentMethod": "Cash on Delivery",
       "status": "Pending",
       "createdAt": "2026-09-16T08:27:05.862Z",
-      "syncedToGoogleSheet": false
+      "syncedToGoogleSheet": true
     },
     {
       "id": "NK-106409",
@@ -335,6 +355,15 @@
       "phone": "01712345678",
       "address": "House 12, Road 4, Dhanmondi, Dhaka",
       "createdAt": "2026-09-16T08:06:01.209Z"
+    },
+    {
+      "id": "cust-mu3vz1u0nbg2",
+      "name": "Md Rahman Test",
+      "email": "mdrahman.test@example.com",
+      "passwordHash": "auto-order-yis4t0",
+      "phone": "01812345678",
+      "address": "Banani, Dhaka",
+      "createdAt": "2026-09-16T09:16:22.152Z"
     }
   ],
   "webhookUrl": "https://script.google.com/macros/s/AKfycbzzGJV2nI7grFnBo6OjDw_vJ20DylCfLg6r8ZExsawP4f17rFn5rfKp870TifdtgV4/exec",
@@ -361,6 +390,66 @@
     }
   ],
   "userTracking": [
+    {
+      "id": "v_mu3w2xdt_1b4m5p_test",
+      "time": "9/16/2026, 3:19:23 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "103.171.251.14",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "সক্রিয় রয়েছে (Active)...",
+      "referrer": "সরাসরি (Direct)",
+      "screen": "1920x1080",
+      "sessionId": "v_mu3w2xdt_1b4m5p_test",
+      "updatedAt": 1789550363010
+    },
+    {
+      "id": "v_mu3vd4n9_u27yam_cat_groceries__food",
+      "time": "9/16/2026, 3:16:30 PM",
+      "page": "ক্যাটাগরি: Groceries & Food",
+      "ip": "103.12.173.138",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "20 মিনিট",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mu3vd4n9_u27yam_cat_groceries__food",
+      "updatedAt": 1789550370719
+    },
+    {
+      "id": "v_mu3v9tjn_idpe4e_home",
+      "time": "9/16/2026, 3:16:26 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "103.12.173.138",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "22 মিনিট 30 সেকেন্ড",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mu3v9tjn_idpe4e_home",
+      "updatedAt": 1789550366347
+    },
+    {
+      "id": "v_verify_1789550181955",
+      "time": "9/16/2026, 3:16:22 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "127.0.0.1",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "সক্রিয় রয়েছে (Active)...",
+      "referrer": "সরাসরি (Direct)",
+      "screen": "1920x1080",
+      "sessionId": "v_verify_1789550181955",
+      "updatedAt": 1789550182120
+    },
     {
       "id": "v_mu3twd23_8y5pgr_cat_baby__kids",
       "time": "9/16/2026, 2:18:29 PM",
