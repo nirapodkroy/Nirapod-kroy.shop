@@ -845,9 +845,13 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
     const responseText = await res.text().catch(() => "");
     console.log(`[Google Sheets] Webhook response status: ${res.status}, body: ${responseText.slice(0, 100)}`);
     return res.ok || responseText.includes('"status":"success"') || res.status === 302 || res.status === 200;
-  } catch (err) {
+  } catch (err: any) {
     clearTimeout(timeoutId);
-    console.warn(`[Google Sheets Sync Warning]:`, err);
+    if (err?.name === "AbortError" || controller.signal.aborted) {
+      console.log(`[Google Sheets Order Sync] Request timed out for order ${order.id} (handled gracefully)`);
+    } else {
+      console.log(`[Google Sheets Order Sync Notice]: ${err?.message || "Connection issue"}`);
+    }
     return false;
   }
 }
@@ -858,6 +862,9 @@ async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: stri
   if (!targetUrl || !targetUrl.startsWith("http")) {
     return false;
   }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 40000);
 
   try {
     const regDate = customer.createdAt 
@@ -891,8 +898,6 @@ async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: stri
       `tab=Customers&target=Customers&type=customer&action=customer_registration&customerId=${encodeURIComponent(customer.id)}&name=${encodeURIComponent(customer.name || "")}&phone=${encodeURIComponent(customer.phone || "")}&email=${encodeURIComponent(customer.email)}`;
 
     console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${urlWithParams}`);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
 
     const res = await fetch(urlWithParams, {
       method: "POST",
@@ -908,8 +913,13 @@ async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: stri
     const responseText = await res.text().catch(() => "");
     console.log(`[Google Sheets Customer Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
     return res.ok || responseText.includes('"status":"success"');
-  } catch (err) {
-    console.warn(`[Google Sheets Customer Sync Error]:`, err);
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err?.name === "AbortError" || controller.signal.aborted) {
+      console.log(`[Google Sheets Customer Sync] Request timed out for customer ${customer.email} (handled gracefully)`);
+    } else {
+      console.log(`[Google Sheets Customer Sync Notice]: ${err?.message || "Connection issue"}`);
+    }
     return false;
   }
 }
@@ -922,7 +932,7 @@ async function syncNewsletterToGoogleSheets(email: string, source = "Website Foo
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  const timeoutId = setTimeout(() => controller.abort(), 40000);
 
   try {
     const subDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
@@ -959,9 +969,13 @@ async function syncNewsletterToGoogleSheets(email: string, source = "Website Foo
     const responseText = await res.text().catch(() => "");
     console.log(`[Google Sheets Newsletter Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
     return res.ok || responseText.includes('"status":"success"');
-  } catch (err) {
+  } catch (err: any) {
     clearTimeout(timeoutId);
-    console.warn(`[Google Sheets Newsletter Sync Error]:`, err);
+    if (err?.name === "AbortError" || controller.signal.aborted) {
+      console.log(`[Google Sheets Newsletter Sync] Request timed out for ${email} (handled gracefully)`);
+    } else {
+      console.log(`[Google Sheets Newsletter Sync Notice]: ${err?.message || "Connection issue"}`);
+    }
     return false;
   }
 }
@@ -974,7 +988,7 @@ async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHeartbeat 
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  const timeoutId = setTimeout(() => controller.abort(), 40000);
 
   try {
     const payload = {
@@ -1027,9 +1041,13 @@ async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHeartbeat 
     const responseText = await res.text().catch(() => "");
     console.log(`[Google Sheets User Tracking Sync] Status: ${res.status}, body: ${responseText.slice(0, 100)}`);
     return res.ok || responseText.includes('"status":"success"');
-  } catch (err) {
+  } catch (err: any) {
     clearTimeout(timeoutId);
-    console.warn(`[Google Sheets User Tracking Sync Error]:`, err);
+    if (err?.name === "AbortError" || controller.signal.aborted) {
+      console.log(`[Google Sheets User Tracking Sync] Request timed out for session ${entry.sessionId} (handled gracefully)`);
+    } else {
+      console.log(`[Google Sheets User Tracking Sync Notice]: ${err?.message || "Connection issue"}`);
+    }
     return false;
   }
 }

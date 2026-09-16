@@ -193,8 +193,8 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
       keepalive: true
     });
     return true;
-  } catch (err) {
-    console.warn("[Google Sheets Webhook Sync Error]:", err);
+  } catch (err: any) {
+    console.log("[Google Sheets Webhook Sync Notice]:", err?.message || "Sync skipped");
     return false;
   }
 }
@@ -252,8 +252,8 @@ export async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPa
       keepalive: true
     });
     return true;
-  } catch (err) {
-    console.warn("[Google Sheets Customer Sync Error]:", err);
+  } catch (err: any) {
+    console.log("[Google Sheets Customer Sync Notice]:", err?.message || "Sync skipped");
     return false;
   }
 }
@@ -304,8 +304,8 @@ export async function syncNewsletterToGoogleSheets(email: string, source = "Webs
       keepalive: true
     });
     return true;
-  } catch (err) {
-    console.warn("[Google Sheets Newsletter Sync Error]:", err);
+  } catch (err: any) {
+    console.log("[Google Sheets Newsletter Sync Notice]:", err?.message || "Sync skipped");
     return false;
   }
 }
@@ -369,8 +369,8 @@ export async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHea
       keepalive: true
     });
     return true;
-  } catch (err) {
-    console.warn("[Google Sheets User Tracking Sync Error]:", err);
+  } catch (err: any) {
+    console.log("[Google Sheets User Tracking Sync Notice]:", err?.message || "Sync skipped");
     return false;
   }
 }
@@ -387,8 +387,8 @@ export async function fetchLiveGoogleSheetData(webhookUrl?: string): Promise<{ o
       const data = await res.json();
       return data;
     }
-  } catch (err) {
-    console.warn("[Google Sheet Pull Error]:", err);
+  } catch (err: any) {
+    console.log("[Google Sheet Pull Notice]:", err?.message || "Skipped");
   }
   return null;
 }
