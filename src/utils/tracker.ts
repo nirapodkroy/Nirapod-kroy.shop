@@ -147,7 +147,7 @@ export async function getClientGeo(): Promise<GeoData> {
 }
 
 // Google Sheets Apps Script Webhook (Nirapod Kroy Live Master Database)
-export const GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4/exec";
+export const GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzzGJV2nI7grFnBo6OjDw_vJ20DylCfLg6r8ZExsawP4f17rFn5rfKp870TifdtgV4/exec";
 
 // Dynamically resolve target webhook URL (supports admin configuration saved in settings)
 export function getGoogleSheetsWebhookUrl(): string {
@@ -157,6 +157,11 @@ export function getGoogleSheetsWebhookUrl(): string {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed.webhookUrl && typeof parsed.webhookUrl === "string" && parsed.webhookUrl.trim().startsWith("http")) {
+          if (parsed.webhookUrl.includes("AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4")) {
+            parsed.webhookUrl = GOOGLE_SHEETS_WEBHOOK_URL;
+            localStorage.setItem("nirapod_admin_settings", JSON.stringify(parsed));
+            return GOOGLE_SHEETS_WEBHOOK_URL;
+          }
           return parsed.webhookUrl.trim();
         }
       }

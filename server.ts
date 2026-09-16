@@ -29,7 +29,7 @@ const DATA_FILE = path.join(process.cwd(), ".app_store_data.json");
 // Default Admin Credentials from environment
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mtarifprodhan@gmail.com").trim().toLowerCase();
 const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || "AdminSecurePass2026!").trim();
-export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4/exec";
+export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbzzGJV2nI7grFnBo6OjDw_vJ20DylCfLg6r8ZExsawP4f17rFn5rfKp870TifdtgV4/exec";
 let googleSheetWebhookUrl = (process.env.GOOGLE_SHEET_WEBHOOK_URL || DEFAULT_GOOGLE_SHEET_WEBHOOK).trim();
 
 // Types
@@ -720,8 +720,8 @@ function loadState() {
           }
           return { ...p, images: imgs };
         });
-        if (!storeState.webhookUrl && googleSheetWebhookUrl) {
-          storeState.webhookUrl = googleSheetWebhookUrl;
+        if (!storeState.webhookUrl || storeState.webhookUrl.includes("AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4")) {
+          storeState.webhookUrl = DEFAULT_GOOGLE_SHEET_WEBHOOK;
         }
       }
     }

@@ -54,7 +54,7 @@ app.use((req, res, next) => {
 var DATA_FILE = import_path.default.join(process.cwd(), ".app_store_data.json");
 var ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mtarifprodhan@gmail.com").trim().toLowerCase();
 var ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || "AdminSecurePass2026!").trim();
-var DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4/exec";
+var DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbzzGJV2nI7grFnBo6OjDw_vJ20DylCfLg6r8ZExsawP4f17rFn5rfKp870TifdtgV4/exec";
 var googleSheetWebhookUrl = (process.env.GOOGLE_SHEET_WEBHOOK_URL || DEFAULT_GOOGLE_SHEET_WEBHOOK).trim();
 var DEFAULT_PRODUCTS = [
   // 1. Groceries & Organic Food
@@ -677,42 +677,47 @@ loadState();
 saveState();
 var adminSessions = /* @__PURE__ */ new Map();
 async function syncOrderToGoogleSheets(order, webhookUrl) {
-  const targetUrl = webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl;
+  const targetUrl = webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!targetUrl || !targetUrl.startsWith("http")) {
     console.log(`[Google Sheets] Webhook URL not set. Order ${order.id} saved locally.`);
     return false;
   }
   try {
-    const itemsFormatted = order.items.map((i) => `${i.title} (x${i.quantity} @ $${i.price})`).join(", ");
+    const itemsList = order.items && Array.isArray(order.items) ? order.items : [];
+    const itemsFormatted = itemsList.length > 0 ? itemsList.map((i) => `${i.title || "Item"} (x${i.quantity || 1} @ \u09F3${i.price || 0})`).join(", ") : "Ordered Items";
+    const orderTime = order.createdAt ? new Date(order.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }) : (/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
     const payload = {
       action: "new_order",
+      type: "order",
+      sheetTab: "order sheet",
+      targetSheet: "order sheet",
       orderId: order.id,
-      timestamp: order.createdAt,
-      orderDate: new Date(order.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
-      customerName: order.customerName,
-      customerEmail: order.customerEmail,
-      customerPhone: order.customerPhone,
-      shippingAddress: order.shippingAddress,
+      timestamp: order.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+      orderDate: orderTime,
+      customerName: order.customerName || "Customer",
+      customerEmail: order.customerEmail || "",
+      customerPhone: order.customerPhone || "",
+      shippingAddress: order.shippingAddress || "",
       orderedItems: itemsFormatted,
-      totalPrice: `$${order.totalPrice.toFixed(2)}`,
-      paymentMethod: order.paymentMethod,
-      orderStatus: order.status,
-      // Array format ready for sheet row append
+      totalPrice: `\u09F3${order.totalPrice || 0}`,
+      paymentMethod: order.paymentMethod || "Cash on Delivery",
+      orderStatus: order.status || "Pending",
       sheetRow: [
         order.id,
-        new Date(order.createdAt).toLocaleString(),
-        order.customerName,
-        order.customerEmail,
-        order.customerPhone,
-        order.shippingAddress,
+        orderTime,
+        order.customerName || "Customer",
+        order.customerEmail || "",
+        order.customerPhone || "",
+        order.shippingAddress || "",
         itemsFormatted,
-        `$${order.totalPrice.toFixed(2)}`,
-        order.paymentMethod,
-        order.status
+        `\u09F3${order.totalPrice || 0}`,
+        order.paymentMethod || "Cash on Delivery",
+        order.status || "Pending"
       ]
     };
-    console.log(`[Google Sheets] Dispatching order ${order.id} to ${targetUrl}`);
-    const res = await fetch(targetUrl, {
+    const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}`;
+    console.log(`[Google Sheets] Dispatching order ${order.id} to ${urlWithParams}`);
+    const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",
       headers: {
@@ -730,33 +735,37 @@ async function syncOrderToGoogleSheets(order, webhookUrl) {
   }
 }
 async function syncCustomerToGoogleSheets(customer, rawPassword) {
-  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl;
+  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!targetUrl || !targetUrl.startsWith("http")) {
     return false;
   }
   try {
+    const regDate = customer.createdAt ? new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }) : (/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
     const payload = {
       action: "customer_registration",
       type: "customer",
+      sheetTab: "Customers",
+      targetSheet: "Customers",
       customerId: customer.id,
-      name: customer.name,
+      name: customer.name || "Customer",
       phone: customer.phone || "N/A",
       email: customer.email,
       address: customer.address || "N/A",
       password: rawPassword || customer.passwordHash || "",
-      registeredAt: new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+      registeredAt: regDate,
       sheetRow: [
         customer.id,
-        new Date(customer.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
-        customer.name,
+        regDate,
+        customer.name || "Customer",
         customer.phone || "N/A",
         customer.email,
         customer.address || "N/A",
         rawPassword || customer.passwordHash || ""
       ]
     };
-    console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${targetUrl}`);
-    const res = await fetch(targetUrl, {
+    const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + `tab=Customers&target=Customers&type=customer&action=customer_registration&customerId=${encodeURIComponent(customer.id)}&name=${encodeURIComponent(customer.name || "")}&phone=${encodeURIComponent(customer.phone || "")}&email=${encodeURIComponent(customer.email)}`;
+    console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${urlWithParams}`);
+    const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",
       headers: {
@@ -1401,7 +1410,7 @@ app.post("/api/orders", async (req, res) => {
       imageUrl
     });
   }
-  const orderId = "ORD-" + Math.floor(1e5 + Math.random() * 9e5);
+  const orderId = req.body.orderId && String(req.body.orderId).trim() || "NK-" + Math.floor(1e5 + Math.random() * 9e5);
   const newOrder = {
     id: orderId,
     customerName: customerName.trim(),
@@ -1450,15 +1459,7 @@ app.post("/api/orders", async (req, res) => {
   res.status(201).json({
     success: true,
     orderId: newOrder.id,
-    order: {
-      id: newOrder.id,
-      customerName: newOrder.customerName,
-      customerEmail: newOrder.customerEmail,
-      totalPrice: newOrder.totalPrice,
-      itemCount: newOrder.items.length,
-      status: newOrder.status,
-      createdAt: newOrder.createdAt
-    }
+    order: newOrder
   });
 });
 app.get("/api/orders/customer/:email", (req, res) => {

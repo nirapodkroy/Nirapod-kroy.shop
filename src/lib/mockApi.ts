@@ -10,7 +10,26 @@ const REVENUE_KEY = "nirapod_custom_revenue";
 export const SUBSCRIBERS_KEY = "nirapod_subscribers";
 export const USER_TRACKING_KEY = "nirapod_user_tracking_list";
 
-export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4/exec";
+export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbzzGJV2nI7grFnBo6OjDw_vJ20DylCfLg6r8ZExsawP4f17rFn5rfKp870TifdtgV4/exec";
+
+// Resolves active Google Sheets Webhook and auto-migrates old URL
+export function resolveGoogleSheetWebhook(customUrl?: string): string {
+  if (customUrl && customUrl.trim().startsWith("http")) {
+    if (!customUrl.includes("AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4")) {
+      return customUrl.trim();
+    }
+  }
+  const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
+  if (settings.webhookUrl && typeof settings.webhookUrl === "string" && settings.webhookUrl.trim().startsWith("http")) {
+    if (settings.webhookUrl.includes("AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4")) {
+      settings.webhookUrl = DEFAULT_GOOGLE_SHEET_WEBHOOK;
+      setSafeStorage(SETTINGS_KEY, settings);
+      return DEFAULT_GOOGLE_SHEET_WEBHOOK;
+    }
+    return settings.webhookUrl.trim();
+  }
+  return DEFAULT_GOOGLE_SHEET_WEBHOOK;
+}
 
 interface StoredCustomer extends CustomerUser {
   passwordHash: string;
@@ -118,8 +137,7 @@ function setSafeStorage<T>(key: string, val: T): void {
 
 // Background sync to Google Sheets (supports static sites via direct Webhook post)
 export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promise<boolean> {
-  const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
-  const target = webhookUrl || settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  const target = resolveGoogleSheetWebhook(webhookUrl);
   if (!target || !target.startsWith("http")) return false;
 
   const itemsList = order.items && Array.isArray(order.items) ? order.items : [];
@@ -188,8 +206,7 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
 }
 
 export async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPassword?: string): Promise<boolean> {
-  const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
-  const target = settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  const target = resolveGoogleSheetWebhook();
   if (!target || !target.startsWith("http")) return false;
 
   const regDate = customer.createdAt 
@@ -247,8 +264,7 @@ export async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPa
 
 // Background sync newsletter subscriber to Google Sheets
 export async function syncNewsletterToGoogleSheets(email: string, source = "Website Footer"): Promise<boolean> {
-  const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
-  const target = settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  const target = resolveGoogleSheetWebhook();
   if (!target || !target.startsWith("http")) return false;
 
   const subDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
@@ -298,8 +314,7 @@ export async function syncNewsletterToGoogleSheets(email: string, source = "Webs
 
 // Background sync user tracking to Google Sheets ("user traking" tab)
 export async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHeartbeat = false): Promise<boolean> {
-  const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
-  const target = settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  const target = resolveGoogleSheetWebhook();
   if (!target || !target.startsWith("http")) return false;
 
   const payload = {
@@ -362,8 +377,7 @@ export async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHea
 
 // Helper to pull live orders, customers, and subscribers directly from Google Sheets
 export async function fetchLiveGoogleSheetData(webhookUrl?: string): Promise<{ orders?: any[]; customers?: any[]; subscribers?: any[] } | null> {
-  const settings = getSafeStorage<{ webhookUrl?: string }>(SETTINGS_KEY, {});
-  const target = webhookUrl || settings.webhookUrl?.trim() || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  const target = resolveGoogleSheetWebhook(webhookUrl);
   if (!target || !target.startsWith("http")) return null;
 
   try {
