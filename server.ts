@@ -2491,13 +2491,24 @@ async function startServer() {
 
     app.use(express.static(distPath, {
       index: "index.html",
-      maxAge: "1d"
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        } else if (filePath.endsWith(".js") || filePath.endsWith(".css")) {
+          res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+        }
+      }
     }));
 
     app.get("*", (req, res) => {
       if (req.path.startsWith("/api/") || req.path.startsWith("/assets/") || req.path.includes(".")) {
         return res.status(404).send("Not found");
       }
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

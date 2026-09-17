@@ -54,9 +54,9 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <!-- Favicon & Brand Icons -->
-    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
-    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
-    <link rel="apple-touch-icon" href="./assets/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="apple-touch-icon" href="/assets/favicon.svg" />
     <title>বাদাম ও বীজ (Nuts & Seeds) - নিরাপদ ক্রয় | Nirapod Kroy</title>
     <meta name="description" content="Nirapod Kroy (নিরাপদ ক্রয়) - Complete all-in-one multi-category e-commerce platform offering groceries, electronics, fashion, beauty, home appliances, baby care, and lifestyle products." />
     <meta property="og:title" content="বাদাম ও বীজ | নিরাপদ ক্রয়" />
@@ -69,8 +69,67 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="./assets/index.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index.css">
+    <script>
+      (function() {
+        var loaded = false;
+        function checkAndFallback() {
+          if (loaded) return;
+          var root = document.getElementById('root');
+          if (root && root.firstElementChild) {
+            loaded = true;
+            return;
+          }
+          loaded = true;
+          var jsCandidates = [
+            '/assets/index.js',
+            '/docs/assets/index.js',
+            './assets/index.js',
+            './docs/assets/index.js'
+          ];
+          var cssCandidates = [
+            '/assets/index.css',
+            '/docs/assets/index.css',
+            './assets/index.css',
+            './docs/assets/index.css'
+          ];
+
+          function loadNextCss() {
+            if (!cssCandidates.length) return;
+            var href = cssCandidates.shift();
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.crossOrigin = 'anonymous';
+            link.href = href;
+            link.onerror = loadNextCss;
+            document.head.appendChild(link);
+          }
+          loadNextCss();
+
+          function loadNextJs() {
+            if (!jsCandidates.length) return;
+            var src = jsCandidates.shift();
+            var script = document.createElement('script');
+            script.type = 'module';
+            script.crossOrigin = 'anonymous';
+            script.src = src;
+            script.onerror = loadNextJs;
+            document.body.appendChild(script);
+          }
+          loadNextJs();
+        }
+
+        window.addEventListener('error', function(e) {
+          if (e && ((e.filename && e.filename.indexOf('main.tsx') !== -1) || (e.target && e.target.src && e.target.src.indexOf('main.tsx') !== -1))) {
+            checkAndFallback();
+          }
+        }, true);
+
+        // Fallback timer: if /src/main.tsx failed to mount the app within 600ms (e.g. GitHub Pages serving raw tsx as octet-stream)
+        setTimeout(checkAndFallback, 600);
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index.css">
   </head>
   <body class="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-200 antialiased selection:bg-emerald-500 selection:text-white">
     <div id="root"></div>

@@ -10,6 +10,8 @@ try {
   // 1. Ensure <base href="/" /> is present in dist/index.html and assets are absolute
   let indexHtmlContent = '';
   const distIndexFile = path.join(dist, 'index.html');
+  const buildVersion = Date.now().toString(36);
+
   if (fs.existsSync(distIndexFile)) {
     indexHtmlContent = fs.readFileSync(distIndexFile, 'utf-8');
     if (!indexHtmlContent.includes('<base href="/"')) {
@@ -19,6 +21,11 @@ try {
     indexHtmlContent = indexHtmlContent
       .replace(/src="\.\/assets\//g, 'src="/assets/')
       .replace(/href="\.\/assets\//g, 'href="/assets/');
+
+    // Cache-bust assets with build version query param so mobile browsers immediately fetch new bundle
+    indexHtmlContent = indexHtmlContent
+      .replace(/\/assets\/index\.js(\?v=[a-z0-9]+)?/g, `/assets/index.js?v=${buildVersion}`)
+      .replace(/\/assets\/index\.css(\?v=[a-z0-9]+)?/g, `/assets/index.css?v=${buildVersion}`);
 
     fs.writeFileSync(distIndexFile, indexHtmlContent);
 
