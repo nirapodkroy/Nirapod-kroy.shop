@@ -121,6 +121,49 @@
   ],
   "orders": [
     {
+      "id": "NK-TEST-UNIQUE-999",
+      "customerName": "Single Sync Tester",
+      "customerEmail": "singlesync@test.com",
+      "customerPhone": "01799999999",
+      "shippingAddress": "Test House, Gulshan, Dhaka",
+      "items": [
+        {
+          "productId": "p1",
+          "title": "Test Product",
+          "price": 500,
+          "quantity": 1,
+          "imageUrl": ""
+        }
+      ],
+      "totalPrice": 500,
+      "paymentMethod": "Cash on Delivery",
+      "status": "Pending",
+      "createdAt": "2026-09-17T07:27:41.333Z",
+      "syncedToGoogleSheet": false,
+      "notes": "Testing duplicate prevention"
+    },
+    {
+      "id": "NK-863191",
+      "customerName": "Test Single Order",
+      "customerEmail": "singleorder@test.com",
+      "customerPhone": "01700000000",
+      "shippingAddress": "Test House, Dhaka",
+      "items": [
+        {
+          "productId": "p-1",
+          "title": "অরিজিনাল প্রিমিয়াম প্রডাক্ট",
+          "price": 950,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b"
+        }
+      ],
+      "totalPrice": 950,
+      "paymentMethod": "Cash on Delivery",
+      "status": "Pending",
+      "createdAt": "2026-09-17T07:08:11.464Z",
+      "syncedToGoogleSheet": true
+    },
+    {
       "id": "NK-702377",
       "customerName": "Md Rahman Test",
       "customerEmail": "mdrahman.test@example.com",
@@ -364,6 +407,24 @@
       "phone": "01812345678",
       "address": "Banani, Dhaka",
       "createdAt": "2026-09-16T09:16:22.152Z"
+    },
+    {
+      "id": "cust-mu56u2bsef65",
+      "name": "Test Single Order",
+      "email": "singleorder@test.com",
+      "passwordHash": "auto-order-fs0eyp",
+      "phone": "01700000000",
+      "address": "Test House, Dhaka",
+      "createdAt": "2026-09-17T07:08:11.464Z"
+    },
+    {
+      "id": "cust-mu57j505blw6",
+      "name": "Single Sync Tester",
+      "email": "singlesync@test.com",
+      "passwordHash": "auto-order-zpgq70",
+      "phone": "01799999999",
+      "address": "Test House, Gulshan, Dhaka",
+      "createdAt": "2026-09-17T07:27:41.333Z"
     }
   ],
   "webhookUrl": "https://script.google.com/macros/s/AKfycbzzGJV2nI7grFnBo6OjDw_vJ20DylCfLg6r8ZExsawP4f17rFn5rfKp870TifdtgV4/exec",
@@ -390,6 +451,21 @@
     }
   ],
   "userTracking": [
+    {
+      "id": "v_mu55y79h_xnkcho_home",
+      "time": "9/17/2026, 1:08:12 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "45.251.228.81",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "25 মিনিট",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1920x1080",
+      "sessionId": "v_mu55y79h_xnkcho_home",
+      "updatedAt": 1789628892063
+    },
     {
       "id": "v_mu3w2xdt_1b4m5p_test",
       "time": "9/16/2026, 3:19:23 PM",

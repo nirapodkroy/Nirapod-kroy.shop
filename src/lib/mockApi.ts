@@ -9,6 +9,7 @@ const ADMIN_TOKEN_KEY = "nirapod_admin_token";
 const REVENUE_KEY = "nirapod_custom_revenue";
 export const SUBSCRIBERS_KEY = "nirapod_subscribers";
 export const USER_TRACKING_KEY = "nirapod_user_tracking_list";
+export const ADMIN_DATA_SAVED_KEY = "nirapod_admin_is_data_saved";
 
 export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/AKfycbzzGJV2nI7grFnBo6OjDw_vJ20DylCfLg6r8ZExsawP4f17rFn5rfKp870TifdtgV4/exec";
 
@@ -135,8 +136,20 @@ function setSafeStorage<T>(key: string, val: T): void {
   }
 }
 
+// Order deduplication cache to guarantee each order is sent to Google Sheets exactly once
+const syncedOrderIdsCache = new Set<string>();
+
 // Background sync to Google Sheets (supports static sites via direct Webhook post)
 export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promise<boolean> {
+  if (!order || !order.id) return false;
+
+  // Strict deduplication guard
+  const cleanOrderId = String(order.id).trim();
+  if (syncedOrderIdsCache.has(cleanOrderId)) {
+    return true; // Already queued or synced
+  }
+  syncedOrderIdsCache.add(cleanOrderId);
+
   const target = resolveGoogleSheetWebhook(webhookUrl);
   if (!target || !target.startsWith("http")) return false;
 
@@ -375,8 +388,8 @@ export async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHea
   }
 }
 
-// Helper to pull live orders, customers, and subscribers directly from Google Sheets
-export async function fetchLiveGoogleSheetData(webhookUrl?: string): Promise<{ orders?: any[]; customers?: any[]; subscribers?: any[] } | null> {
+// Helper to pull live orders, customers, subscribers, and tracking directly from Google Sheets
+export async function fetchLiveGoogleSheetData(webhookUrl?: string): Promise<{ orders?: any[]; customers?: any[]; subscribers?: any[]; tracking?: any[] } | null> {
   const target = resolveGoogleSheetWebhook(webhookUrl);
   if (!target || !target.startsWith("http")) return null;
 
@@ -587,6 +600,16 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     setSafeStorage(PRODUCTS_KEY, products);
 
     const orderId = (body.orderId && String(body.orderId).trim()) || ("NK-" + Math.floor(100000 + Math.random() * 900000));
+    const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
+    const existingOrder = orders.find(o => o.id === orderId);
+    if (existingOrder) {
+      return createJsonResponse({
+        success: true,
+        orderId: existingOrder.id,
+        order: existingOrder
+      });
+    }
+
     const newOrder: Order = {
       id: orderId,
       customerName: String(customerName).trim(),
@@ -602,7 +625,6 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       notes: notes ? String(notes).trim() : undefined
     };
 
-    const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
     orders.unshift(newOrder);
     setSafeStorage(ORDERS_KEY, orders);
 
@@ -843,8 +865,9 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
   }
 
   if (path === "/api/admin/orders") {
-    const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
-    return createJsonResponse({ orders });
+    const isSaved = getSafeStorage<boolean>(ADMIN_DATA_SAVED_KEY, false);
+    const orders = isSaved ? getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS) : [];
+    return createJsonResponse({ orders, isSaved });
   }
 
   if (path.startsWith("/api/admin/orders/") && path.endsWith("/status") && method === "PUT") {
@@ -888,8 +911,35 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     });
   }
 
+  // POST /api/admin/clean-order-sheet
+  if (path === "/api/admin/clean-order-sheet" && method === "POST") {
+    const targetUrl = (body && body.url) || resolveGoogleSheetWebhook();
+    if (!targetUrl || !targetUrl.startsWith("http")) {
+      return createJsonResponse({ error: "গুগল শিট ওয়েবহুক পাওয়া যায়নি।" }, 400);
+    }
+    try {
+      const fetchUrl = targetUrl + (targetUrl.includes("?") ? "&" : "?") + "action=clean_order_sheet";
+      await fetch(fetchUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "clean_order_sheet" })
+      });
+      return createJsonResponse({
+        success: true,
+        message: "অর্ডার শিট ও ট্র্যাকিং ডুপ্লিকেট রিমুভ রিকোয়েস্ট সফলভাবে পাঠানো হয়েছে!"
+      });
+    } catch (err: any) {
+      return createJsonResponse({ error: err?.message || "ক্লিন রিকোয়েস্ট পাঠাতে সমস্যা হয়েছে।" }, 500);
+    }
+  }
+
   // Admin Customers List (/api/admin/customers)
   if (path === "/api/admin/customers" && method === "GET") {
+    const isSaved = getSafeStorage<boolean>(ADMIN_DATA_SAVED_KEY, false);
+    if (!isSaved) {
+      return createJsonResponse({ customers: [], total: 0, isSaved: false });
+    }
     const customers = getSafeStorage<StoredCustomer[]>(CUSTOMERS_KEY, DEFAULT_CUSTOMERS);
     const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
     const list = customers.map(c => {
@@ -906,7 +956,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
         totalSpent
       };
     });
-    return createJsonResponse({ customers: list, total: list.length });
+    return createJsonResponse({ customers: list, total: list.length, isSaved: true });
   }
 
   // DELETE /api/admin/customers/:id (Delete customer in admin panel only, Google Sheet remains untouched)
@@ -927,8 +977,25 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
 
   // 11. Admin Stats & Settings
   if (path === "/api/admin/stats") {
-    const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
+    const isSaved = getSafeStorage<boolean>(ADMIN_DATA_SAVED_KEY, false);
     const products = getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
+    if (!isSaved) {
+      return createJsonResponse({
+        stats: {
+          totalRevenue: 0,
+          calculatedRevenue: 0,
+          isCustomRevenue: false,
+          customTotalRevenue: undefined,
+          totalOrders: 0,
+          totalProducts: products.length,
+          lowStockProducts: products.filter(p => p.stock <= 10).length,
+          syncedGoogleSheetsCount: 0,
+          isSaved: false
+        }
+      });
+    }
+
+    const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
     const customRev = getSafeStorage<{ customTotalRevenue?: number | null }>(REVENUE_KEY, {});
     const calculatedRevenue = orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
     const hasCustom = typeof customRev.customTotalRevenue === "number";
@@ -943,7 +1010,8 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
         totalOrders: orders.length,
         totalProducts: products.length,
         lowStockProducts: products.filter(p => p.stock <= 10).length,
-        syncedGoogleSheetsCount: orders.filter(o => o.syncedToGoogleSheet).length
+        syncedGoogleSheetsCount: orders.filter(o => o.syncedToGoogleSheet).length,
+        isSaved: true
       }
     });
   }
@@ -1049,8 +1117,9 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
 
   // 13. Admin Subscribers List & Delete
   if (path === "/api/admin/subscribers" && method === "GET") {
-    const subscribers = getSafeStorage<{ email: string; source: string; subscribedAt: string }[]>(SUBSCRIBERS_KEY, []);
-    return createJsonResponse({ subscribers, total: subscribers.length });
+    const isSaved = getSafeStorage<boolean>(ADMIN_DATA_SAVED_KEY, false);
+    const subscribers = isSaved ? getSafeStorage<{ email: string; source: string; subscribedAt: string }[]>(SUBSCRIBERS_KEY, []) : [];
+    return createJsonResponse({ subscribers, total: subscribers.length, isSaved });
   }
 
   if (path.startsWith("/api/admin/subscribers/") && method === "DELETE") {
@@ -1061,66 +1130,177 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     return createJsonResponse({ success: true, message: "সাবস্ক্রাইবার মুছে ফেলা হয়েছে", total: remaining.length });
   }
 
-  // 14. Live Google Sheet Sync (Pull all orders, customers, subscribers across all live devices)
+  // 14. Live Google Sheet Sync (Pull-Only Preview - Does NOT persist until user saves!)
   if (path === "/api/admin/sync-from-sheets" && method === "POST") {
     const liveData = await fetchLiveGoogleSheetData(body.webhookUrl);
     if (!liveData) {
       return createJsonResponse({ error: "গুগল শিট থেকে ডেটা পড়তে ব্যর্থ হয়েছে। অ্যাপস স্ক্রিপ্টে doGet ফাংশনটি আছে কিনা নিশ্চিত করুন।" }, 500);
     }
 
-    let importedOrders = 0;
-    let importedSubscribers = 0;
-
+    // 1. Orders
+    const normalizedOrders: Order[] = [];
     if (liveData.orders && Array.isArray(liveData.orders)) {
-      const currentOrders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
       for (const sheetOrder of liveData.orders) {
-        if (!currentOrders.some(o => o.id === sheetOrder.id)) {
-          const rawPrice = String(sheetOrder.totalPrice || "0").replace(/[^0-9.]/g, "");
-          currentOrders.unshift({
-            id: sheetOrder.id,
-            customerName: sheetOrder.customerName || "Customer",
-            customerEmail: sheetOrder.customerEmail || "",
-            customerPhone: sheetOrder.customerPhone || "",
-            shippingAddress: sheetOrder.shippingAddress || "",
-            items: [{
-              productId: "imported",
-              title: sheetOrder.itemsText || "Order Items",
-              price: Number(rawPrice) || 0,
-              quantity: 1,
-              imageUrl: ""
-            }],
-            totalPrice: Number(rawPrice) || 0,
-            paymentMethod: sheetOrder.paymentMethod || "Cash on Delivery",
-            status: sheetOrder.status || "Pending",
-            createdAt: sheetOrder.createdAt || new Date().toISOString(),
-            syncedToGoogleSheet: true
-          });
-          importedOrders++;
-        }
+        const rawPrice = String(sheetOrder.totalPrice || "0").replace(/[^0-9.]/g, "");
+        normalizedOrders.push({
+          id: sheetOrder.id || `NK-${Math.floor(100000 + Math.random() * 900000)}`,
+          customerName: sheetOrder.customerName || "Customer",
+          customerEmail: sheetOrder.customerEmail || "",
+          customerPhone: sheetOrder.customerPhone || "",
+          shippingAddress: sheetOrder.shippingAddress || "",
+          items: [{
+            productId: "sheet-item",
+            title: sheetOrder.itemsText || "Order Items",
+            price: Number(rawPrice) || 0,
+            quantity: 1,
+            imageUrl: ""
+          }],
+          totalPrice: Number(rawPrice) || 0,
+          paymentMethod: sheetOrder.paymentMethod || "Cash on Delivery",
+          status: sheetOrder.status || "Pending",
+          createdAt: sheetOrder.createdAt || new Date().toISOString(),
+          syncedToGoogleSheet: true
+        });
       }
-      setSafeStorage(ORDERS_KEY, currentOrders);
     }
 
+    // 2. Customers
+    const customerMap = new Map<string, any>();
+    if (liveData.customers && Array.isArray(liveData.customers)) {
+      for (const c of liveData.customers) {
+        const key = (c.email || c.phone || c.id || "").toLowerCase().trim();
+        if (key) {
+          customerMap.set(key, {
+            id: c.id || `cust_${Math.random().toString(36).slice(2, 8)}`,
+            name: c.name || "Customer",
+            email: c.email || "",
+            phone: c.phone || "",
+            address: c.address || "",
+            createdAt: c.registeredAt || new Date().toISOString(),
+            orderCount: 0,
+            totalSpent: 0
+          });
+        }
+      }
+    }
+    for (const o of normalizedOrders) {
+      const key = (o.customerEmail || o.customerPhone || o.customerName || "").toLowerCase().trim();
+      if (!key) continue;
+      const existing = customerMap.get(key);
+      if (existing) {
+        existing.orderCount = (existing.orderCount || 0) + 1;
+        if (o.status !== "Cancelled") {
+          existing.totalSpent = (existing.totalSpent || 0) + o.totalPrice;
+        }
+        if ((!existing.phone || existing.phone === "N/A") && o.customerPhone) existing.phone = o.customerPhone;
+        if ((!existing.address || existing.address === "N/A") && o.shippingAddress) existing.address = o.shippingAddress;
+      } else {
+        customerMap.set(key, {
+          id: `cust_${Math.random().toString(36).slice(2, 8)}`,
+          name: o.customerName || "Customer",
+          email: o.customerEmail || "",
+          phone: o.customerPhone || "",
+          address: o.shippingAddress || "",
+          createdAt: o.createdAt || new Date().toISOString(),
+          orderCount: 1,
+          totalSpent: o.status !== "Cancelled" ? o.totalPrice : 0
+        });
+      }
+    }
+    const normalizedCustomers = Array.from(customerMap.values());
+
+    // 3. Subscribers
+    const normalizedSubscribers: any[] = [];
     if (liveData.subscribers && Array.isArray(liveData.subscribers)) {
-      const currentSubs = getSafeStorage<{ email: string; source: string; subscribedAt: string }[]>(SUBSCRIBERS_KEY, []);
       for (const s of liveData.subscribers) {
-        if (s.email && !currentSubs.some(cs => cs.email === s.email.toLowerCase())) {
-          currentSubs.unshift({
+        if (s.email && !normalizedSubscribers.some(ns => ns.email === s.email.toLowerCase())) {
+          normalizedSubscribers.push({
             email: s.email.toLowerCase(),
             source: s.source || "Google Sheet",
-            subscribedAt: s.date || new Date().toISOString()
+            subscribedAt: s.date || s.subscribedAt || new Date().toISOString()
           });
-          importedSubscribers++;
         }
       }
-      setSafeStorage(SUBSCRIBERS_KEY, currentSubs);
     }
 
+    // 4. Tracking
+    const normalizedTracking: UserTrackingEntry[] = [];
+    if (liveData.tracking && Array.isArray(liveData.tracking)) {
+      for (const t of liveData.tracking) {
+        if (t.sessionId && !normalizedTracking.some(et => et.sessionId === t.sessionId)) {
+          normalizedTracking.push({
+            id: t.sessionId,
+            time: t.time || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+            page: t.page || "হোমপেজ (Home)",
+            ip: t.ip || "Unknown",
+            location: t.location || "Bangladesh",
+            device: t.device || "Desktop / PC",
+            os: t.os || "Windows 10/11",
+            browser: t.browser || "Chrome",
+            timeSpent: t.timeSpent || "সক্রিয় রয়েছে (Active)...",
+            referrer: t.referrer || "সরাসরি (Direct)",
+            screen: t.screen || "1920x1080",
+            sessionId: t.sessionId,
+            updatedAt: Date.now()
+          });
+        }
+      }
+    }
+
+    // 5. Stats computation
+    const calculatedRevenue = normalizedOrders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+    const products = getSafeStorage<Product[]>(PRODUCTS_KEY, DEFAULT_PRODUCTS);
+    const stats = {
+      totalRevenue: calculatedRevenue,
+      calculatedRevenue,
+      isCustomRevenue: false,
+      customTotalRevenue: undefined,
+      totalOrders: normalizedOrders.length,
+      totalProducts: products.length,
+      lowStockProducts: products.filter(p => p.stock <= 10).length,
+      syncedGoogleSheetsCount: normalizedOrders.length,
+      isSaved: false
+    };
+
+    // Note: PULL-ONLY PREVIEW - We DO NOT mutate safeStorage!
     return createJsonResponse({
       success: true,
-      message: `গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে! (${importedOrders} টি নতুন অর্ডার, ${importedSubscribers} জন নতুন সাবস্ক্রাইবার)`,
-      importedOrders,
-      importedSubscribers
+      isLivePreview: true,
+      isSaved: false,
+      message: `গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে! (${normalizedOrders.length} টি অর্ডার, ${normalizedCustomers.length} জন কাস্টমার, ${normalizedSubscribers.length} জন সাবস্ক্রাইবার, ${normalizedTracking.length} টি ভিজিটর লগ)`,
+      orders: normalizedOrders,
+      customers: normalizedCustomers,
+      subscribers: normalizedSubscribers,
+      tracking: normalizedTracking,
+      stats
+    });
+  }
+
+  // POST /api/admin/save-synced-data
+  if (path === "/api/admin/save-synced-data" && method === "POST") {
+    const { orders, customers, subscribers, tracking } = body;
+    if (Array.isArray(orders)) setSafeStorage(ORDERS_KEY, orders);
+    if (Array.isArray(customers)) setSafeStorage(CUSTOMERS_KEY, customers);
+    if (Array.isArray(subscribers)) setSafeStorage(SUBSCRIBERS_KEY, subscribers);
+    if (Array.isArray(tracking)) setSafeStorage(USER_TRACKING_KEY, tracking);
+    setSafeStorage(ADMIN_DATA_SAVED_KEY, true);
+    return createJsonResponse({
+      success: true,
+      message: "গুগল শিটের সকল ডেটা (অর্ডার, কাস্টমার, সাবস্ক্রাইবার, ট্র্যাকিং) অ্যাডমিন প্যানেলে সফলভাবে সেভ করা হয়েছে!"
+    });
+  }
+
+  // POST /api/admin/clear-saved-data
+  if (path === "/api/admin/clear-saved-data" && method === "POST") {
+    setSafeStorage(ORDERS_KEY, []);
+    setSafeStorage(CUSTOMERS_KEY, []);
+    setSafeStorage(SUBSCRIBERS_KEY, []);
+    setSafeStorage(USER_TRACKING_KEY, []);
+    setSafeStorage(ADMIN_DATA_SAVED_KEY, false);
+    setSafeStorage(REVENUE_KEY, {});
+    return createJsonResponse({
+      success: true,
+      message: "অ্যাডমিন প্যানেলের সংরক্ষিত ডেটা মুছে ফেলা হয়েছে (গুগল শিটের কোনো ডেটা ডিলিট হয়নি, তা অক্ষত রয়েছে)।"
     });
   }
 
@@ -1168,12 +1348,29 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     }
     setSafeStorage(USER_TRACKING_KEY, currentTracking);
 
-    // Sync to Google Sheet in background
-    syncTrackingToGoogleSheets(currentEntry, isHeartbeat).catch(() => {});
+    // Sync to Google Sheet in background ONLY if not explicitly skipped by client-side direct sync
+    if (!body.skipGoogleSheets) {
+      syncTrackingToGoogleSheets(currentEntry, isHeartbeat).catch(() => {});
+    }
     return createJsonResponse({ success: true, sessionId, timeSpent });
   }
 
   if (path === "/api/admin/tracking" && method === "GET") {
+    const isSaved = getSafeStorage<boolean>(ADMIN_DATA_SAVED_KEY, false);
+    if (!isSaved) {
+      return createJsonResponse({
+        success: true,
+        totalVisits: 0,
+        activeNow: 0,
+        tracking: [],
+        pageStats: {},
+        deviceStats: {},
+        browserStats: {},
+        sheetTab: "user tracking",
+        isSaved: false
+      });
+    }
+
     const currentTracking = getSafeStorage<UserTrackingEntry[]>(USER_TRACKING_KEY, []);
     const now = Date.now();
     const activeNow = currentTracking.filter(t => t.updatedAt && (now - t.updatedAt < 120000)).length;
@@ -1191,12 +1388,13 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     return createJsonResponse({
       success: true,
       totalVisits: currentTracking.length,
-      activeNow: Math.max(activeNow, 1),
+      activeNow: currentTracking.length > 0 ? Math.max(activeNow, 1) : 0,
       tracking: currentTracking,
       pageStats: pageCounts,
       deviceStats: deviceCounts,
       browserStats: browserCounts,
-      sheetTab: "user tracking"
+      sheetTab: "user tracking",
+      isSaved: true
     });
   }
 

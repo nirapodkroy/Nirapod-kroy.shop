@@ -692,6 +692,7 @@ interface StoreState {
   userTracking?: UserTrackingEntry[];
   webhookUrl: string;
   customTotalRevenue?: number;
+  isDataSaved?: boolean;
 }
 
 let storeState: StoreState = {
@@ -700,7 +701,8 @@ let storeState: StoreState = {
   customers: INITIAL_CUSTOMERS,
   subscribers: [],
   userTracking: [],
-  webhookUrl: googleSheetWebhookUrl
+  webhookUrl: googleSheetWebhookUrl,
+  isDataSaved: false
 };
 
 // Load or save persistence helper
@@ -711,6 +713,7 @@ function loadState() {
       const parsed = JSON.parse(raw);
       if (parsed.products && Array.isArray(parsed.products)) {
         storeState = parsed;
+        storeState.isDataSaved = Boolean(parsed.isDataSaved);
         // Ensure all products have images array populated
         storeState.products = storeState.products.map(p => {
           const imgs = Array.isArray(p.images) && p.images.length > 0 ? p.images : [p.imageUrl];
@@ -773,9 +776,18 @@ const adminSessions = new Map<string, number>();
 
 // Session throttle for Google Sheets tracking dispatch (sessionId -> lastSyncTimestamp)
 const trackingSyncThrottle = new Map<string, number>();
+const syncedOrderIdsServer = new Set<string>();
 
 // Helper: dispatch order to Google Sheets webhook
 async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promise<boolean> {
+  if (!order || !order.id) return false;
+
+  const cleanOrderId = String(order.id).trim();
+  if (syncedOrderIdsServer.has(cleanOrderId)) {
+    return true; // Already synced or queued
+  }
+  syncedOrderIdsServer.add(cleanOrderId);
+
   const targetUrl = webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!targetUrl || !targetUrl.startsWith("http")) {
     console.log(`[Google Sheets] Webhook URL not set. Order ${order.id} saved locally.`);
@@ -1678,6 +1690,17 @@ app.post("/api/orders", async (req, res) => {
   }
 
   const orderId = (req.body.orderId && String(req.body.orderId).trim()) || ("NK-" + Math.floor(100000 + Math.random() * 900000));
+  
+  // Strict server deduplication guard
+  const existingOrder = storeState.orders.find(o => o.id === orderId);
+  if (existingOrder) {
+    return res.status(200).json({
+      success: true,
+      orderId: existingOrder.id,
+      order: existingOrder
+    });
+  }
+
   const newOrder: Order = {
     id: orderId,
     customerName: customerName.trim(),
@@ -1781,7 +1804,8 @@ app.get("/api/orders/recent-ticker", (_req, res) => {
 // 6. Admin Orders & Stats (Admin only)
 // GET /api/admin/orders
 app.get("/api/admin/orders", requireAdmin, (_req, res) => {
-  res.json({ orders: storeState.orders });
+  const orders = storeState.isDataSaved ? storeState.orders : [];
+  res.json({ orders, isSaved: Boolean(storeState.isDataSaved) });
 });
 
 // PUT /api/admin/orders/:id/status
@@ -1843,9 +1867,13 @@ app.delete("/api/admin/orders/:id", requireAdmin, (req, res) => {
 
 // GET /api/admin/customers (Admin only)
 app.get("/api/admin/customers", requireAdmin, (_req, res) => {
+  if (!storeState.isDataSaved) {
+    return res.json({ customers: [], total: 0, isSaved: false });
+  }
+
   const safeCustomers = storeState.customers.map(c => {
     // Count associated orders
-    const customerOrders = storeState.orders.filter(o => o.customerEmail.toLowerCase() === c.email.toLowerCase());
+    const customerOrders = storeState.orders.filter(o => o.customerEmail && c.email && o.customerEmail.toLowerCase() === c.email.toLowerCase());
     const totalSpent = customerOrders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
 
     return {
@@ -1860,7 +1888,7 @@ app.get("/api/admin/customers", requireAdmin, (_req, res) => {
     };
   });
 
-  res.json({ customers: safeCustomers, total: safeCustomers.length });
+  res.json({ customers: safeCustomers, total: safeCustomers.length, isSaved: true });
 });
 
 // DELETE /api/admin/customers/:id (Admin only - Deletes from store database, leaves Google Sheets intact)
@@ -1884,6 +1912,22 @@ app.delete("/api/admin/customers/:id", requireAdmin, (req, res) => {
 
 // GET /api/admin/stats
 app.get("/api/admin/stats", requireAdmin, (_req, res) => {
+  if (!storeState.isDataSaved) {
+    return res.json({
+      stats: {
+        totalRevenue: 0,
+        calculatedRevenue: 0,
+        isCustomRevenue: false,
+        customTotalRevenue: undefined,
+        totalOrders: 0,
+        totalProducts: storeState.products.length,
+        lowStockProducts: storeState.products.filter(p => p.stock <= 10).length,
+        syncedGoogleSheetsCount: 0,
+        isSaved: false
+      }
+    });
+  }
+
   const calculatedRevenue = storeState.orders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
   const totalRevenue = typeof storeState.customTotalRevenue === "number" ? storeState.customTotalRevenue : calculatedRevenue;
   const isCustomRevenue = typeof storeState.customTotalRevenue === "number";
@@ -1901,7 +1945,8 @@ app.get("/api/admin/stats", requireAdmin, (_req, res) => {
       totalOrders,
       totalProducts,
       lowStockProducts,
-      syncedGoogleSheetsCount
+      syncedGoogleSheetsCount,
+      isSaved: true
     }
   });
 });
@@ -2045,8 +2090,8 @@ app.post(["/api/newsletter", "/api/subscribe"], async (req, res) => {
 
 // GET /api/admin/subscribers
 app.get("/api/admin/subscribers", requireAdmin, (_req, res) => {
-  const subscribers = storeState.subscribers || [];
-  res.json({ subscribers, total: subscribers.length });
+  const subscribers = storeState.isDataSaved ? (storeState.subscribers || []) : [];
+  res.json({ subscribers, total: subscribers.length, isSaved: Boolean(storeState.isDataSaved) });
 });
 
 // DELETE /api/admin/subscribers/:email
@@ -2059,6 +2104,7 @@ app.delete("/api/admin/subscribers/:email", requireAdmin, (req, res) => {
 });
 
 // POST /api/admin/sync-from-sheets
+// Pull-Only: Returns live data from Google Sheets without persisting to disk/storeState!
 app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
   const target = req.body.webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!target || !target.startsWith("http")) {
@@ -2076,58 +2122,99 @@ app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
       return res.status(500).json({ error: "গুগল শিট থেকে ডেটা সঠিক ফরম্যাটে পাওয়া যায়নি।" });
     }
 
-    let importedOrders = 0;
-    let importedSubscribers = 0;
-
+    // 1. Orders
+    const normalizedOrders: Order[] = [];
     if (liveData.orders && Array.isArray(liveData.orders)) {
       for (const sheetOrder of liveData.orders) {
-        if (!storeState.orders.some(o => o.id === sheetOrder.id)) {
-          const rawPrice = String(sheetOrder.totalPrice || "0").replace(/[^0-9.]/g, "");
-          storeState.orders.unshift({
-            id: sheetOrder.id,
-            customerName: sheetOrder.customerName || "Customer",
-            customerEmail: sheetOrder.customerEmail || "",
-            customerPhone: sheetOrder.customerPhone || "",
-            shippingAddress: sheetOrder.shippingAddress || "",
-            items: [{
-              productId: "imported",
-              title: sheetOrder.itemsText || "Order Items",
-              price: Number(rawPrice) || 0,
-              quantity: 1,
-              imageUrl: ""
-            }],
-            totalPrice: Number(rawPrice) || 0,
-            paymentMethod: sheetOrder.paymentMethod || "Cash on Delivery",
-            status: sheetOrder.status || "Pending",
-            createdAt: sheetOrder.createdAt || new Date().toISOString(),
-            syncedToGoogleSheet: true
-          });
-          importedOrders++;
-        }
+        const rawPrice = String(sheetOrder.totalPrice || "0").replace(/[^0-9.]/g, "");
+        normalizedOrders.push({
+          id: sheetOrder.id || `NK-${Math.floor(100000 + Math.random() * 900000)}`,
+          customerName: sheetOrder.customerName || "Customer",
+          customerEmail: sheetOrder.customerEmail || "",
+          customerPhone: sheetOrder.customerPhone || "",
+          shippingAddress: sheetOrder.shippingAddress || "",
+          items: [{
+            productId: "sheet-item",
+            title: sheetOrder.itemsText || "Order Items",
+            price: Number(rawPrice) || 0,
+            quantity: 1,
+            imageUrl: ""
+          }],
+          totalPrice: Number(rawPrice) || 0,
+          paymentMethod: sheetOrder.paymentMethod || "Cash on Delivery",
+          status: sheetOrder.status || "Pending",
+          createdAt: sheetOrder.createdAt || new Date().toISOString(),
+          syncedToGoogleSheet: true
+        });
       }
     }
 
+    // 2. Customers (From sheet's Customers tab + enriched from all orders)
+    const customerMap = new Map<string, any>();
+    if (liveData.customers && Array.isArray(liveData.customers)) {
+      for (const c of liveData.customers) {
+        const key = (c.email || c.phone || c.id || "").toLowerCase().trim();
+        if (key) {
+          customerMap.set(key, {
+            id: c.id || `cust_${Math.random().toString(36).slice(2, 8)}`,
+            name: c.name || "Customer",
+            email: c.email || "",
+            phone: c.phone || "",
+            address: c.address || "",
+            createdAt: c.registeredAt || new Date().toISOString(),
+            orderCount: 0,
+            totalSpent: 0
+          });
+        }
+      }
+    }
+    // Also enrich/synthesize from orders
+    for (const o of normalizedOrders) {
+      const key = (o.customerEmail || o.customerPhone || o.customerName || "").toLowerCase().trim();
+      if (!key) continue;
+      const existing = customerMap.get(key);
+      if (existing) {
+        existing.orderCount = (existing.orderCount || 0) + 1;
+        if (o.status !== "Cancelled") {
+          existing.totalSpent = (existing.totalSpent || 0) + o.totalPrice;
+        }
+        if ((!existing.phone || existing.phone === "N/A") && o.customerPhone) existing.phone = o.customerPhone;
+        if ((!existing.address || existing.address === "N/A") && o.shippingAddress) existing.address = o.shippingAddress;
+      } else {
+        customerMap.set(key, {
+          id: `cust_${Math.random().toString(36).slice(2, 8)}`,
+          name: o.customerName || "Customer",
+          email: o.customerEmail || "",
+          phone: o.customerPhone || "",
+          address: o.shippingAddress || "",
+          createdAt: o.createdAt || new Date().toISOString(),
+          orderCount: 1,
+          totalSpent: o.status !== "Cancelled" ? o.totalPrice : 0
+        });
+      }
+    }
+    const normalizedCustomers = Array.from(customerMap.values());
+
+    // 3. Subscribers
+    const normalizedSubscribers: Subscriber[] = [];
     if (liveData.subscribers && Array.isArray(liveData.subscribers)) {
-      if (!storeState.subscribers) storeState.subscribers = [];
       for (const s of liveData.subscribers) {
-        if (s.email && !storeState.subscribers.some(cs => cs.email === s.email.toLowerCase())) {
-          storeState.subscribers.unshift({
+        if (s.email && !normalizedSubscribers.some(ns => ns.email === s.email.toLowerCase())) {
+          normalizedSubscribers.push({
             email: s.email.toLowerCase(),
             source: s.source || "Google Sheet",
-            subscribedAt: s.date || new Date().toISOString()
+            subscribedAt: s.date || s.subscribedAt || new Date().toISOString()
           });
-          importedSubscribers++;
         }
       }
     }
 
-    // Also import tracking records if present in sheet response
-    let importedTracking = 0;
+    // 4. Tracking
+    const normalizedTracking: UserTrackingEntry[] = [];
     if (liveData.tracking && Array.isArray(liveData.tracking)) {
-      if (!storeState.userTracking) storeState.userTracking = [];
       for (const t of liveData.tracking) {
-        if (t.sessionId && !storeState.userTracking.some(et => et.sessionId === t.sessionId)) {
-          storeState.userTracking.push({
+        if (t.sessionId && !normalizedTracking.some(et => et.sessionId === t.sessionId)) {
+          normalizedTracking.push({
             id: t.sessionId,
             time: t.time || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
             page: t.page || "হোমপেজ (Home)",
@@ -2142,22 +2229,69 @@ app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
             sessionId: t.sessionId,
             updatedAt: Date.now()
           });
-          importedTracking++;
         }
       }
     }
 
-    saveState();
+    // 5. Stats computation
+    const calculatedRevenue = normalizedOrders.reduce((sum, o) => o.status !== "Cancelled" ? sum + o.totalPrice : sum, 0);
+    const stats = {
+      totalRevenue: calculatedRevenue,
+      calculatedRevenue,
+      isCustomRevenue: false,
+      customTotalRevenue: undefined,
+      totalOrders: normalizedOrders.length,
+      totalProducts: storeState.products.length,
+      lowStockProducts: storeState.products.filter(p => p.stock <= 10).length,
+      syncedGoogleSheetsCount: normalizedOrders.length,
+      isSaved: false
+    };
+
+    // Note: PULL-ONLY PREVIEW - We DO NOT mutate storeState or call saveState()!
     return res.json({
       success: true,
-      message: `গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে! (${importedOrders} টি অর্ডার, ${importedSubscribers} জন সাবস্ক্রাইবার, ${importedTracking} টি ভিজিটর লগ)`,
-      importedOrders,
-      importedSubscribers,
-      importedTracking
+      isLivePreview: true,
+      isSaved: false,
+      message: `গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে! (${normalizedOrders.length} টি অর্ডার, ${normalizedCustomers.length} জন কাস্টমার, ${normalizedSubscribers.length} জন সাবস্ক্রাইবার, ${normalizedTracking.length} টি ভিজিটর লগ)`,
+      orders: normalizedOrders,
+      customers: normalizedCustomers,
+      subscribers: normalizedSubscribers,
+      tracking: normalizedTracking,
+      stats
     });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || "গুগল শিট সিঙ্ক এরর" });
   }
+});
+
+// POST /api/admin/save-synced-data (Admin explicitly saves synced data)
+app.post("/api/admin/save-synced-data", requireAdmin, (req, res) => {
+  const { orders, customers, subscribers, tracking } = req.body;
+  if (Array.isArray(orders)) storeState.orders = orders;
+  if (Array.isArray(customers)) storeState.customers = customers;
+  if (Array.isArray(subscribers)) storeState.subscribers = subscribers;
+  if (Array.isArray(tracking)) storeState.userTracking = tracking;
+  storeState.isDataSaved = true;
+  saveState();
+  return res.json({
+    success: true,
+    message: "গুগল শিটের সকল ডেটা (অর্ডার, কাস্টমার, সাবস্ক্রাইবার, ট্র্যাকিং) অ্যাডমিন প্যানেলে সফলভাবে সেভ করা হয়েছে!"
+  });
+});
+
+// POST /api/admin/clear-saved-data (Admin deletes/clears saved data, leaves Google Sheets intact)
+app.post("/api/admin/clear-saved-data", requireAdmin, (_req, res) => {
+  storeState.orders = [];
+  storeState.customers = [];
+  storeState.subscribers = [];
+  storeState.userTracking = [];
+  storeState.isDataSaved = false;
+  delete storeState.customTotalRevenue;
+  saveState();
+  return res.json({
+    success: true,
+    message: "অ্যাডমিন প্যানেলের সংরক্ষিত ডেটা মুছে ফেলা হয়েছে (গুগল শিটের কোনো ডেটা ডিলিট হয়নি, তা অক্ষত রয়েছে)।"
+  });
 });
 
 // ==========================================
@@ -2225,7 +2359,11 @@ app.post("/api/track", async (req, res) => {
       }
     }
 
-    // Asynchronously dispatch to Google Sheets tab "user tracking"
+    // Asynchronously dispatch to Google Sheets tab "user tracking" ONLY if not explicitly handled by client
+    if (req.body.skipGoogleSheets) {
+      return res.json({ success: true, sessionId, timeSpent, skippedGoogleSheets: true });
+    }
+
     // FAST TRACK: New visitors & initial visits dispatch to Google Sheets immediately (<1s)!
     // Ongoing duration updates are throttled to at most once every 60s per session,
     // which prevents queue buildup on Google Apps Script and guarantees instant responses!
@@ -2248,7 +2386,7 @@ app.post("/api/track", async (req, res) => {
 
 // 2. Admin: Get live user tracking stats & logs (GET /api/admin/tracking)
 app.get("/api/admin/tracking", requireAdmin, (_req, res) => {
-  const trackingList = storeState.userTracking || [];
+  const trackingList = storeState.isDataSaved ? (storeState.userTracking || []) : [];
   const now = Date.now();
   // Active visitors in the last 2 minutes
   const activeNow = trackingList.filter(t => t.updatedAt && (now - t.updatedAt < 120000)).length;
@@ -2266,12 +2404,13 @@ app.get("/api/admin/tracking", requireAdmin, (_req, res) => {
   return res.json({
     success: true,
     totalVisits: trackingList.length,
-    activeNow: Math.max(activeNow, 1),
+    activeNow: trackingList.length > 0 ? Math.max(activeNow, 1) : 0,
     tracking: trackingList,
     pageStats: pageCounts,
     deviceStats: deviceCounts,
     browserStats: browserCounts,
-    sheetTab: "user tracking"
+    sheetTab: "user tracking",
+    isSaved: Boolean(storeState.isDataSaved)
   });
 });
 

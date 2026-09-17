@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLanguage } from "../context/LanguageContext";
-import { handleLocalApi, syncOrderToGoogleSheets } from "../lib/mockApi";
+import { handleLocalApi } from "../lib/mockApi";
 import {
   X,
   ShieldCheck,
@@ -38,6 +38,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   >("Cash on Delivery");
   const [orderNotes, setOrderNotes] = useState("");
 
+  const isSubmittingRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<any | null>(null);
 
@@ -60,6 +61,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Strict double-submit guard
+    if (isSubmitting || isSubmittingRef.current) {
+      return;
+    }
+
     if (!customerName.trim() || !customerEmail.trim() || !customerPhone.trim() || !shippingAddress.trim()) {
       addToast(
         language === "bn"
@@ -75,6 +81,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -112,100 +119,80 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
         notes: orderNotes.trim()
       };
 
-      let res: Response;
-      let usedLocalFallback = false;
+      let orderResult: any = null;
+      let orderSuccess = false;
+
+      // 1. Primary: Submit to server API (which dispatches single authoritative sync)
       try {
-        res = await fetch("/api/orders", {
+        const res = await fetch("/api/orders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        const contentType = res.headers.get("content-type") || "";
-        if (!res.ok && (res.status === 404 || contentType.includes("text/html"))) {
-          throw new Error("Local fallback");
+
+        if (res.ok) {
+          const contentType = res.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            orderResult = await res.json();
+            if (orderResult?.order || orderResult?.success) {
+              orderSuccess = true;
+            }
+          }
         }
-      } catch {
-        usedLocalFallback = true;
-        res = await handleLocalApi("/api/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+      } catch (networkErr) {
+        console.warn("[Order] Primary API dispatch failed, falling back to local handler:", networkErr);
       }
 
-      let data: any;
-      try {
-        data = await res.json();
-      } catch {
-        usedLocalFallback = true;
-        res = await handleLocalApi("/api/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        data = await res.json();
+      // 2. Secondary fallback (Static hosting without Node.js backend):
+      if (!orderSuccess) {
+        try {
+          const localRes = await handleLocalApi("/api/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          orderResult = await localRes.json();
+          if (orderResult?.order || orderResult?.success) {
+            orderSuccess = true;
+          }
+        } catch (localErr) {
+          console.error("[Order] Local handler failed:", localErr);
+        }
       }
 
-      if (!res.ok || !data?.order) {
-        addToast(data?.error || (language === "bn" ? "অর্ডার সম্পন্ন হতে সমস্যা হয়েছে।" : "Failed to place order."), "error");
+      if (!orderSuccess || (!orderResult?.order && !orderResult?.success)) {
+        addToast(
+          orderResult?.error || (language === "bn" ? "অর্ডার সম্পন্ন হতে সমস্যা হয়েছে। আবার চেষ্টা করুন।" : "Failed to place order."),
+          "error"
+        );
+        isSubmittingRef.current = false;
         setIsSubmitting(false);
         return;
       }
 
-      // Order placed successfully!
+      // Order placed successfully! Exactly ONCE.
       const finalConfirmedOrder = {
         ...fullOrderForSync,
-        ...(data.order || {}),
-        id: data.order?.id || clientOrderId,
-        items: (data.order?.items && data.order.items.length > 0) ? data.order.items : orderedItemList
+        ...(orderResult.order || {}),
+        id: orderResult.order?.id || clientOrderId,
+        items: (orderResult.order?.items && orderResult.order.items.length > 0) ? orderResult.order.items : orderedItemList
       };
 
       setConfirmedOrder(finalConfirmedOrder);
       clearCart();
 
-      // Dispatch order directly to Google Sheets "order sheet" tab from client browser
-      syncOrderToGoogleSheets(finalConfirmedOrder).catch(() => {});
-
       addToast(
         language === "bn"
-          ? "অর্ডার সফলভাবে সম্পন্ন হয়েছে! নিরাপদ ক্রয়ে কেনাকাটার জন্য ধন্যবাদ।"
+          ? `অর্ডার সফলভাবে সম্পন্ন হয়েছে! আপনার অর্ডার আইডি: ${finalConfirmedOrder.id}`
           : "Order Placed Successfully! Synced to Google Sheets.",
         "success"
       );
       onOrderSuccess();
-    } catch (err) {
-      console.warn("Direct order fallback execution:", err);
-      // Emergency local order confirmation
-      const emergencyOrder = {
-        id: "NK-" + Math.floor(100000 + Math.random() * 900000),
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
-        customerEmail: customerEmail.trim().toLowerCase(),
-        shippingAddress: shippingAddress.trim(),
-        items: items.map(item => ({
-          productId: item.product.id,
-          title: item.product.title,
-          price: item.product.price,
-          quantity: item.quantity,
-          imageUrl: item.product.imageUrl
-        })),
-        totalPrice: finalTotal,
-        paymentMethod,
-        status: "Pending" as const,
-        createdAt: new Date().toISOString(),
-        syncedToGoogleSheet: false
-      };
-      setConfirmedOrder(emergencyOrder);
-      clearCart();
-      syncOrderToGoogleSheets(emergencyOrder).catch(() => {});
-      addToast(
-        language === "bn"
-          ? "অর্ডার সফলভাবে সম্পন্ন হয়েছে! নিরাপদ ক্রয়ে কেনাকাটার জন্য ধন্যবাদ।"
-          : "Order Placed Successfully!",
-        "success"
-      );
-      onOrderSuccess();
+    } catch (err: any) {
+      console.error("[Order] Unexpected checkout error:", err);
+      addToast(language === "bn" ? "অর্ডারে অনাকাঙ্ক্ষিত সমস্যা হয়েছে।" : "Unexpected error during checkout.", "error");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

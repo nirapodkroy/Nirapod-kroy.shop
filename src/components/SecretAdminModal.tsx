@@ -143,6 +143,13 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
 
+  // Google Sheets Live Sync & Admin Panel Persistence States
+  const [isLiveSheetMode, setIsLiveSheetMode] = useState(false);
+  const [isSyncedDataSaved, setIsSyncedDataSaved] = useState(false);
+  const [isSavingSyncedData, setIsSavingSyncedData] = useState(false);
+  const [isClearingSavedData, setIsClearingSavedData] = useState(false);
+  const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
+
   // Admin Products State (Includes inactive products)
   const [adminProducts, setAdminProducts] = useState<Product[]>(products);
   const [productSearchTerm, setProductSearchTerm] = useState("");
@@ -511,7 +518,15 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       if (statsRes.ok) {
         const statsData = await statsRes.json();
-        if (statsData?.stats) setStats(statsData.stats);
+        if (statsData?.stats) {
+          setStats(statsData.stats);
+          if (typeof statsData.stats.isSaved === "boolean") {
+            setIsSyncedDataSaved(statsData.stats.isSaved);
+            if (!statsData.stats.isSaved && !isLiveSheetMode) {
+              setIsLiveSheetMode(false);
+            }
+          }
+        }
       }
     } catch (e) {
       console.warn("Admin stats fetch fallback:", e);
@@ -526,6 +541,9 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       if (ordersRes.ok) {
         const ordersData = await ordersRes.json();
         setOrders(ordersData?.orders || []);
+        if (typeof ordersData?.isSaved === "boolean") {
+          setIsSyncedDataSaved(ordersData.isSaved);
+        }
       }
     } catch (e) {
       console.warn("Admin orders fetch fallback:", e);
@@ -992,16 +1010,63 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   }, [products]);
 
+  // Clean close handler: if unsaved sync data is active in preview mode, clear it so it doesn't linger
+  const handleCloseAdminModal = useCallback(() => {
+    if (isLiveSheetMode && !isSyncedDataSaved) {
+      setOrders([]);
+      setCustomers([]);
+      setSubscribers([]);
+      setUserTracking([]);
+      setTrackingStats({
+        totalVisits: 0,
+        activeNow: 0,
+        pageStats: {},
+        deviceStats: {},
+        browserStats: {}
+      });
+      setStats(prev => prev ? {
+        ...prev,
+        totalRevenue: 0,
+        calculatedRevenue: 0,
+        isCustomRevenue: false,
+        totalOrders: 0,
+        syncedGoogleSheetsCount: 0
+      } : null);
+      setIsLiveSheetMode(false);
+    }
+    setIsAdminModalOpen(false);
+  }, [isLiveSheetMode, isSyncedDataSaved, setIsAdminModalOpen]);
+
+  // Admin Logout Handler
+  const handleAdminLogout = useCallback(() => {
+    if (isLiveSheetMode && !isSyncedDataSaved) {
+      setOrders([]);
+      setCustomers([]);
+      setSubscribers([]);
+      setUserTracking([]);
+      setTrackingStats({
+        totalVisits: 0,
+        activeNow: 0,
+        pageStats: {},
+        deviceStats: {},
+        browserStats: {}
+      });
+      setStats(null);
+      setIsLiveSheetMode(false);
+    }
+    logoutAdmin();
+  }, [isLiveSheetMode, isSyncedDataSaved, logoutAdmin]);
+
   // Listen for Escape key to cleanly close admin console for comfortable UX
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isAdminModalOpen) {
-        setIsAdminModalOpen(false);
+        handleCloseAdminModal();
       }
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [isAdminModalOpen, setIsAdminModalOpen]);
+  }, [isAdminModalOpen, handleCloseAdminModal]);
 
   // Handle Admin Login
   const handleAdminLogin = async (e: React.FormEvent) => {
@@ -1602,7 +1667,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     addToast("CSV ফাইল ডাউনলোড সম্পন্ন হয়েছে", "success");
   };
 
-  // Sync Live Data from Google Sheets Hub
+  // Sync Live Data from Google Sheets Hub (Pull-only preview mode)
   const handleSyncFromGoogleSheets = async () => {
     setIsSyncingFromSheets(true);
     try {
@@ -1616,8 +1681,37 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        addToast(data.message || "গুগল শিট থেকে ডেটা সফলভাবে সিঙ্ক হয়েছে!", "success");
-        fetchAdminData();
+        if (Array.isArray(data.orders)) setOrders(data.orders);
+        if (Array.isArray(data.customers)) setCustomers(data.customers);
+        if (Array.isArray(data.subscribers)) setSubscribers(data.subscribers);
+        if (Array.isArray(data.tracking)) {
+          setUserTracking(data.tracking);
+          const pageCounts: Record<string, number> = {};
+          const deviceCounts: Record<string, number> = {};
+          const browserCounts: Record<string, number> = {};
+          data.tracking.forEach((t: any) => {
+            pageCounts[t.page] = (pageCounts[t.page] || 0) + 1;
+            deviceCounts[t.device] = (deviceCounts[t.device] || 0) + 1;
+            browserCounts[t.browser] = (browserCounts[t.browser] || 0) + 1;
+          });
+          setTrackingStats({
+            totalVisits: data.tracking.length,
+            activeNow: data.tracking.length > 0 ? Math.max(1, Math.min(data.tracking.length, 5)) : 0,
+            pageStats: pageCounts,
+            deviceStats: deviceCounts,
+            browserStats: browserCounts
+          });
+        }
+        if (data.stats) {
+          setStats(data.stats);
+        }
+
+        setIsLiveSheetMode(true);
+        setIsSyncedDataSaved(false);
+        addToast(
+          data.message || "গুগল শিট থেকে ডেটা সফলভাবে লোড হয়েছে! অ্যাডমিন প্যানেলে রাখতে চাইলে 'সেভ করুন' বাটনে চাপুন।",
+          "info"
+        );
       } else {
         addToast(data.error || "গুগল শিট থেকে ডেটা পড়তে ব্যর্থ হয়েছে।", "error");
       }
@@ -1626,6 +1720,121 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     } finally {
       setIsSyncingFromSheets(false);
     }
+  };
+
+  // Save synced preview data permanently into Admin Panel
+  const handleSaveSyncedData = async () => {
+    setIsSavingSyncedData(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/save-synced-data", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          orders,
+          customers,
+          subscribers,
+          tracking: userTracking
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsSyncedDataSaved(true);
+        setIsLiveSheetMode(false);
+        addToast(data.message || "অ্যাডমিন প্যানেলে ডেটা সফলভাবে সেভ করা হয়েছে!", "success");
+        if (adminToken) {
+          const statsRes = await safeAdminFetch("/api/admin/stats", {
+            headers: { Authorization: `Bearer ${adminToken}` }
+          });
+          if (statsRes.ok) {
+            const statsData = await statsRes.json();
+            if (statsData?.stats) setStats(statsData.stats);
+          }
+        }
+      } else {
+        addToast(data.error || "ডেটা সেভ করতে ব্যর্থ হয়েছে।", "error");
+      }
+    } catch (err: any) {
+      addToast(err?.message || "সেভ এরর", "error");
+    } finally {
+      setIsSavingSyncedData(false);
+    }
+  };
+
+  // Clear saved data from Admin Panel (Google Sheets remains 100% safe & untouched)
+  const handleClearSavedData = async () => {
+    setIsClearingSavedData(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/clear-saved-data", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setOrders([]);
+        setCustomers([]);
+        setSubscribers([]);
+        setUserTracking([]);
+        setTrackingStats({
+          totalVisits: 0,
+          activeNow: 0,
+          pageStats: {},
+          deviceStats: {},
+          browserStats: {}
+        });
+        setStats(prev => prev ? {
+          ...prev,
+          totalRevenue: 0,
+          calculatedRevenue: 0,
+          isCustomRevenue: false,
+          totalOrders: 0,
+          syncedGoogleSheetsCount: 0
+        } : null);
+        setIsSyncedDataSaved(false);
+        setIsLiveSheetMode(false);
+        setShowClearConfirmModal(false);
+        addToast(
+          data.message || "অ্যাডমিন প্যানেলের সংরক্ষিত ডেটা মুছে ফেলা হয়েছে (গুগল শিট অক্ষত রয়েছে)।",
+          "success"
+        );
+      } else {
+        addToast(data.error || "ডেটা মুছতে ব্যর্থ হয়েছে।", "error");
+      }
+    } catch (err: any) {
+      addToast(err?.message || "মুছতে সমস্যা হয়েছে", "error");
+    } finally {
+      setIsClearingSavedData(false);
+    }
+  };
+
+  // Discard preview without saving
+  const handleDiscardPreview = () => {
+    setOrders([]);
+    setCustomers([]);
+    setSubscribers([]);
+    setUserTracking([]);
+    setTrackingStats({
+      totalVisits: 0,
+      activeNow: 0,
+      pageStats: {},
+      deviceStats: {},
+      browserStats: {}
+    });
+    setStats(prev => prev ? {
+      ...prev,
+      totalRevenue: 0,
+      calculatedRevenue: 0,
+      isCustomRevenue: false,
+      totalOrders: 0,
+      syncedGoogleSheetsCount: 0
+    } : null);
+    setIsLiveSheetMode(false);
+    addToast("শিট প্রিভিউ ডেটা সরিয়ে নেওয়া হয়েছে।", "info");
   };
 
   // Save Webhook URL
@@ -1725,6 +1934,9 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   // Fetch Tracking Data
   const fetchTrackingData = useCallback(async () => {
     if (!adminToken) return;
+    if (isLiveSheetMode && !isSyncedDataSaved) {
+      return;
+    }
     setIsLoadingTracking(true);
     try {
       const res = await safeAdminFetch("/api/admin/tracking", {
@@ -1746,7 +1958,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     } finally {
       setIsLoadingTracking(false);
     }
-  }, [adminToken]);
+  }, [adminToken, isLiveSheetMode, isSyncedDataSaved]);
 
   // Test User Tracking Webhook -> sends dummy log to "user traking" tab in Google Sheets
   const handleTestTrackingWebhook = async () => {
@@ -1970,7 +2182,11 @@ function doGet(e) {
 
 // 2. নতুন ডেটা যুক্ত করার জন্য (POST Request)
 function doPost(e) {
+  var lock = LockService.getScriptLock();
   try {
+    // ২০ সেকেন্ড লক নিয়ে একাধিক রিকোয়েস্ট একসাথে এলেও ডুপ্লিকেট এড়ানো
+    try { lock.waitLock(20000); } catch(le) {}
+
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = {};
     
@@ -1984,7 +2200,7 @@ function doPost(e) {
       data = e.parameter;
     }
 
-    // অর্ডার শিট ক্লিন করার স্পেশাল কমান্ড
+    // অর্ডার শিট ও ট্র্যাকিং ক্লিন করার স্পেশাল কমান্ড
     if (data.action === "clean_order_sheet" || (e && e.parameter && e.parameter.action === "clean_order_sheet")) {
       var cleanMsg = cleanOrderSheetTrackingRows();
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: cleanMsg }))
@@ -2287,12 +2503,14 @@ function doPost(e) {
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    try { lock.releaseLock(); } catch(le) {}
   }
 }
 
 // ==========================================
-// ৩. অর্ডার শিট ক্লিনআপ ফাংশন (Clean Order Sheet)
-// এটি চালালে অর্ডার শিটে ভুল করে ঢুকে যাওয়া ট্র্যাকিং রোগুলো 'user traking' এ চলে যাবে
+// ৩. অর্ডার শিট ও ট্র্যাকিং ডুপ্লিকেট ক্লিনআপ ফাংশন
+// এটি চালালে অর্ডার শিটে ভুল করে ঢুকে যাওয়া ট্র্যাকিং রো এবং ডুপ্লিকেট অর্ডার ক্লিন হয়ে যাবে
 // ==========================================
 function cleanOrderSheetTrackingRows() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2316,7 +2534,7 @@ function cleanOrderSheetTrackingRows() {
   var lastRow = orderSheet.getLastRow();
   var cleanedCount = 0;
   
-  // নিচ থেকে ওপরের দিকে লুপ চালিয়ে ডিলিট করা
+  // ১. নিচ থেকে ওপরের দিকে লুপ চালিয়ে ট্র্যাকিং রো রিমুভ
   for (var r = lastRow; r >= 2; r--) {
     var rowValues = orderSheet.getRange(r, 1, 1, Math.min(orderSheet.getLastColumn(), 11)).getValues()[0];
     var colA = String(rowValues[0] || "").trim();
@@ -2327,7 +2545,7 @@ function cleanOrderSheetTrackingRows() {
     var colF = String(rowValues[5] || "").trim();
     var colG = String(rowValues[6] || "").trim();
     
-    // ট্র্যাকিং রো শনাক্তকরণ (যেমন হোমপেজ, আইপি এড্রেস, Desktop / PC, Windows, Chrome ইত্যাদি)
+    // ট্র্যাকিং রো শনাক্তকরণ
     var isTrackingRow = (
       colB.indexOf("হোমপেজ") !== -1 || colB.indexOf("Home") !== -1 ||
       colC.indexOf("103.") !== -1 || (colC.indexOf(".") !== -1 && colC.split(".").length === 4) ||
@@ -2339,27 +2557,48 @@ function cleanOrderSheetTrackingRows() {
     );
     
     if (isTrackingRow) {
-      // সাজিয়ে ১১ কলামে user traking ট্যাবে স্থানান্তর
-      var trackingRow = [
-        colA.indexOf("/") !== -1 ? colA : colB,
-        colB.indexOf("হোমপেজ") !== -1 ? colB : "হোমপেজ (Home)",
-        colC.indexOf(".") !== -1 ? colC : "Unknown",
-        colD || "Bangladesh",
-        colE || "Desktop / PC",
-        colF || "Windows 10/11",
-        colG || "Chrome",
-        String(rowValues[7] || "সক্রিয় রয়েছে (Active)..."),
-        String(rowValues[8] || "সরাসরি (Direct)"),
-        String(rowValues[9] || "1920x1080"),
-        String(rowValues[10] || ("v_cleaned_" + r))
-      ];
-      trackSheet.appendRow(trackingRow);
       orderSheet.deleteRow(r);
       cleanedCount++;
     }
   }
+
+  // ২. ডুপ্লিকেট অর্ডার রিমুভ (প্রতিটি Order ID যেন কেবল একবারই থাকে)
+  var duplicateOrdersRemoved = 0;
+  var seenOrderIds = {};
+  var currentOrderLastRow = orderSheet.getLastRow();
+  for (var o = currentOrderLastRow; o >= 2; o--) {
+    var checkOrderId = String(orderSheet.getRange(o, 1).getValue() || "").trim();
+    if (checkOrderId) {
+      if (seenOrderIds[checkOrderId]) {
+        orderSheet.deleteRow(o);
+        duplicateOrdersRemoved++;
+      } else {
+        seenOrderIds[checkOrderId] = true;
+      }
+    }
+  }
+
+  // ৩. user traking শিট থেকে ডুপ্লিকেট রো রিমুভ
+  var duplicateTrackingRemoved = 0;
+  if (trackSheet.getLastRow() > 1) {
+    var seenTracks = {};
+    var trackLastRow = trackSheet.getLastRow();
+    for (var t = trackLastRow; t >= 2; t--) {
+      var tRow = trackSheet.getRange(t, 1, 1, Math.min(trackSheet.getLastColumn(), 11)).getValues()[0];
+      var tTime = String(tRow[0] || "").trim();
+      var tPage = String(tRow[1] || "").trim();
+      var tIp = String(tRow[2] || "").trim();
+      var tKey = tTime + "_" + tPage + "_" + tIp;
+      if (seenTracks[tKey]) {
+        trackSheet.deleteRow(t);
+        duplicateTrackingRemoved++;
+      } else {
+        seenTracks[tKey] = true;
+      }
+    }
+  }
   
-  return "সফলভাবে " + cleanedCount + " টি ট্র্যাকিং রো অর্ডার শিট থেকে মুছে 'user traking' ট্যাবে স্থানান্তর করা হয়েছে!";
+  return "ক্লিনআপ সম্পন্ন! " + cleanedCount + " টি ট্র্যাকিং রো, " + duplicateOrdersRemoved + " টি ডুপ্লিকেট অর্ডার এবং " + duplicateTrackingRemoved + " টি ডুপ্লিকেট ট্র্যাকিং রো সফলভাবে মোছা হয়েছে!";
 }`;
 
   return (
@@ -2371,7 +2610,7 @@ function cleanOrderSheetTrackingRows() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={() => setIsAdminModalOpen(false)}
+          onClick={handleCloseAdminModal}
           className="fixed inset-0 bg-black/80 backdrop-blur-md"
         />
 
@@ -2406,16 +2645,16 @@ function cleanOrderSheetTrackingRows() {
             <div className="flex items-center gap-3">
               {isAdminLoggedIn && (
                 <button
-                  onClick={logoutAdmin}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-rose-400 transition-colors"
+                  onClick={handleAdminLogout}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-rose-400 transition-colors cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Exit Console</span>
                 </button>
               )}
               <button
-                onClick={() => setIsAdminModalOpen(false)}
-                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                onClick={handleCloseAdminModal}
+                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
                 aria-label="Close admin modal"
               >
                 <X className="w-5 h-5" />
@@ -2613,7 +2852,40 @@ function cleanOrderSheetTrackingRows() {
                 </div>
 
                 {/* Quick Actions (Always Visible, Never Hidden) */}
-                <div className="flex items-center justify-end gap-2 shrink-0 pt-1.5 md:pt-0 border-t md:border-t-0 border-zinc-800/80">
+                <div className="flex items-center justify-end gap-2 shrink-0 pt-1.5 md:pt-0 border-t md:border-t-0 border-zinc-800/80 flex-wrap">
+                  <button
+                    onClick={handleSyncFromGoogleSheets}
+                    disabled={isSyncingFromSheets}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 font-bold text-xs shadow-sm transition-all cursor-pointer whitespace-nowrap"
+                    title="গুগল শিট থেকে অর্ডার, কাস্টমার, সাবস্ক্রাইব ও ট্র্যাকিং ডেটা সিঙ্ক করুন"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFromSheets ? "animate-spin" : ""}`} />
+                    <span>{isSyncingFromSheets ? "সিঙ্ক হচ্ছে..." : "শিট থেকে সিঙ্ক"}</span>
+                  </button>
+
+                  {isLiveSheetMode && !isSyncedDataSaved && (
+                    <button
+                      onClick={handleSaveSyncedData}
+                      disabled={isSavingSyncedData}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-extrabold text-xs shadow-md transition-all cursor-pointer whitespace-nowrap animate-pulse"
+                      title="প্রিভিউ করা ডেটা অ্যাডমিন প্যানেলে স্থায়ীভাবে সেভ করুন"
+                    >
+                      <Save className={`w-3.5 h-3.5 ${isSavingSyncedData ? "animate-spin" : ""}`} />
+                      <span>{isSavingSyncedData ? "সেভ হচ্ছে..." : "💾 ডেটা সেভ করুন"}</span>
+                    </button>
+                  )}
+
+                  {isSyncedDataSaved && (
+                    <button
+                      onClick={() => setShowClearConfirmModal(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 font-bold text-xs transition-all cursor-pointer whitespace-nowrap"
+                      title="অ্যাডমিন প্যানেল থেকে সেভ করা ডেটা মুছে ফেলুন (গুগল শিট অক্ষত থাকবে)"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>সেভ ডেটা মুছুন</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={handlePushToGithub}
                     disabled={isPushingToGithub}
@@ -2644,6 +2916,118 @@ function cleanOrderSheetTrackingRows() {
 
               {/* Tab Contents */}
               <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
+                {/* Global Google Sheets Sync & Persistence Controller */}
+                {activeTab !== "github" && activeTab !== "products" && (
+                  <div className={`rounded-2xl p-4 sm:p-5 border transition-all duration-200 shadow-lg relative overflow-hidden backdrop-blur-sm ${
+                    isLiveSheetMode && !isSyncedDataSaved
+                      ? "bg-gradient-to-br from-amber-950/40 via-zinc-900 to-zinc-900 border-amber-500/50"
+                      : isSyncedDataSaved
+                      ? "bg-gradient-to-br from-emerald-950/40 via-zinc-900 to-zinc-900 border-emerald-500/50"
+                      : "bg-zinc-900/90 border-zinc-800"
+                  }`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
+                          isLiveSheetMode && !isSyncedDataSaved
+                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
+                            : isSyncedDataSaved
+                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                            : "bg-sky-500/20 text-sky-400 border border-sky-500/30"
+                        }`}>
+                          {isLiveSheetMode && !isSyncedDataSaved ? (
+                            <RefreshCw className="w-5 h-5 text-amber-400 animate-spin" />
+                          ) : isSyncedDataSaved ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                          ) : (
+                            <FileSpreadsheet className="w-5 h-5 text-sky-400" />
+                          )}
+                        </div>
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-bold text-sm text-white">
+                              {isLiveSheetMode && !isSyncedDataSaved
+                                ? "শিট থেকে লাইভ প্রিভিউ মোড (অসংরক্ষিত ডেটা)"
+                                : isSyncedDataSaved
+                                ? "অ্যাডমিন প্যানেলে ডেটা সংরক্ষিত রয়েছে (Data Saved)"
+                                : "গুগল শিট থেকে ডেটা সিঙ্ক কন্ট্রোল"}
+                            </h4>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider ${
+                              isLiveSheetMode && !isSyncedDataSaved
+                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                : isSyncedDataSaved
+                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                            }`}>
+                              {isLiveSheetMode && !isSyncedDataSaved
+                                ? "লাইভ প্রিভিউ • বের হলে মুছে যাবে"
+                                : isSyncedDataSaved
+                                ? "অ্যাডমিন প্যানেলে সেভ করা"
+                                : "কোনো ডেটা সেভ নেই"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-400 leading-relaxed">
+                            {isLiveSheetMode && !isSyncedDataSaved
+                              ? "গুগল শিট থেকে অর্ডার, কাস্টমার, সাবস্ক্রাইব ও ট্র্যাকিং ডেটা শুধু দেখার জন্য লোড করা হয়েছে। অ্যাডমিন প্যানেল থেকে বের হয়ে গেলে এগুলো থাকবে না। অ্যাডমিন প্যানেলে স্থায়ীভাবে রাখতে চাইলে 'সেভ করুন' বাটনে ক্লিক করুন।"
+                              : isSyncedDataSaved
+                              ? "অর্ডার, কাস্টমার, সাবস্ক্রাইব ও ট্র্যাকিং ডেটা অ্যাডমিন প্যানেলে সেভ করা রয়েছে। গুগল শিটের মূল রেকর্ডও সম্পূর্ণ অক্ষত রয়েছে। আপনি চাইলে যখন ইচ্ছা সেভ করা ডেটা মুছে ফেলতে পারেন।"
+                              : "অ্যাডমিন প্যানেলে কোনো ডেটা সেভ করা নেই। গুগল শিটের ডেটা দেখতে 'শিট থেকে সিঙ্ক' বাটনে চাপুন। সেভ না করে বের হয়ে গেলে কোনো ডেটা জমা থাকবে না।"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Control Actions */}
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                        <button
+                          type="button"
+                          onClick={handleSyncFromGoogleSheets}
+                          disabled={isSyncingFromSheets}
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-bold text-white transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                          title="গুগল শিট থেকে সর্বশেষ ডেটা সিঙ্ক করুন"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 text-sky-400 ${isSyncingFromSheets ? "animate-spin" : ""}`} />
+                          <span>{isSyncingFromSheets ? "সিঙ্ক হচ্ছে..." : "শিট থেকে সিঙ্ক"}</span>
+                        </button>
+
+                        {isLiveSheetMode && !isSyncedDataSaved && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={handleSaveSyncedData}
+                              disabled={isSavingSyncedData}
+                              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-all cursor-pointer shadow-md shadow-emerald-900/30 active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                              title="প্রিভিউ করা ডেটা অ্যাডমিন প্যানেলে সেভ করুন"
+                            >
+                              <Save className={`w-3.5 h-3.5 ${isSavingSyncedData ? "animate-spin" : ""}`} />
+                              <span>{isSavingSyncedData ? "সেভ হচ্ছে..." : "💾 ডেটা সেভ করুন"}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleDiscardPreview}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
+                              title="প্রিভিউ ডেটা ফেলে দিন"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>প্রিভিউ মুছুন</span>
+                            </button>
+                          </>
+                        )}
+
+                        {isSyncedDataSaved && (
+                          <button
+                            type="button"
+                            onClick={() => setShowClearConfirmModal(true)}
+                            disabled={isClearingSavedData}
+                            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
+                            title="অ্যাডমিন প্যানেল থেকে সেভ করা ডেটা মুছে ফেলুন (গুগল শিট অক্ষত থাকবে)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>সেভ ডেটা মুছুন</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {/* TAB 1: DASHBOARD OVERVIEW */}
                 {activeTab === "dashboard" && (
                   <div className="space-y-6">
@@ -4027,6 +4411,104 @@ function cleanOrderSheetTrackingRows() {
                       <p className="text-xs text-zinc-400 mt-1">
                         অর্ডার হলে <strong>order sheet</strong> ট্যাবে, গ্রাহক নিবন্ধনে <strong>Customers</strong> ট্যাবে, নিউজলেটার সাবস্ক্রাইব হলে <strong>subscribe</strong> ট্যাবে এবং ওয়েবসাইট ভিজিটরদের লাইভ তথ্য সম্পূর্ণ আলাদা <strong>user traking</strong> ট্যাবে স্বয়ংক্রিয়ভাবে যুক্ত হবে।
                       </p>
+                    </div>
+
+                    {/* Dedicated Sync, Save & Delete Management Hub */}
+                    <div className="p-5 rounded-2xl bg-zinc-800/80 border border-zinc-700/80 space-y-4 shadow-xl">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-700/60">
+                        <div>
+                          <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                            <RefreshCw className="w-4 h-4 text-sky-400" />
+                            <span>গুগল শিট থেকে ডেটা সিঙ্ক ও সংরক্ষণ কন্ট্রোল (Pull-Only Sync & Storage)</span>
+                          </h4>
+                          <p className="text-xs text-zinc-400 mt-0.5">
+                            শিট থেকে সিঙ্ক করলে অর্ডার, কাস্টমার, সাবস্ক্রাইব ও ট্র্যাকিং ডেটা সাময়িকভাবে আসবে। আপনি না চাইলে সেভ হবে না।
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                            isLiveSheetMode && !isSyncedDataSaved
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                              : isSyncedDataSaved
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                              : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                          }`}>
+                            {isLiveSheetMode && !isSyncedDataSaved
+                              ? "প্রিভিউ মোড (অসংরক্ষিত)"
+                              : isSyncedDataSaved
+                              ? "অ্যাডমিনে সংরক্ষিত (Saved)"
+                              : "কোনো ডেটা সংরক্ষিত নেই"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* 1. Sync / Preview */}
+                        <div className="p-4 rounded-xl bg-zinc-900/80 border border-zinc-750 flex flex-col justify-between space-y-3">
+                          <div>
+                            <div className="flex items-center gap-2 text-xs font-bold text-sky-400">
+                              <RefreshCw className={`w-4 h-4 ${isSyncingFromSheets ? "animate-spin" : ""}`} />
+                              <span>১. শিট থেকে সিঙ্ক (Pull Data)</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
+                              গুগল শিটের ৪টি ট্যাব থেকে সব ডেটা টেনে আনবে। বের হওয়ার সাথে সাথে মুছে যাবে (অটো প্রিভিউ)।
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleSyncFromGoogleSheets}
+                            disabled={isSyncingFromSheets}
+                            className="w-full py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold text-xs transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2 active:scale-95"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFromSheets ? "animate-spin" : ""}`} />
+                            <span>{isSyncingFromSheets ? "সিঙ্ক হচ্ছে..." : "শিট থেকে সিঙ্ক করুন"}</span>
+                          </button>
+                        </div>
+
+                        {/* 2. Save Button */}
+                        <div className="p-4 rounded-xl bg-zinc-900/80 border border-zinc-750 flex flex-col justify-between space-y-3">
+                          <div>
+                            <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                              <Save className="w-4 h-4" />
+                              <span>২. স্থায়ীভাবে সেভ করুন (Save Data)</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
+                              প্রিভিউ করা ডেটা অ্যাডমিন প্যানেলে স্থায়ীভাবে রাখতে এই বাটনে চাপুন।
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleSaveSyncedData}
+                            disabled={isSavingSyncedData || (!isLiveSheetMode && isSyncedDataSaved) || (orders.length === 0 && customers.length === 0 && subscribers.length === 0 && userTracking.length === 0)}
+                            className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2 active:scale-95"
+                          >
+                            <Save className={`w-3.5 h-3.5 ${isSavingSyncedData ? "animate-spin" : ""}`} />
+                            <span>{isSavingSyncedData ? "সেভ হচ্ছে..." : "💾 অ্যাডমিনে সেভ করুন"}</span>
+                          </button>
+                        </div>
+
+                        {/* 3. Delete / Clear Button */}
+                        <div className="p-4 rounded-xl bg-zinc-900/80 border border-zinc-750 flex flex-col justify-between space-y-3">
+                          <div>
+                            <div className="flex items-center gap-2 text-xs font-bold text-rose-400">
+                              <Trash2 className="w-4 h-4" />
+                              <span>৩. সেভ ডেটা মুছুন (Clear Saved)</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
+                              অ্যাডমিন প্যানেল সম্পূর্ণ পরিষ্কার করে ফেলবে। গুগল শিটের মূল রেকর্ড ১০০% অক্ষত থাকবে।
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowClearConfirmModal(true)}
+                            disabled={!isSyncedDataSaved && !isLiveSheetMode}
+                            className="w-full py-2.5 px-3 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-rose-300 font-bold text-xs transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2 active:scale-95"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>সেভ করা ডেটা মুছুন</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Webhook Input Box */}
@@ -5698,6 +6180,57 @@ function cleanOrderSheetTrackingRows() {
                     className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer transition-all active:scale-95"
                   >
                     Delete Subscriber
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Clear Saved Data Confirmation Modal */}
+          {showClearConfirmModal && (
+            <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+              <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl animate-in fade-in zoom-in duration-150">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 shrink-0">
+                    <Trash2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-base text-white">অ্যাডমিন প্যানেল থেকে সেভ করা ডেটা মুছবেন?</h4>
+                    <p className="text-[11px] text-zinc-400">Clear Saved Admin Data (Local Store Reset)</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  অ্যাডমিন প্যানেলে সংরক্ষিত থাকা <strong>অর্ডার, কাস্টমার, সাবস্ক্রাইবার ও ইউজার ট্র্যাকিং</strong> ডেটা সম্পূর্ণ মুছে দেওয়া হবে।
+                </p>
+
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs leading-relaxed space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-emerald-400">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>গুগল শিটের ডেটা ১০০% অক্ষত ও নিরাপদ থাকবে</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-200/80">
+                    আপনার গুগল স্প্রেডশিটে থাকা কোনো ডেটা ডিলিট হবে না। আপনি চাইলে যেকোনো সময় আবার <strong>"শিট থেকে সিঙ্ক"</strong> বাটনে চাপ দিয়ে গুগল শিটের ডেটা দেখতে পারবেন।
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowClearConfirmModal(false)}
+                    disabled={isClearingSavedData}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    বাতিল (Cancel)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearSavedData}
+                    disabled={isClearingSavedData}
+                    className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <Trash2 className={`w-3.5 h-3.5 ${isClearingSavedData ? "animate-spin" : ""}`} />
+                    <span>{isClearingSavedData ? "মুছে ফেলা হচ্ছে..." : "হ্যাঁ, ডেটা মুছুন"}</span>
                   </button>
                 </div>
               </div>

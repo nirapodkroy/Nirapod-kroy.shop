@@ -172,6 +172,7 @@ export function getGoogleSheetsWebhookUrl(): string {
 
 // Throttle map to ensure Google Sheets isn't flooded while guaranteeing instant visit logging
 const lastSheetDispatchMap = new Map<string, number>();
+const initialVisitDispatchedSessions = new Set<string>();
 
 // Dispatcher to Server API and direct Google Sheets Webhook
 async function dispatchTrackingEvent(payload: {
@@ -190,26 +191,38 @@ async function dispatchTrackingEvent(payload: {
 }) {
   const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
   
-  // 1. Notify server API for admin live dashboard
+  // Enforce single initial visit rule:
+  // If an initial visit (!isHeartbeat) has already been sent for this session,
+  // all subsequent events for this session MUST be updates (isHeartbeat: true).
+  let effectiveIsHeartbeat = Boolean(payload.isHeartbeat);
+  if (!effectiveIsHeartbeat) {
+    if (initialVisitDispatchedSessions.has(payload.sessionId)) {
+      effectiveIsHeartbeat = true;
+    } else {
+      initialVisitDispatchedSessions.add(payload.sessionId);
+    }
+  }
+
+  // 1. Notify server API for admin live dashboard ONLY (skip Google Sheets to avoid duplicate entries)
   try {
     fetch("/api/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, isHeartbeat: effectiveIsHeartbeat, skipGoogleSheets: true, syncToGoogleSheet: false }),
       keepalive: true
     }).catch(() => {});
   } catch {}
 
   // 2. Direct client-side dispatch to Google Sheets Webhook (works on mobile and desktop without server proxy blocking)
-  // - Always dispatch for initial visit (!isHeartbeat)
-  // - For ongoing heartbeats, throttle to once every 45s per session or on final exit
-  const lastSync = lastSheetDispatchMap.get(payload.sessionId) || 0;
-  const now = Date.now();
-  const isFinal = payload.timeSpent.includes("মিনিট") || payload.timeSpent.includes("সেকেন্ড");
-  const shouldSyncSheet = !payload.isHeartbeat || isFinal || (now - lastSync >= 45000);
+  // STRICT RULE: Dispatch to Google Sheets EXACTLY ONCE per session.
+  // This guarantees that "user traking" tab gets exactly ONE row per visitor, never duplicate rows!
+  if (initialVisitDispatchedSessions.has(payload.sessionId)) {
+    return; // Session already recorded in Google Sheets. Do not create duplicate rows.
+  }
+  initialVisitDispatchedSessions.add(payload.sessionId);
 
-  if (shouldSyncSheet) {
-    lastSheetDispatchMap.set(payload.sessionId, now);
+  {
+    lastSheetDispatchMap.set(payload.sessionId, Date.now());
 
     const sheetPayload = {
       action: "user_tracking",
@@ -219,8 +232,8 @@ async function dispatchTrackingEvent(payload: {
       targetTab: "user traking",
       alternativeSheet: "user tracking",
       sessionId: payload.sessionId,
-      isHeartbeat: Boolean(payload.isHeartbeat),
-      timeSpent: payload.timeSpent,
+      isHeartbeat: false,
+      timeSpent: "সক্রিয় ভিজিটর (Active)",
       page: payload.page,
       ip: payload.clientIp,
       location: payload.location,
@@ -238,7 +251,7 @@ async function dispatchTrackingEvent(payload: {
         payload.device,
         payload.os,
         payload.browser,
-        payload.timeSpent,
+        "সক্রিয় ভিজিটর (Active)",
         payload.referrer,
         payload.screen,
         payload.sessionId
@@ -292,52 +305,43 @@ export function trackPageView(pageTitle: string, pageSlug = "root"): () => void 
     pageSlug: cleanSlug,
     startTime,
     timerId: null as any,
+    ended: false,
     cleanupListeners: () => {}
   };
   currentTrackingSession = sessionObj;
 
-  // Send Immediate Page Visit Record (0ms response to Google Sheets)
-  const initialGeo = cachedGeo || { ip: "Unknown", location: "Bangladesh" };
-  dispatchTrackingEvent({
-    sessionId,
-    page: pageTitle,
-    pageSlug: cleanSlug,
-    isHeartbeat: false,
-    timeSpent: "সক্রিয় রয়েছে (Active)...",
-    clientIp: initialGeo.ip,
-    location: initialGeo.location,
-    device,
-    os,
-    browser,
-    screen,
-    referrer
-  });
-
-  // Then fetch refined geo asynchronously in background
-  getClientGeo().then((geo) => {
-    if (currentTrackingSession?.sessionId !== sessionId) return;
-    if (geo.ip !== "Unknown" && geo.ip !== initialGeo.ip) {
-      dispatchTrackingEvent({
-        sessionId,
-        page: pageTitle,
-        pageSlug: cleanSlug,
-        isHeartbeat: false,
-        timeSpent: "সক্রিয় রয়েছে (Active)...",
-        clientIp: geo.ip,
-        location: geo.location,
-        device,
-        os,
-        browser,
-        screen,
-        referrer
-      });
+  // Send EXACTLY ONE initial visit record (wait up to 120ms for geo to avoid duplicate "Unknown" and real IP rows)
+  const sendInitialVisit = async () => {
+    let initialGeo = cachedGeo;
+    if (!initialGeo) {
+      initialGeo = await Promise.race([
+        getClientGeo(),
+        new Promise<GeoData>((r) => setTimeout(() => r({ ip: "Unknown", location: "Bangladesh" }), 120))
+      ]);
     }
-  });
+    if (sessionObj.ended || currentTrackingSession?.sessionId !== sessionId) return;
+
+    dispatchTrackingEvent({
+      sessionId,
+      page: pageTitle,
+      pageSlug: cleanSlug,
+      isHeartbeat: false,
+      timeSpent: "সক্রিয় রয়েছে (Active)...",
+      clientIp: initialGeo.ip,
+      location: initialGeo.location,
+      device,
+      os,
+      browser,
+      screen,
+      referrer
+    });
+  };
+  sendInitialVisit();
 
   // Heartbeat sequence: update active duration (every 30 seconds if tab is active)
   let elapsedSeconds = 0;
   const heartbeatInterval = setInterval(() => {
-    if (currentTrackingSession?.sessionId !== sessionId) {
+    if (sessionObj.ended || currentTrackingSession?.sessionId !== sessionId) {
       clearInterval(heartbeatInterval);
       return;
     }
@@ -350,6 +354,7 @@ export function trackPageView(pageTitle: string, pageSlug = "root"): () => void 
     const timeSpent = formatDurationBangla(elapsedSeconds);
 
     getClientGeo().then((geo) => {
+      if (sessionObj.ended) return;
       dispatchTrackingEvent({
         sessionId,
         page: pageTitle,
@@ -369,28 +374,32 @@ export function trackPageView(pageTitle: string, pageSlug = "root"): () => void 
 
   sessionObj.timerId = heartbeatInterval;
 
-  // Pagehide / Visibility change listener
+  // Pagehide / Visibility change listener (guarded against duplicate exit dispatches)
   const handleUnloadOrHide = () => {
-    if (currentTrackingSession?.sessionId === sessionId) {
-      const finalSecs = Math.max(1, Math.round((Date.now() - startTime) / 1000));
-      const finalTimeSpent = formatDurationBangla(finalSecs);
-      const geo = cachedGeo || { ip: "Unknown", location: "Bangladesh" };
+    if (sessionObj.ended) return;
+    sessionObj.ended = true;
 
-      dispatchTrackingEvent({
-        sessionId,
-        page: pageTitle,
-        pageSlug: cleanSlug,
-        isHeartbeat: true,
-        timeSpent: finalTimeSpent,
-        clientIp: geo.ip,
-        location: geo.location,
-        device,
-        os,
-        browser,
-        screen,
-        referrer
-      });
-    }
+    if (sessionObj.timerId) clearInterval(sessionObj.timerId);
+    if (sessionObj.cleanupListeners) sessionObj.cleanupListeners();
+
+    const finalSecs = Math.max(1, Math.round((Date.now() - startTime) / 1000));
+    const finalTimeSpent = formatDurationBangla(finalSecs);
+    const geo = cachedGeo || { ip: "Unknown", location: "Bangladesh" };
+
+    dispatchTrackingEvent({
+      sessionId,
+      page: pageTitle,
+      pageSlug: cleanSlug,
+      isHeartbeat: true,
+      timeSpent: finalTimeSpent,
+      clientIp: geo.ip,
+      location: geo.location,
+      device,
+      os,
+      browser,
+      screen,
+      referrer
+    });
   };
 
   window.addEventListener("pagehide", handleUnloadOrHide);
@@ -402,15 +411,16 @@ export function trackPageView(pageTitle: string, pageSlug = "root"): () => void 
   };
 
   return () => {
-    if (currentTrackingSession?.sessionId === sessionId) {
+    if (!sessionObj.ended) {
       endTrackingSession(sessionObj);
       currentTrackingSession = null;
     }
   };
 }
 
-function endTrackingSession(session: typeof currentTrackingSession) {
-  if (!session) return;
+function endTrackingSession(session: (typeof currentTrackingSession & { ended?: boolean }) | null) {
+  if (!session || session.ended) return;
+  session.ended = true;
   if (session.timerId) clearInterval(session.timerId);
   if (session.cleanupListeners) session.cleanupListeners();
 
