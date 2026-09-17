@@ -2604,7 +2604,7 @@ function cleanOrderSheetTrackingRows() {
   return (
     <AnimatePresence>
       {isAdminModalOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-start sm:justify-center p-2 sm:p-4 md:p-6 overflow-y-auto overscroll-contain">
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-start sm:justify-center p-0 sm:p-4 md:p-6 overflow-y-auto overscroll-contain">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -2619,7 +2619,7 @@ function cleanOrderSheetTrackingRows() {
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-5xl rounded-3xl bg-zinc-900 border border-zinc-700/80 text-zinc-100 shadow-2xl overflow-hidden z-10 my-auto flex flex-col max-h-[92dvh]"
+          className="relative w-full max-w-5xl rounded-none sm:rounded-3xl bg-zinc-900 border-0 sm:border border-zinc-700/80 text-zinc-100 shadow-2xl overflow-hidden z-10 my-0 sm:my-auto flex flex-col h-[100dvh] sm:h-auto sm:max-h-[92dvh]"
         >
           {/* Top Admin Header Bar */}
           <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between gap-3">

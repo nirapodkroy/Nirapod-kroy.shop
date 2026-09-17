@@ -136,45 +136,45 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       </div>
 
       {/* Product Info */}
-      <div className="flex flex-col flex-1 p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-2 text-xs text-zinc-400 dark:text-zinc-500 mb-1.5">
+      <div className="flex flex-col flex-1 p-2.5 sm:p-4 md:p-5">
+        <div className="flex items-center justify-between gap-1.5 text-xs text-zinc-400 dark:text-zinc-500 mb-1">
           {/* Category Tag (links to category page on click) */}
-          <span className="font-semibold uppercase tracking-wider text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
+          <span className="font-semibold uppercase tracking-wider text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 sm:px-2 py-0.5 rounded-md truncate max-w-[110px] sm:max-w-none">
             {getCategoryName(product.category)}
           </span>
-          <div className="flex items-center gap-1">
-            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-            <span className="font-bold text-zinc-700 dark:text-zinc-300">{product.rating.toFixed(1)}</span>
-            <span className="text-[11px]">({product.ratingCount})</span>
+          <div className="flex items-center gap-1 shrink-0">
+            <Star className="w-3 sm:w-3.5 h-3 sm:h-3.5 fill-amber-400 text-amber-400" />
+            <span className="font-bold text-zinc-700 dark:text-zinc-300 text-xs sm:text-sm">{product.rating.toFixed(1)}</span>
+            <span className="text-[10px] sm:text-[11px] hidden xs:inline">({product.ratingCount})</span>
           </div>
         </div>
 
         <h3
-          className="font-bold text-zinc-900 dark:text-zinc-100 text-sm sm:text-base line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors"
+          className="font-bold text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm md:text-base line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors"
           title={product.title}
         >
           {product.title}
         </h3>
 
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+        <p className="mt-0.5 sm:mt-1 text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
           {product.description}
         </p>
 
         {/* Pricing */}
-        <div className="mt-4 flex items-baseline gap-2">
-          <span className="font-extrabold text-lg sm:text-xl text-zinc-900 dark:text-zinc-50 font-display">
+        <div className="mt-2 sm:mt-4 flex items-baseline gap-1.5 sm:gap-2 flex-wrap">
+          <span className="font-extrabold text-base sm:text-lg md:text-xl text-zinc-900 dark:text-zinc-50 font-display">
             {formatPrice(product.price)}
           </span>
           {product.regularPrice && product.regularPrice > product.price && (
-            <span className="text-xs sm:text-sm text-zinc-400 dark:text-zinc-500 line-through">
+            <span className="text-[11px] sm:text-xs md:text-sm text-zinc-400 dark:text-zinc-500 line-through">
               {formatPrice(product.regularPrice)}
             </span>
           )}
         </div>
 
         {/* Action Buttons: Add to Cart & Buy Now */}
-        <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="mt-2.5 sm:mt-4 pt-2 sm:pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
+          <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
             {/* Add to Cart Button (stopPropagation prevents card navigation) */}
             <button
               id={`add-to-cart-${product.id}`}
@@ -183,7 +183,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 e.stopPropagation();
                 addItem(product);
               }}
-              className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-1.5 sm:px-2 rounded-xl text-[11px] sm:text-xs font-semibold transition-all duration-200 cursor-pointer ${
+              className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 px-1 sm:px-2 rounded-xl text-[10px] sm:text-xs font-semibold transition-all duration-200 cursor-pointer min-h-[38px] sm:min-h-[42px] ${
                 inCartItem
                   ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700"
@@ -192,7 +192,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               {inCartItem ? (
                 <>
                   <Check className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{language === "bn" ? `কার্টে (${inCartItem.quantity})` : `In Cart (${inCartItem.quantity})`}</span>
+                  <span className="truncate">{language === "bn" ? `কার্ট (${inCartItem.quantity})` : `In Cart (${inCartItem.quantity})`}</span>
                 </>
               ) : (
                 <>
@@ -210,7 +210,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 e.stopPropagation();
                 buyNow(product);
               }}
-              className="flex items-center justify-center gap-1 py-2.5 px-1.5 sm:px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold text-[11px] sm:text-xs tracking-wide shadow-sm shadow-emerald-600/20 hover:shadow-md transition-all active:scale-[0.98] cursor-pointer"
+              className="flex items-center justify-center gap-1 py-2 sm:py-2.5 px-1 sm:px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold text-[10px] sm:text-xs tracking-wide shadow-sm shadow-emerald-600/20 hover:shadow-md transition-all active:scale-[0.98] cursor-pointer min-h-[38px] sm:min-h-[42px]"
             >
               <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
               <span className="truncate">{t("buy_now")}</span>

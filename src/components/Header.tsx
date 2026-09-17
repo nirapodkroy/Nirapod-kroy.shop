@@ -73,6 +73,22 @@ export const Header: React.FC<HeaderProps> = ({
   const categoryScrollRef = useRef<HTMLDivElement>(null);
   const aroDropdownRef = useRef<HTMLDivElement>(null);
   const searchCatDropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Desktop search shortcut listener (Cmd/Ctrl + K or /)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const scrollCategories = (direction: "left" | "right") => {
     if (categoryScrollRef.current) {
@@ -261,24 +277,42 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex-1 max-w-2xl mx-2 hidden md:flex items-center gap-2">
               <div className="relative flex-1">
                 <input
+                  ref={searchInputRef}
                   id="main-header-search-input"
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={language === "bn" ? "পণ্য খুঁজুন... (Search in...)" : "Search in..."}
-                  className="w-full pl-5 pr-11 py-2.5 bg-zinc-100/90 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-full text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all shadow-inner"
+                  className="w-full pl-5 pr-20 py-2.5 bg-zinc-100/90 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-full text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all shadow-inner"
                 />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const catalog = document.getElementById("catalog-section");
-                    if (catalog) catalog.scrollIntoView({ behavior: "smooth" });
-                  }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-                  aria-label="Search"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-full cursor-pointer"
+                      title="Clear search"
+                      aria-label="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <kbd className="hidden lg:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 bg-zinc-200/70 dark:bg-zinc-700/70 rounded border border-zinc-300/60 dark:border-zinc-600/60 select-none">
+                      ⌘K
+                    </kbd>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const catalog = document.getElementById("catalog-section");
+                      if (catalog) catalog.scrollIntoView({ behavior: "smooth" });
+                    }}
+                    className="p-1 text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
+                    aria-label="Search"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {/* Category Dropdown Pill beside Search (Screenshot 1) */}
@@ -578,10 +612,25 @@ export const Header: React.FC<HeaderProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={language === "bn" ? "পণ্য খুঁজুন... (Search in...)" : "Search in..."}
-                className="w-full pl-4 pr-10 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                placeholder={language === "bn" ? "পণ্য খুঁজুন... (Search products...)" : "Search products..."}
+                className="w-full pl-4 pr-16 py-2.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full text-[15px] sm:text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 shadow-inner"
               />
-              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <Search className="w-4 h-4 text-zinc-400" />
+              </div>
             </div>
           </div>
         </div>

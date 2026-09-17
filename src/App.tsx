@@ -19,6 +19,7 @@ import { CustomerProfileModal } from "./components/CustomerProfileModal";
 import { TrackOrderModal } from "./components/TrackOrderModal";
 import { WishlistDrawer } from "./components/WishlistDrawer";
 import { FloatingWhatsApp } from "./components/FloatingWhatsApp";
+import { MobileBottomNav } from "./components/MobileBottomNav";
 import { SecretAdminModal } from "./components/SecretAdminModal";
 import { Footer } from "./components/Footer";
 import { ToastContainer } from "./components/ToastContainer";
@@ -316,6 +317,16 @@ const StoreContent: React.FC = () => {
 
       {/* Persistent Floating WhatsApp Support Button */}
       <FloatingWhatsApp />
+
+      {/* Mobile Bottom Navigation Bar (Phone & Tablet Friendly) */}
+      <MobileBottomNav
+        selectedCategory={selectedCategory}
+        onSelectCategory={handleSelectCategory}
+        onOpenTrackOrder={() => setIsTrackOrderOpen(true)}
+        onOpenWishlist={() => setIsWishlistOpen(true)}
+        wishlistCount={wishlistIds.length}
+        categories={dynamicCategories}
+      />
 
       {/* Cart Slide-Over Drawer */}
       <CartDrawer />

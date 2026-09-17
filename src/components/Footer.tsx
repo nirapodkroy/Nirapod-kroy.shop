@@ -12,6 +12,7 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
   const { language, t, getCategoryName } = useLanguage();
   const { addToast } = useToast();
+  const { setIsAdminModalOpen } = useAuth();
   const [subscribed, setSubscribed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailInput, setEmailInput] = useState("");
@@ -278,11 +279,21 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
         </div>
 
         {/* Bottom Bar: Copyright & Payment Methods */}
-        <div className="mt-12 pt-6 border-t border-zinc-200/60 dark:border-zinc-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+        <div className="mt-12 pt-6 pb-20 md:pb-6 border-t border-zinc-200/60 dark:border-zinc-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
           <div className="text-zinc-400 text-center sm:text-left flex items-center justify-center sm:justify-start gap-2 flex-wrap">
             <span>
               © {new Date().getFullYear()} Nirapod Kroy (নিরাপদ ক্রয়) — {t("copyright")}
             </span>
+            {/* Discreet Admin Lock Button for Phone / Tablet / Mac store owner */}
+            <button
+              type="button"
+              onClick={() => setIsAdminModalOpen(true)}
+              className="inline-flex items-center gap-1 text-[11px] text-zinc-400/60 hover:text-emerald-600 dark:hover:text-emerald-400 p-1 rounded transition-colors cursor-pointer"
+              title="Admin Portal Access"
+              aria-label="Admin Access"
+            >
+              <Lock className="w-3 h-3" />
+            </button>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-center">
