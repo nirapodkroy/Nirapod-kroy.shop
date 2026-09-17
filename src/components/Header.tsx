@@ -58,9 +58,9 @@ export const Header: React.FC<HeaderProps> = ({
   wishlistCount = 0
 }) => {
   const { theme, toggleTheme } = useTheme();
-  const { itemCount, setIsCartOpen } = useCart();
-  const { currentUser, logoutCustomer, setIsAuthModalOpen, setAuthModalTab, setIsProfileModalOpen } = useAuth();
-  const { language, setLanguage, toggleLanguage, t, getCategoryName } = useLanguage();
+  const { itemCount, setIsCartOpen, subtotal } = useCart();
+  const { currentUser, logoutCustomer, setIsAuthModalOpen, setAuthModalTab, setIsProfileModalOpen, setIsAdminModalOpen } = useAuth();
+  const { language, setLanguage, toggleLanguage, t, getCategoryName, formatPrice } = useLanguage();
 
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -274,7 +274,7 @@ export const Header: React.FC<HeaderProps> = ({
             </a>
 
             {/* Center: Search Bar with Category Dropdown attached (Matching Screenshot 1) */}
-            <div className="flex-1 max-w-2xl mx-2 hidden md:flex items-center gap-2">
+            <div className="flex-1 max-w-2xl mx-2 hidden lg:flex items-center gap-2">
               <div className="relative flex-1">
                 <input
                   ref={searchInputRef}
@@ -442,8 +442,9 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* Right: Header Action Icons (About Us, Track Order, Sign In, Wishlist, Cart, More) */}
-            <div className="flex items-center gap-1 sm:gap-4 lg:gap-5 shrink-0">
+            {/* Right: Actions */}
+            {/* 1. PC & Mac Desktop View (Full original actions: About Us, Track Order, Sign In, Wishlist, Cart, More) */}
+            <div className="hidden lg:flex items-center gap-2 xl:gap-4 shrink-0">
               {/* About Us (আমাদের সম্পর্কে) */}
               <button
                 type="button"
@@ -456,13 +457,13 @@ export const Header: React.FC<HeaderProps> = ({
                     window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
                   }
                 }}
-                className="flex flex-col items-center justify-center p-1.5 sm:px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer"
+                className="flex flex-col items-center justify-center p-1.5 px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer"
                 title={language === "bn" ? "আমাদের সম্পর্কে" : "About Us"}
               >
                 <div className="relative">
-                  <Info className="w-5 h-5 sm:w-5 sm:h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+                  <Info className="w-5 h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                 </div>
-                <span className="text-[10px] sm:text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
+                <span className="text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
                   {language === "bn" ? "আমাদের সম্পর্কে" : "About Us"}
                 </span>
               </button>
@@ -471,14 +472,14 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenTrackOrder}
-                className="flex flex-col items-center justify-center p-1.5 sm:px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer"
+                className="flex flex-col items-center justify-center p-1.5 px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer"
                 title="Track your order"
               >
                 <div className="relative">
-                  <MapPin className="w-5 h-5 sm:w-5 sm:h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+                  <MapPin className="w-5 h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                   <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                 </div>
-                <span className="text-[10px] sm:text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
+                <span className="text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
                   {language === "bn" ? "অর্ডার ট্র্যাক" : "Track Order"}
                 </span>
               </button>
@@ -489,12 +490,12 @@ export const Header: React.FC<HeaderProps> = ({
                   <button
                     type="button"
                     onClick={() => setUserDropdownOpen(prev => !prev)}
-                    className="flex flex-col items-center justify-center p-1.5 sm:px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer"
+                    className="flex flex-col items-center justify-center p-1.5 px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer"
                   >
                     <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
                       {currentUser.name.charAt(0).toUpperCase()}
                     </div>
-                    <span className="text-[10px] sm:text-[11px] font-semibold mt-0.5 max-w-[65px] truncate">
+                    <span className="text-[11px] font-semibold mt-0.5 max-w-[65px] truncate">
                       {currentUser.name.split(" ")[0]}
                     </span>
                   </button>
@@ -505,11 +506,11 @@ export const Header: React.FC<HeaderProps> = ({
                       setAuthModalTab("signin");
                       setIsAuthModalOpen(true);
                     }}
-                    className="flex flex-col items-center justify-center p-1.5 sm:px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer"
+                    className="flex flex-col items-center justify-center p-1.5 px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer"
                     title="Sign in to your account"
                   >
-                    <User className="w-5 h-5 sm:w-5 sm:h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
-                    <span className="text-[10px] sm:text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
+                    <User className="w-5 h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+                    <span className="text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
                       {language === "bn" ? "লগইন" : "Sign In"}
                     </span>
                   </button>
@@ -555,37 +556,37 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenWishlist}
-                className="flex flex-col items-center justify-center p-1.5 sm:px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer relative"
+                className="flex flex-col items-center justify-center p-1.5 px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer relative"
                 title="Your Wishlist"
               >
                 <div className="relative">
-                  <Heart className="w-5 h-5 sm:w-5 sm:h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-rose-500 transition-colors" />
+                  <Heart className="w-5 h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-rose-500 transition-colors" />
                   {wishlistCount > 0 && (
                     <span className="absolute -top-1.5 -right-2 bg-rose-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm">
                       {wishlistCount}
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] sm:text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
+                <span className="text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
                   {language === "bn" ? "উইশলিস্ট" : "Wishlist"}
                 </span>
               </button>
 
-              {/* 4. Cart (with emerald circular badge count) */}
+              {/* 4. Cart */}
               <button
                 type="button"
                 id="header-cart-btn"
                 onClick={() => setIsCartOpen(true)}
-                className="flex flex-col items-center justify-center p-1.5 sm:px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer relative"
+                className="flex flex-col items-center justify-center p-1.5 px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer relative"
                 title="View Cart"
               >
                 <div className="relative">
-                  <ShoppingCart className="w-5 h-5 sm:w-5 sm:h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 transition-colors" />
+                  <ShoppingCart className="w-5 h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 transition-colors" />
                   <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 bg-emerald-600 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md">
                     {itemCount}
                   </span>
                 </div>
-                <span className="text-[10px] sm:text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
+                <span className="text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
                   {language === "bn" ? "কার্ট" : "Cart"}
                 </span>
               </button>
@@ -594,20 +595,63 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => setIsMoreOpen(true)}
-                className="flex flex-col items-center justify-center p-1.5 sm:px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer"
+                className="flex flex-col items-center justify-center p-1.5 px-2 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group cursor-pointer"
                 title="More Options"
               >
-                <Menu className="w-5 h-5 sm:w-5 sm:h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 transition-colors" />
-                <span className="text-[10px] sm:text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
+                <Menu className="w-5 h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 transition-colors" />
+                <span className="text-[11px] font-semibold mt-0.5 tracking-tight whitespace-nowrap">
                   {language === "bn" ? "আরও" : "More"}
                 </span>
               </button>
             </div>
+
+            {/* 2. Phone & Tablet View: ONLY Login Bar & 3-Line Menu (About Us and all else consolidated into 3-line menu) */}
+            <div className="flex lg:hidden items-center gap-2 sm:gap-3 shrink-0">
+              {/* Login Bar */}
+              {currentUser ? (
+                <button
+                  type="button"
+                  onClick={() => setIsProfileModalOpen(true)}
+                  className="flex items-center gap-1.5 py-1.5 px-2.5 sm:px-3 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-2xs"
+                  title={currentUser.name}
+                >
+                  <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-extrabold shadow-2xs">
+                    {currentUser.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="max-w-[70px] sm:max-w-[100px] truncate">{currentUser.name.split(" ")[0]}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthModalTab("signin");
+                    setIsAuthModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 py-1.5 px-2.5 sm:px-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-xs shadow-emerald-600/20"
+                  title={language === "bn" ? "লগইন করুন" : "Sign In"}
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>{language === "bn" ? "লগইন" : "Login"}</span>
+                </button>
+              )}
+
+              {/* 3-Line Hamburger Menu Button */}
+              <button
+                type="button"
+                onClick={() => setIsMoreOpen(true)}
+                className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-100 border border-zinc-200/80 dark:border-zinc-700/80 transition-all active:scale-95 cursor-pointer shadow-2xs"
+                title={language === "bn" ? "সকল মেনু (3-Line)" : "All Menu (3-Line)"}
+                aria-label="Open menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          {/* Mobile Search Bar (under logo on small screens) */}
-          <div className="pb-3 md:hidden">
-            <div className="relative">
+          {/* Compact, User-Friendly Search Bar (Phone & Tablet only: lg:hidden) */}
+          <div className="pb-2.5 pt-0.5 lg:hidden">
+            <div className="relative flex items-center">
+              <Search className="absolute left-3.5 w-4 h-4 text-emerald-600 dark:text-emerald-400 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
@@ -616,28 +660,38 @@ export const Header: React.FC<HeaderProps> = ({
                 autoCorrect="off"
                 autoCapitalize="none"
                 placeholder={language === "bn" ? "পণ্য খুঁজুন... (Search products...)" : "Search products..."}
-                className="w-full pl-4 pr-16 py-2.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full text-[15px] sm:text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 shadow-inner"
+                className="w-full pl-9.5 pr-14 py-2 bg-zinc-100/90 dark:bg-zinc-800/90 border border-zinc-200/90 dark:border-zinc-700/80 rounded-full text-[14px] sm:text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 shadow-inner transition-all"
               />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery("")}
-                    className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+                    className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-full cursor-pointer"
                     aria-label="Clear search"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
-                <Search className="w-4 h-4 text-zinc-400" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const catalog = document.getElementById("catalog-section");
+                    if (catalog) catalog.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="p-1 text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer"
+                  aria-label="Search"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Secondary Bar: Dark Green / Teal Bar (Smooth horizontal scrolling with visible category names & arrows) */}
-      <div className="bg-[#0b2923] text-white border-b border-[#071f1a] relative z-40 overflow-visible">
+      {/* Secondary Bar: Dark Green / Teal Bar (Visible only on PC/Mac desktop, hidden on Phone & Tablet as requested) */}
+      <div className="hidden lg:block bg-[#0b2923] text-white border-b border-[#071f1a] relative z-40 overflow-visible">
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 relative overflow-visible flex items-center gap-1 sm:gap-2">
           {/* 1. STABLE PINNED HOME BUTTON - Outside scroll container, ALWAYS stays in place and never moves */}
           <div className="shrink-0 flex items-center">
@@ -877,7 +931,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* More Slide-over Drawer */}
+      {/* More Slide-over Drawer (Comprehensive 3-Line Menu for Phone & Tablet) */}
       {isMoreOpen && (
         <div
           onClick={() => setIsMoreOpen(false)}
@@ -885,35 +939,200 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white dark:bg-zinc-900 h-full p-6 shadow-2xl border-l border-zinc-200 dark:border-zinc-800 flex flex-col justify-between overflow-y-auto cursor-default"
+            className="w-full max-w-sm bg-white dark:bg-zinc-900 h-full p-5 sm:p-6 shadow-2xl border-l border-zinc-200 dark:border-zinc-800 flex flex-col justify-between overflow-y-auto cursor-default"
           >
-            <div>
+            <div className="space-y-4">
               {/* Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between pb-3.5 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-bold shadow-xs">
                     <ShieldCheck className="w-5 h-5 text-white" />
                   </div>
-                  <span className="font-bold text-base text-zinc-900 dark:text-white">
-                    {language === "bn" ? "মেনু ও সহায়তা" : "Menu & Help"}
-                  </span>
+                  <div className="flex flex-col">
+                    <span className="font-extrabold text-sm sm:text-base text-zinc-900 dark:text-white leading-none">
+                      {language === "bn" ? "নিরাপদ ক্রয় মেনু" : "Nirapod Menu"}
+                    </span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium mt-0.5">
+                      {language === "bn" ? "সকল সার্ভিস ও অপশন" : "All Services & Options"}
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsMoreOpen(false)}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-white cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-white cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   title={language === "bn" ? "বন্ধ করুন" : "Close"}
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
+              {/* Customer Account / Sign In Card */}
+              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700/80">
+                {currentUser ? (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-extrabold shadow-xs shrink-0">
+                        {currentUser.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">
+                          {currentUser.name}
+                        </p>
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                          {currentUser.phone || currentUser.email}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1 border-t border-zinc-200/60 dark:border-zinc-700/60">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMoreOpen(false);
+                          setIsProfileModalOpen(true);
+                        }}
+                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Package className="w-3.5 h-3.5" />
+                        <span>{language === "bn" ? "আমার অর্ডার" : "My Orders"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMoreOpen(false);
+                          logoutCustomer();
+                        }}
+                        className="py-1.5 px-2.5 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer border border-rose-200/60 dark:border-rose-900/40"
+                        title={t("logout")}
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>{language === "bn" ? "লগআউট" : "Logout"}</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-white">
+                        {language === "bn" ? "স্বাগতম! কেনাকাটা সহজ করতে লগইন করুন" : "Welcome! Sign in for a faster shopping"}
+                      </p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        {language === "bn" ? "অর্ডার ট্র্যাকিং ও দ্রুত ডেলিভারির সুবিধা পান" : "Track orders & get quick delivery"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMoreOpen(false);
+                        setAuthModalTab("signin");
+                        setIsAuthModalOpen(true);
+                      }}
+                      className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>{language === "bn" ? "লগইন বা একাউন্ট তৈরি করুন" : "Sign In or Register"}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Shopping Shortcuts (Cart & Wishlist Cards) */}
+              <div className="grid grid-cols-2 gap-2.5">
+                {/* Cart Shortcut */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMoreOpen(false);
+                    setIsCartOpen(true);
+                  }}
+                  className="p-3 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/70 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 border border-emerald-500/20 text-left transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+                      <ShoppingCart className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-black px-1.5 py-0.5 rounded-full bg-emerald-600 text-white">
+                      {itemCount}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-zinc-900 dark:text-white">
+                    {language === "bn" ? "শপিং কার্ট" : "Cart"}
+                  </p>
+                  <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    {formatPrice(subtotal)}
+                  </p>
+                </button>
+
+                {/* Wishlist Shortcut */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMoreOpen(false);
+                    if (onOpenWishlist) onOpenWishlist();
+                  }}
+                  className="p-3 rounded-xl bg-rose-50/70 hover:bg-rose-100/70 dark:bg-rose-950/30 dark:hover:bg-rose-950/50 border border-rose-500/20 text-left transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="w-7 h-7 rounded-lg bg-rose-500 text-white flex items-center justify-center">
+                      <Heart className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-black px-1.5 py-0.5 rounded-full bg-rose-500 text-white">
+                      {wishlistCount}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-zinc-900 dark:text-white">
+                    {language === "bn" ? "উইশলিস্ট" : "Wishlist"}
+                  </p>
+                  <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                    {language === "bn" ? "পছন্দের পণ্য" : "Saved Items"}
+                  </p>
+                </button>
+              </div>
+
+              {/* Primary Services (About Us & Track Order) */}
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMoreOpen(false);
+                    if (onOpenTrackOrder) onOpenTrackOrder();
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer border border-amber-500/20"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <MapPin className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>{language === "bn" ? "অর্ডার ট্র্যাক করুন (Track Order)" : "Track Your Order"}</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-amber-500/70" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMoreOpen(false);
+                    const footerSection = document.getElementById("about-us-section");
+                    if (footerSection) {
+                      footerSection.scrollIntoView({ behavior: "smooth" });
+                    } else {
+                      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer border border-zinc-200/80 dark:border-zinc-700/80"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Info className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>{language === "bn" ? "আমাদের সম্পর্কে (About Us)" : "About Nirapod Kroy"}</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-400" />
+                </button>
+              </div>
+
               {/* Categories Navigation in Drawer */}
-              <div className="py-4 space-y-1">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 px-3">
-                  {language === "bn" ? "ক্যাটাগরি সমূহ" : "Product Categories"}
+              <div className="space-y-1 pt-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 px-1">
+                  {language === "bn" ? "পণ্য ক্যাটাগরি ব্রাউজ করুন" : "Browse Categories"}
                 </span>
-                <div className="mt-2 space-y-1">
+                <div className="mt-1.5 space-y-1 max-h-56 overflow-y-auto pr-1">
                   <button
                     onClick={() => {
                       handleCategoryClick("All");
@@ -925,7 +1144,10 @@ export const Header: React.FC<HeaderProps> = ({
                         : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     }`}
                   >
-                    <span>{language === "bn" ? "সকল পণ্য (Home)" : "All Products"}</span>
+                    <span className="flex items-center gap-2">
+                      <Home className="w-3.5 h-3.5" />
+                      <span>{language === "bn" ? "সকল পণ্য (Home)" : "All Products"}</span>
+                    </span>
                     <ChevronRight className="w-4 h-4 text-zinc-400" />
                   </button>
 
@@ -994,106 +1216,71 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
 
-              {/* Close Button right below categories (Exactly where user drew the arrow) */}
-              <div className="py-2">
+              {/* Preferences & Mode Switchers */}
+              <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-2 gap-2">
+                {/* Language Switcher */}
                 <button
-                  type="button"
-                  id="drawer-categories-close-btn"
-                  onClick={() => setIsMoreOpen(false)}
-                  className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 font-bold text-xs flex items-center justify-center gap-2 border border-rose-200 dark:border-rose-900/50 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+                  onClick={toggleLanguage}
+                  className="px-2.5 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer border border-zinc-200 dark:border-zinc-700"
                 >
-                  <X className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                  <span>{language === "bn" ? "মেনু বন্ধ করুন (Close)" : "Close Menu"}</span>
-                </button>
-              </div>
-
-              {/* Quick Services */}
-              <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
-                <button
-                  onClick={() => {
-                    setIsMoreOpen(false);
-                    const footerSection = document.getElementById("about-us-section");
-                    if (footerSection) {
-                      footerSection.scrollIntoView({ behavior: "smooth" });
-                    } else {
-                      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-                    }
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Info className="w-4 h-4 text-emerald-500" />
-                  <span>{language === "bn" ? "আমাদের সম্পর্কে (About Us)" : "About Us"}</span>
+                  <div className="flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>{language === "bn" ? "ভাষা" : "Lang"}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400">
+                    {language === "bn" ? "বাংলা" : "ENG"}
+                  </span>
                 </button>
 
-                <button
-                  onClick={() => {
-                    setIsMoreOpen(false);
-                    if (onOpenTrackOrder) onOpenTrackOrder();
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <MapPin className="w-4 h-4 text-amber-500" />
-                  <span>{language === "bn" ? "অর্ডার ট্র্যাক করুন" : "Track Order"}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsMoreOpen(false);
-                    if (onOpenWishlist) onOpenWishlist();
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Heart className="w-4 h-4 text-rose-500" />
-                  <span>{language === "bn" ? "পছন্দের তালিকা (Wishlist)" : "Wishlist"}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsMoreOpen(false);
-                    setIsProfileModalOpen(true);
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold flex items-center gap-2.5 transition-colors cursor-pointer"
-                >
-                  <Package className="w-4 h-4 text-emerald-500" />
-                  <span>{language === "bn" ? "আমার পূর্ববর্তী অর্ডার" : "Order History"}</span>
-                </button>
-
-                {/* Theme / Mode Switcher */}
+                {/* Theme Switcher */}
                 <button
                   onClick={toggleTheme}
-                  className="w-full px-3 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer border border-zinc-200 dark:border-zinc-700"
+                  className="px-2.5 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer border border-zinc-200 dark:border-zinc-700"
                 >
-                  <div className="flex items-center gap-2.5">
-                    {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-zinc-600 dark:text-zinc-300" />}
-                    <span>{language === "bn" ? "মোড পরিবর্তন (থিম)" : "Color Mode (Theme)"}</span>
+                  <div className="flex items-center gap-1.5">
+                    {theme === "dark" ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-300" />}
+                    <span>{language === "bn" ? "মোড" : "Mode"}</span>
                   </div>
-                  <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
-                    {theme === "dark" ? (language === "bn" ? "ডার্ক মোড" : "Dark") : (language === "bn" ? "সাদা মোড" : "Light")}
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">
+                    {theme === "dark" ? (language === "bn" ? "ডার্ক" : "Dark") : (language === "bn" ? "লাইট" : "Light")}
                   </span>
                 </button>
               </div>
+
+              {/* Secret Admin Access Button for Store Owner */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMoreOpen(false);
+                  setIsAdminModalOpen(true);
+                }}
+                className="w-full py-2 px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-dashed border-zinc-300 dark:border-zinc-700"
+              >
+                <Lock className="w-3.5 h-3.5 text-zinc-400" />
+                <span>{language === "bn" ? "অ্যাডমিন পোর্টাল (স্টোর ওনার)" : "Admin Portal (Owner)"}</span>
+              </button>
             </div>
 
-            {/* Bottom Support Info & Close */}
-            <div className="pt-5 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
-              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/20 text-xs">
+            {/* Bottom Support Info & Close Button */}
+            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-2.5">
+              <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/20 text-xs">
                 <p className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                  <PhoneCall className="w-3.5 h-3.5" />
+                  <PhoneCall className="w-3.5 h-3.5 text-emerald-600" />
                   <span>{language === "bn" ? "হেল্পলাইন: 01786681134" : "Helpline: 01786681134"}</span>
                 </p>
-                <p className="text-zinc-600 dark:text-zinc-400 mt-1">
+                <p className="text-zinc-600 dark:text-zinc-400 mt-0.5 text-[11px]">
                   <a href="tel:01786681134" className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline">
                     01786681134
                   </a>
                   {" "}
-                  {language === "bn" ? "(যেকোনো তথ্যে কল বা হোয়াটসঅ্যাপ করুন)" : "(Call or WhatsApp for any assistance)"}
+                  {language === "bn" ? "(কল বা হোয়াটসঅ্যাপ করুন)" : "(Call or WhatsApp)"}
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setIsMoreOpen(false)}
-                className="w-full py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white dark:bg-zinc-200 dark:hover:bg-white dark:text-zinc-900 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-[0.98]"
+                className="w-full py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-[0.98]"
               >
                 <X className="w-4 h-4" />
                 <span>{language === "bn" ? "মেনু বন্ধ করুন" : "Close Menu"}</span>

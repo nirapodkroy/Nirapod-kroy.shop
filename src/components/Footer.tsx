@@ -279,7 +279,7 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
         </div>
 
         {/* Bottom Bar: Copyright & Payment Methods */}
-        <div className="mt-12 pt-6 pb-20 md:pb-6 border-t border-zinc-200/60 dark:border-zinc-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+        <div className="mt-12 pt-6 pb-24 lg:pb-6 border-t border-zinc-200/60 dark:border-zinc-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
           <div className="text-zinc-400 text-center sm:text-left flex items-center justify-center sm:justify-start gap-2 flex-wrap">
             <span>
               © {new Date().getFullYear()} Nirapod Kroy (নিরাপদ ক্রয়) — {t("copyright")}

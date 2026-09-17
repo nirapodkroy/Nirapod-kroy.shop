@@ -51,7 +51,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     <>
       {/* Mobile Category Quick Sheet */}
       {isCategorySheetOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div
             className="fixed inset-0 -z-10"
             onClick={() => setIsCategorySheetOpen(false)}
@@ -156,13 +156,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         </div>
       )}
 
-      {/* Sticky Bottom Navigation Bar for Mobile Phones & Small Tablets */}
+      {/* Sticky Bottom Navigation Bar for Mobile Phones & Tablets (Always fixed at bottom) */}
       <nav
         id="mobile-bottom-navigation"
         aria-label="Mobile Navigation"
-        className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800/80 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
+        className="fixed bottom-0 inset-x-0 z-40 lg:hidden bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800/80 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
       >
-        <div className="grid grid-cols-5 items-center h-15 px-1 max-w-lg mx-auto">
+        <div className="grid grid-cols-5 items-center h-15 px-1 max-w-xl mx-auto">
           {/* 1. Home Button */}
           <button
             type="button"
