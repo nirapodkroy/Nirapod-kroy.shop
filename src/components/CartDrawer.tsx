@@ -144,13 +144,13 @@ export const CartDrawer: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                items.map(({ product, quantity }) => (
+                items.map(({ product, quantity, selectedImageCode, selectedImageUrl }) => (
                   <div
                     key={product.id}
                     className="flex gap-3.5 p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-800/80"
                   >
                     <img
-                      src={product.imageUrl}
+                      src={selectedImageUrl || product.imageUrl}
                       alt={product.title}
                       className="w-20 h-20 rounded-xl object-cover object-center bg-zinc-200 dark:bg-zinc-700 shrink-0"
                     />
@@ -168,9 +168,16 @@ export const CartDrawer: React.FC = () => {
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 capitalize">
-                          {getCategoryName(product.category)}
-                        </p>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 capitalize">
+                            {getCategoryName(product.category)}
+                          </p>
+                          {selectedImageCode && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">
+                              📷 কোড: {selectedImageCode}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between mt-2">

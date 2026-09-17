@@ -138,10 +138,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       {/* Product Info */}
       <div className="flex flex-col flex-1 p-2.5 sm:p-4 md:p-5">
         <div className="flex items-center justify-between gap-1.5 text-xs text-zinc-400 dark:text-zinc-500 mb-1">
-          {/* Category Tag (links to category page on click) */}
-          <span className="font-semibold uppercase tracking-wider text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 sm:px-2 py-0.5 rounded-md truncate max-w-[110px] sm:max-w-none">
-            {getCategoryName(product.category)}
-          </span>
+          {/* Category Tag & Product Code */}
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+            <span className="font-semibold uppercase tracking-wider text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 sm:px-2 py-0.5 rounded-md truncate max-w-[110px] sm:max-w-none">
+              {getCategoryName(product.category)}
+            </span>
+            {product.productCode && (
+              <span className="font-mono font-bold text-[10px] text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700">
+                #{product.productCode}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-1 shrink-0">
             <Star className="w-3 sm:w-3.5 h-3 sm:h-3.5 fill-amber-400 text-amber-400" />
             <span className="font-bold text-zinc-700 dark:text-zinc-300 text-xs sm:text-sm">{product.rating.toFixed(1)}</span>

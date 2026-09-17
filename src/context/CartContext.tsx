@@ -5,7 +5,8 @@ import { safeGetLocalStorage, safeSetLocalStorage } from "../utils/storage";
 
 interface CartContextType {
   items: CartItem[];
-  addItem: (product: Product, quantity?: number) => void;
+  addItem: (product: Product, quantity?: number, selectedImageCode?: string, selectedImageUrl?: string) => void;
+  updateItemCode: (productId: string, code: string, imageUrl?: string) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, delta: number) => void;
   clearCart: () => void;
@@ -15,7 +16,7 @@ interface CartContextType {
   setIsCartOpen: (open: boolean) => void;
   isCheckoutOpen: boolean;
   setIsCheckoutOpen: (open: boolean) => void;
-  buyNow: (product: Product) => void;
+  buyNow: (product: Product, selectedImageCode?: string, selectedImageUrl?: string) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -37,19 +38,55 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     safeSetLocalStorage("auracart_cart", JSON.stringify(items));
   }, [items]);
 
-  const addItem = (product: Product, quantity: number = 1) => {
+  const addItem = (
+    product: Product,
+    quantity: number = 1,
+    selectedImageCode?: string,
+    selectedImageUrl?: string
+  ) => {
     setItems(prev => {
-      const existingIdx = prev.findIndex(item => item.product.id === product.id);
+      // Find matching item by product.id and matching selectedImageCode (if applicable)
+      const existingIdx = prev.findIndex(
+        item => item.product.id === product.id && (!selectedImageCode || item.selectedImageCode === selectedImageCode)
+      );
       if (existingIdx > -1) {
         const updated = [...prev];
         const newQty = updated[existingIdx].quantity + quantity;
-        updated[existingIdx] = { ...updated[existingIdx], quantity: newQty };
+        updated[existingIdx] = {
+          ...updated[existingIdx],
+          quantity: newQty,
+          selectedImageCode: selectedImageCode || updated[existingIdx].selectedImageCode,
+          selectedImageUrl: selectedImageUrl || updated[existingIdx].selectedImageUrl
+        };
         return updated;
       } else {
-        return [...prev, { product, quantity }];
+        return [
+          ...prev,
+          {
+            product,
+            quantity,
+            selectedImageCode,
+            selectedImageUrl: selectedImageUrl || product.imageUrl
+          }
+        ];
       }
     });
-    addToast(`Added "${product.title}" to cart!`, "success");
+    addToast(`Added "${product.title}" ${selectedImageCode ? `[${selectedImageCode}]` : ""} to cart!`, "success");
+  };
+
+  const updateItemCode = (productId: string, code: string, imageUrl?: string) => {
+    setItems(prev => {
+      return prev.map(item => {
+        if (item.product.id === productId) {
+          return {
+            ...item,
+            selectedImageCode: code,
+            selectedImageUrl: imageUrl || item.selectedImageUrl || item.product.imageUrl
+          };
+        }
+        return item;
+      });
+    });
   };
 
   const removeItem = (productId: string) => {
@@ -78,12 +115,24 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setItems([]);
   };
 
-  const buyNow = (product: Product) => {
-    // Add product if not already in cart, then open checkout directly
+  const buyNow = (product: Product, selectedImageCode?: string, selectedImageUrl?: string) => {
     setItems(prev => {
-      const exists = prev.some(i => i.product.id === product.id);
-      if (exists) return prev;
-      return [...prev, { product, quantity: 1 }];
+      const existsIdx = prev.findIndex(i => i.product.id === product.id);
+      if (existsIdx > -1) {
+        const updated = [...prev];
+        if (selectedImageCode) updated[existsIdx].selectedImageCode = selectedImageCode;
+        if (selectedImageUrl) updated[existsIdx].selectedImageUrl = selectedImageUrl;
+        return updated;
+      }
+      return [
+        ...prev,
+        {
+          product,
+          quantity: 1,
+          selectedImageCode,
+          selectedImageUrl: selectedImageUrl || product.imageUrl
+        }
+      ];
     });
     setIsCartOpen(false);
     setIsCheckoutOpen(true);
@@ -97,6 +146,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         items,
         addItem,
+        updateItemCode,
         removeItem,
         updateQuantity,
         clearCart,

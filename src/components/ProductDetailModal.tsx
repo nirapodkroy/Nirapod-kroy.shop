@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Product } from "../types";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
+import { getProductImagesWithCodes } from "../utils/productCodeHelper";
 import {
   X,
   Star,
@@ -15,7 +16,8 @@ import {
   Link2,
   ChevronLeft,
   ChevronRight,
-  Images
+  Images,
+  Tag
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -31,10 +33,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
   const [copiedLink, setCopiedLink] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // Extract all gallery images, falling back to product.imageUrl
-  const galleryImages = (product?.images && product.images.length > 0)
-    ? product.images
-    : (product?.imageUrl ? [product.imageUrl] : []);
+  // Extract all gallery images with their assigned/auto-generated codes
+  const imageItems = getProductImagesWithCodes(product);
+  const galleryImages = imageItems.map((item) => item.url);
+  const activeImageItem = imageItems[currentImageIndex] || imageItems[0];
 
   // Reset image index when product changes
   useEffect(() => {
@@ -135,6 +137,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
                   )}
                 </div>
 
+                {/* Picture Code Tag Overlay */}
+                {activeImageItem && (
+                  <div className="absolute top-4 right-4 z-10 px-2.5 py-1 rounded-xl bg-black/80 backdrop-blur-md text-emerald-400 border border-emerald-500/40 text-xs font-mono font-bold flex items-center gap-1.5 shadow-md pointer-events-none">
+                    <Tag className="w-3 h-3 text-emerald-400" />
+                    <span>{language === "bn" ? "কোড" : "Code"}: {activeImageItem.code}</span>
+                  </div>
+                )}
+
                 {/* Image Counter Badge: 1 / 4 */}
                 {galleryImages.length > 1 && (
                   <div className="absolute bottom-3 right-3 z-10 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-xs font-bold flex items-center gap-1.5 shadow-md pointer-events-none">
@@ -175,7 +185,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
                 )}
               </div>
 
-              {/* Interactive Thumbnail Strip (aktar por akta sob pic dekha jabe) */}
+              {/* Interactive Thumbnail Strip with Picture Codes */}
               {galleryImages.length > 1 && (
                 <div className="p-3 bg-white dark:bg-zinc-900/90 border-t border-zinc-200/80 dark:border-zinc-800 flex items-center gap-2 overflow-x-auto">
                   {galleryImages.map((img, idx) => (
@@ -183,10 +193,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
                       key={idx}
                       type="button"
                       onClick={() => setCurrentImageIndex(idx)}
-                      className={`relative shrink-0 w-13 h-13 sm:w-14 sm:h-14 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                      className={`relative shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
                         currentImageIndex === idx
                           ? "border-emerald-500 scale-105 shadow-md ring-2 ring-emerald-500/25"
-                          : "border-transparent opacity-65 hover:opacity-100 hover:border-zinc-300 dark:hover:border-zinc-700"
+                          : "border-transparent opacity-70 hover:opacity-100 hover:border-zinc-300 dark:hover:border-zinc-700"
                       }`}
                       aria-label={`View photo ${idx + 1}`}
                     >
@@ -196,6 +206,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
                         className="w-full h-full object-cover object-center"
                         referrerPolicy="no-referrer"
                       />
+                      <span className="absolute bottom-0 inset-x-0 bg-black/80 text-[9px] text-emerald-300 font-mono text-center truncate px-0.5">
+                        {imageItems[idx]?.code || `#${idx + 1}`}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -246,6 +259,51 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
                 <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
                   {product.description}
                 </p>
+
+                {/* Variant / Picture Code Selector */}
+                {imageItems.length > 0 && (
+                  <div className="mt-4 p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-700/80">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>{language === "bn" ? "ছবির কোড নির্বাচন করুন:" : "Select Picture Code:"}</span>
+                      </span>
+                      <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                        {activeImageItem?.code}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {imageItems.map((item, idx) => {
+                        const isSelected = currentImageIndex === idx;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setCurrentImageIndex(idx)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
+                              isSelected
+                                ? "border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20 font-bold shadow-xs"
+                                : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400"
+                            }`}
+                          >
+                            <img
+                              src={item.url}
+                              alt=""
+                              className="w-5 h-5 rounded-md object-cover border border-zinc-200 dark:border-zinc-700"
+                            />
+                            <span className="font-mono">{item.code}</span>
+                            {idx === 0 && (
+                              <span className="text-[10px] text-zinc-400">
+                                ({language === "bn" ? "কভার" : "Cover"})
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Affiliate Partner Notice Banner */}
                 {product.isAffiliate && (
@@ -371,7 +429,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
                     <div className="grid grid-cols-2 gap-3 mt-2">
                       <button
                         onClick={() => {
-                          addItem(product, quantity);
+                          addItem(product, quantity, activeImageItem?.code, activeImageItem?.url);
                         }}
                         className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 font-semibold text-xs sm:text-sm transition-all cursor-pointer"
                       >
@@ -390,7 +448,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
 
                       <button
                         onClick={() => {
-                          buyNow(product);
+                          buyNow(product, activeImageItem?.code, activeImageItem?.url);
                           onClose();
                         }}
                         className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#846F15] hover:bg-[#967F19] active:bg-[#6E5C0E] text-white font-bold text-xs sm:text-sm shadow-md shadow-[#846F15]/30 transition-all hover:shadow-lg active:scale-[0.98] cursor-pointer"

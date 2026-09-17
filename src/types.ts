@@ -9,6 +9,8 @@ export interface Product {
   stock: number;
   imageUrl: string;
   images?: string[];
+  imageCodes?: string[];
+  productCode?: string;
   rating: number;
   ratingCount: number;
   badge?: string;
@@ -25,6 +27,8 @@ export interface Product {
 export interface CartItem {
   product: Product;
   quantity: number;
+  selectedImageCode?: string;
+  selectedImageUrl?: string;
 }
 
 export interface CustomerUser {
@@ -47,10 +51,13 @@ export interface OrderItem {
   price: number;
   quantity: number;
   imageUrl: string;
+  selectedImageCode?: string;
 }
 
 export interface Order {
   id: string;
+  trackingNumber?: string;
+  productCodes?: string;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
