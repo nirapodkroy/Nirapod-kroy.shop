@@ -37,6 +37,14 @@ try {
     fs.writeFileSync(path.join(dist, '404.html'), indexHtmlContent);
     fs.writeFileSync(path.join(docs, '404.html'), indexHtmlContent);
     fs.writeFileSync(path.join(root, '404.html'), indexHtmlContent);
+
+    // Update buildVer in root/index.html so root deployment also gets instant cache busting
+    const rootIndexFile = path.join(root, 'index.html');
+    if (fs.existsSync(rootIndexFile)) {
+      let rootHtml = fs.readFileSync(rootIndexFile, 'utf-8');
+      rootHtml = rootHtml.replace(/var buildVer = ['"][^'"]*['"]/, `var buildVer = '${buildVersion}'`);
+      fs.writeFileSync(rootIndexFile, rootHtml);
+    }
   }
 
   // 4. Sync dist to docs (for users with Pages set to /docs folder)
@@ -44,10 +52,22 @@ try {
     fs.cpSync(dist, docs, { recursive: true, force: true });
   }
 
-  // 5. Copy dist/assets to root assets directory (for users with Pages set to / root)
+  // 5. Clean stale files and copy dist/assets to docs/assets and root assets
   const distAssets = path.join(dist, 'assets');
   if (fs.existsSync(distAssets)) {
+    // Remove stale hashed files in docs/assets and root assets
+    [path.join(docs, 'assets'), assets].forEach(targetAssetDir => {
+      if (fs.existsSync(targetAssetDir)) {
+        const files = fs.readdirSync(targetAssetDir);
+        files.forEach(file => {
+          if (file.startsWith('index-') && (file.endsWith('.js') || file.endsWith('.css'))) {
+            try { fs.unlinkSync(path.join(targetAssetDir, file)); } catch {}
+          }
+        });
+      }
+    });
     fs.cpSync(distAssets, assets, { recursive: true, force: true });
+    fs.cpSync(distAssets, path.join(docs, 'assets'), { recursive: true, force: true });
   }
 
   // 6. Ensure CNAME and favicon are everywhere
