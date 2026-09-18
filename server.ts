@@ -78,7 +78,11 @@ interface Order {
   totalPrice: number;
   shippingFee?: number;
   deliveryArea?: string;
-  paymentMethod: 'Cash on Delivery' | 'bKash / Mobile Wallet' | 'Credit / Debit Card';
+  paymentMethod: 'Cash on Delivery' | 'bKash / Mobile Wallet' | 'bKash' | 'Nagad' | 'Rocket' | string;
+  senderPhoneNumber?: string;
+  transactionId?: string;
+  paymentGatewayFee?: number;
+  paymentProvider?: string;
   status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
   createdAt: string;
   syncedToGoogleSheet: boolean;
@@ -825,6 +829,11 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
       ? new Date(order.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
       : new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
 
+    // Format payment by for email notification as requested by user ("Payment By: bKash / Nagad / Rocket / Cash on Delivery")
+    const paymentByMethod = order.paymentProvider 
+      ? order.paymentProvider 
+      : (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : (order.paymentMethod || "Cash on Delivery"))));
+
     // Payload formatted for standard Google Apps Script Webhook
     const payload = {
       action: "new_order",
@@ -845,6 +854,14 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
       orderedItems: itemsFormatted,
       totalPrice: `৳${order.totalPrice || 0}`,
       paymentMethod: order.paymentMethod || "Cash on Delivery",
+      paymentBy: paymentByMethod,
+      paymentProvider: order.paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : ""))),
+      senderPhoneNumber: order.senderPhoneNumber || "",
+      senderPhone: order.senderPhoneNumber || "",
+      sendMoneyNumber: order.senderPhoneNumber || "",
+      transactionId: order.transactionId || "",
+      tranzationNumber: order.transactionId || "",
+      paymentGatewayFee: order.paymentGatewayFee ? `৳${order.paymentGatewayFee}` : "",
       orderStatus: order.status || "Pending",
       adminNotifyEmail: "adib1234@gmail.com,adib1234w@gmail.com",
       deliveryArea: order.deliveryArea || "",
@@ -862,16 +879,20 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
         order.paymentMethod || "Cash on Delivery",
         order.status || "Pending",
         productCodesText,
-        trackingNum
+        trackingNum,
+        order.senderPhoneNumber || "N/A", // send money number (যে নম্বর থেকে টাকা পাঠানো হয়েছে)
+        order.transactionId || "N/A",      // tranzation number (ট্রানজেকশন আইডি)
+        order.paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : "Cash on Delivery"))) // ki teke dice (bKash / Nagad / Rocket)
       ]
     };
 
     const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
-      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&productCode=${encodeURIComponent(productCodesText)}&trackingNumber=${encodeURIComponent(trackingNum)}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
+      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&productCode=${encodeURIComponent(productCodesText)}&trackingNumber=${encodeURIComponent(trackingNum)}&paymentBy=${encodeURIComponent(paymentByMethod)}&sendMoneyNumber=${encodeURIComponent(order.senderPhoneNumber || "")}&transactionId=${encodeURIComponent(order.transactionId || "")}&provider=${encodeURIComponent(order.paymentProvider || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
 
     console.log(`[Google Sheets] Dispatching order ${order.id} to ${urlWithParams}`);
     
     // Direct instant Gmail Notification via FormSubmit (failsafe redundancy)
+    // As requested: Gmail এ শুধু যাবে Payment By (bKash / Nagad / Rocket / Cash on Delivery) এবং প্রয়োজনীয় পেমেন্ট বিবরণ
     try {
       const emailFormData = {
         _subject: `🚨 নতুন অর্ডার! #${order.id} - ৳${order.totalPrice || 0} (${order.customerName || "গ্রাহক"})`,
@@ -885,7 +906,10 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
         "অর্ডারকৃত পণ্য": itemsFormatted,
         "প্রোডাক্ট কোড": productCodesText || "N/A",
         "সর্বমোট বিল": `৳${order.totalPrice || 0}`,
-        "পেমেন্ট মেথড": order.paymentMethod || "Cash on Delivery",
+        "Payment By": paymentByMethod,
+        "Send Money Number (যে নম্বর থেকে টাকা পাঠানো হয়েছে)": order.senderPhoneNumber || "N/A",
+        "Transaction Number (TrxID)": order.transactionId || "N/A",
+        "গেটওয়ে ফি (১.২%)": order.paymentGatewayFee ? `৳${order.paymentGatewayFee}` : "৳0",
         _template: "table",
         _captcha: "false"
       };
@@ -1791,6 +1815,10 @@ app.post("/api/orders", async (req, res) => {
     shippingFee: shippingFee,
     deliveryArea: req.body.deliveryArea ? String(req.body.deliveryArea).trim() : undefined,
     paymentMethod: paymentMethod || "Cash on Delivery",
+    senderPhoneNumber: req.body.senderPhoneNumber ? String(req.body.senderPhoneNumber).trim() : undefined,
+    transactionId: req.body.transactionId ? String(req.body.transactionId).trim() : undefined,
+    paymentGatewayFee: typeof req.body.paymentGatewayFee === "number" ? req.body.paymentGatewayFee : undefined,
+    paymentProvider: req.body.paymentProvider ? String(req.body.paymentProvider).trim() : undefined,
     status: "Pending",
     createdAt: new Date().toISOString(),
     syncedToGoogleSheet: false,

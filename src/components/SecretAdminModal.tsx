@@ -2315,9 +2315,10 @@ function doPost(e) {
         orderSheet.appendRow([
           "Order ID", "Date/Time", "Customer Name", "Customer Email", 
           "Customer Phone", "Shipping Address", "Ordered Items", 
-          "Total Price", "Payment Method", "Status"
+          "Total Price", "Payment Method", "Status", "Product Code", "Tracking Number",
+          "Send Money Number", "Tranzation Number", "Payment Provider"
         ]);
-        orderSheet.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#e6f4ea");
+        orderSheet.getRange(1, 1, 1, 15).setFontWeight("bold").setBackground("#e6f4ea");
       }
       var ordRow = data.sheetRow;
       if (!ordRow || ordRow.length < 10) {
@@ -2331,7 +2332,12 @@ function doPost(e) {
           data.orderedItems || "",
           data.totalPrice || "৳0",
           data.paymentMethod || "Cash on Delivery",
-          data.orderStatus || "Pending"
+          data.orderStatus || "Pending",
+          data.productCodes || data.productCode || "",
+          data.trackingNumber || "",
+          data.senderPhoneNumber || data.sendMoneyNumber || data.senderPhone || "",
+          data.transactionId || data.tranzationNumber || "",
+          data.paymentProvider || data.paymentBy || (data.paymentMethod && data.paymentMethod.indexOf("bKash") !== -1 ? "bKash" : (data.paymentMethod && data.paymentMethod.indexOf("Nagad") !== -1 ? "Nagad" : (data.paymentMethod && data.paymentMethod.indexOf("Rocket") !== -1 ? "Rocket" : "Cash on Delivery")))
         ];
       }
 
@@ -2386,7 +2392,10 @@ function doPost(e) {
                 '<tr style="background-color: #f8fafc;"><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">প্রোডাক্ট / ছবি কোড:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-family: monospace; font-weight: bold; color: #d97706;">' + (data.productCodes || data.productCode || (ordRow.length > 10 ? ordRow[10] : "") || "P-01") + '</td></tr>' +
                 '<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">সর্বমোট বিল (Total):</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-size: 16px; font-weight: bold; color: #dc2626;">' + (data.totalPrice || ordRow[7] || "") + '</td></tr>' +
                 '<tr style="background-color: #f8fafc;"><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">পেমেন্ট মেথড:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">' + (data.paymentMethod || ordRow[8] || "Cash on Delivery") + '</td></tr>' +
-                '<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">অর্ডারের সময়:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; color: #64748b;">' + (data.orderDate || ordRow[1] || "") + '</td></tr>' +
+                '<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold; color: #059669;">Payment By:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold; color: #059669;">' + (data.paymentBy || data.paymentProvider || (ordRow.length > 14 ? ordRow[14] : "") || (data.paymentMethod && data.paymentMethod.indexOf("bKash") !== -1 ? "bKash" : (data.paymentMethod && data.paymentMethod.indexOf("Nagad") !== -1 ? "Nagad" : (data.paymentMethod && data.paymentMethod.indexOf("Rocket") !== -1 ? "Rocket" : "Cash on Delivery")))) + '</td></tr>' +
+                (data.senderPhoneNumber || data.sendMoneyNumber || (ordRow.length > 12 && ordRow[12] && ordRow[12] !== "N/A") ? '<tr style="background-color: #f8fafc;"><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">Send Money Number:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-family: monospace; font-weight: bold; color: #2563eb;">' + (data.senderPhoneNumber || data.sendMoneyNumber || ordRow[12]) + '</td></tr>' : '') +
+                (data.transactionId || (ordRow.length > 13 && ordRow[13] && ordRow[13] !== "N/A") ? '<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">Transaction Number (TrxID):</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-family: monospace; font-weight: bold; color: #d97706;">' + (data.transactionId || ordRow[13]) + '</td></tr>' : '') +
+                '<tr style="background-color: #f8fafc;"><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">অর্ডারের সময়:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; color: #64748b;">' + (data.orderDate || ordRow[1] || "") + '</td></tr>' +
               '</table>' +
               '<div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #475569; text-align: center;">' +
                 'এই অর্ডারটি গুগল শিটের <b style="color: #059669;">"order sheet"</b> ট্যাবে এবং ওয়েবসাইট অ্যাডমিন প্যানেলে স্বয়ংক্রিয়ভাবে সংরক্ষিত হয়েছে।' +
@@ -3893,8 +3902,18 @@ function cleanOrderSheetTrackingRows() {
                               <div>
                                 <span className="text-zinc-500 block text-[10px] uppercase font-bold">Payment & Total</span>
                                 <p className="text-zinc-300">{order.paymentMethod}</p>
-                                <p className="font-bold text-sm text-emerald-400 font-display">
-                                  ${order.totalPrice.toFixed(2)}
+                                {order.senderPhoneNumber && (
+                                  <p className="text-[11px] text-sky-400 font-mono mt-0.5">
+                                    <span className="text-zinc-400 font-sans">Send From:</span> {order.senderPhoneNumber}
+                                  </p>
+                                )}
+                                {order.transactionId && (
+                                  <p className="text-[11px] text-amber-400 font-mono mt-0.5">
+                                    <span className="text-zinc-400 font-sans">TrxID:</span> {order.transactionId}
+                                  </p>
+                                )}
+                                <p className="font-bold text-sm text-emerald-400 font-display mt-0.5">
+                                  ৳{order.totalPrice.toFixed(2)}
                                 </p>
                               </div>
                             </div>

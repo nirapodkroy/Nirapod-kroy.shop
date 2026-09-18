@@ -65,7 +65,11 @@ export interface Order {
   shippingAddress: string;
   items: OrderItem[];
   totalPrice: number;
-  paymentMethod: 'Cash on Delivery' | 'bKash / Mobile Wallet' | 'Credit / Debit Card';
+  paymentMethod: 'Cash on Delivery' | 'bKash / Mobile Wallet' | 'bKash' | 'Nagad' | 'Rocket' | string;
+  senderPhoneNumber?: string;
+  transactionId?: string;
+  paymentGatewayFee?: number;
+  paymentProvider?: 'bKash' | 'Nagad' | 'Rocket' | string;
   status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
   createdAt: string;
   syncedToGoogleSheet: boolean;

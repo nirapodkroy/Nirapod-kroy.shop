@@ -182,6 +182,9 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
     orderedItems: itemsFormatted,
     totalPrice: `৳${order.totalPrice || 0}`,
     paymentMethod: order.paymentMethod || "Cash on Delivery",
+    paymentBy: (order as any).paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : (order.paymentMethod || "Cash on Delivery")))),
+    senderPhoneNumber: (order as any).senderPhoneNumber || "",
+    transactionId: (order as any).transactionId || "",
     orderStatus: order.status || "Pending",
     sheetRow: [
       order.id,
@@ -195,12 +198,17 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
       order.paymentMethod || "Cash on Delivery",
       order.status || "Pending",
       order.productCodes || "",
-      order.trackingNumber || ""
+      order.trackingNumber || "",
+      (order as any).senderPhoneNumber || "N/A", // send money number
+      (order as any).transactionId || "N/A",      // tranzation number
+      (order as any).paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : "Cash on Delivery"))) // provider (ki teke dice)
     ]
   };
 
+  const paymentByVal = (order as any).paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : (order.paymentMethod || "Cash on Delivery"))));
+
   const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
-    `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
+    `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&paymentBy=${encodeURIComponent(paymentByVal)}&sendMoneyNumber=${encodeURIComponent((order as any).senderPhoneNumber || "")}&transactionId=${encodeURIComponent((order as any).transactionId || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
 
   // 1. Direct instant Gmail alert dispatch via FormSubmit (independent of Google Apps Script)
   try {
@@ -216,7 +224,10 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
       "অর্ডারকৃত পণ্য": itemsFormatted,
       "প্রোডাক্ট কোড": order.productCodes || "N/A",
       "সর্বমোট বিল": `৳${order.totalPrice || 0}`,
-      "পেমেন্ট মেথড": order.paymentMethod || "Cash on Delivery",
+      "Payment By": paymentByVal,
+      "Send Money Number (যে নম্বর থেকে টাকা পাঠানো হয়েছে)": (order as any).senderPhoneNumber || "N/A",
+      "Transaction Number (TrxID)": (order as any).transactionId || "N/A",
+      "গেটওয়ে ফি (১.২%)": (order as any).paymentGatewayFee ? `৳${(order as any).paymentGatewayFee}` : "৳0",
       _template: "table",
       _captcha: "false"
     };

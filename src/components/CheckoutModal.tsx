@@ -5,6 +5,7 @@ import { useToast } from "../context/ToastContext";
 import { useLanguage } from "../context/LanguageContext";
 import { handleLocalApi } from "../lib/mockApi";
 import { getProductImagesWithCodes } from "../utils/productCodeHelper";
+import { MobileBankingGateway, MobileBankingProvider } from "./MobileBankingGateway";
 import {
   X,
   ShieldCheck,
@@ -52,8 +53,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
   const [shippingAddress, setShippingAddress] = useState(currentUser?.address || "");
   const [deliveryArea, setDeliveryArea] = useState<"inside_dhaka" | "outside_dhaka">("inside_dhaka");
   const [paymentMethod, setPaymentMethod] = useState<
-    "Cash on Delivery" | "bKash / Mobile Wallet" | "Credit / Debit Card"
+    "Cash on Delivery" | "bKash / Mobile Wallet"
   >("Cash on Delivery");
+  const [mobileProvider, setMobileProvider] = useState<MobileBankingProvider>("bKash");
+  const [senderPhone, setSenderPhone] = useState("");
+  const [transactionId, setTransactionId] = useState("");
+  const [orderPreviewId, setOrderPreviewId] = useState(() => "NK-" + Math.floor(100000 + Math.random() * 900000));
   const [orderNotes, setOrderNotes] = useState("");
 
   const isSubmittingRef = useRef(false);
@@ -73,7 +78,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
 
   // Delivery charge: Inside Dhaka = 60 Tk, Outside Dhaka = 100 Tk
   const deliveryFee = deliveryArea === "inside_dhaka" ? 60 : 100;
-  const finalTotal = itemsSubtotal + deliveryFee;
+  const baseTotal = itemsSubtotal + deliveryFee;
+
+  // 1.2% Payment Gateway surcharge for Mobile Banking (bKash / Nagad / Rocket)
+  const gatewayFee = paymentMethod === "bKash / Mobile Wallet" ? Math.round(baseTotal * 0.012) : 0;
+  const finalTotal = baseTotal + gatewayFee;
 
   // Sync if user logs in
   useEffect(() => {
@@ -92,6 +101,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       setDirectCheckoutItem(null);
     }
     setConfirmedOrder(null);
+    setSenderPhone("");
+    setTransactionId("");
+    setOrderPreviewId("NK-" + Math.floor(100000 + Math.random() * 900000));
     onClose();
   };
 
@@ -118,11 +130,33 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
       return;
     }
 
+    // Require sender phone number and transaction ID when bKash / Mobile Banking is selected
+    if (paymentMethod === "bKash / Mobile Wallet") {
+      if (!senderPhone.trim()) {
+        addToast(
+          language === "bn"
+            ? `অনুগ্রহ করে যে নম্বর থেকে টাকা পাঠিয়েছেন (Sender Number) তা লিখুন।`
+            : `Please enter the mobile number you sent money from.`,
+          "warning"
+        );
+        return;
+      }
+      if (!transactionId.trim()) {
+        addToast(
+          language === "bn"
+            ? `অনুগ্রহ করে আপনার ${mobileProvider} ট্রানজেকশন আইডি (TrxID) লিখুন।`
+            : `Please enter your ${mobileProvider} Transaction ID (TrxID).`,
+          "warning"
+        );
+        return;
+      }
+    }
+
     isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
-      const clientOrderId = "NK-" + Math.floor(100000 + Math.random() * 900000);
+      const clientOrderId = orderPreviewId;
       const trackingNumber = "TRK-" + clientOrderId.replace(/\D/g, "");
 
       const orderedItemList = activeItems.map(item => ({
@@ -144,6 +178,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
 
       const fullShippingAddress = `${shippingAddress.trim()}, ${city.trim()} (${deliveryArea === "inside_dhaka" ? "ঢাকার ভেতরে" : "ঢাকার বাইরে"})`;
 
+      const finalPaymentMethod = paymentMethod === "Cash on Delivery"
+        ? "Cash on Delivery"
+        : `${mobileProvider} (TrxID: ${transactionId.trim().toUpperCase()})`;
+
       const fullOrderForSync = {
         id: clientOrderId,
         trackingNumber,
@@ -155,8 +193,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
         items: orderedItemList,
         totalPrice: finalTotal,
         shippingFee: deliveryFee,
+        paymentGatewayFee: gatewayFee,
+        paymentProvider: paymentMethod === "bKash / Mobile Wallet" ? mobileProvider : undefined,
+        senderPhoneNumber: senderPhone.trim() || undefined,
+        transactionId: transactionId.trim().toUpperCase() || undefined,
         deliveryArea: deliveryArea === "inside_dhaka" ? "ঢাকার ভেতরে (৳৬০)" : "ঢাকার বাইরে (৳১০০)",
-        paymentMethod,
+        paymentMethod: finalPaymentMethod,
         status: "Pending" as const,
         createdAt: new Date().toISOString(),
         syncedToGoogleSheet: false,
@@ -174,8 +216,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
         items: orderedItemList,
         totalPrice: finalTotal,
         shippingFee: deliveryFee,
+        paymentGatewayFee: gatewayFee,
+        paymentProvider: paymentMethod === "bKash / Mobile Wallet" ? mobileProvider : undefined,
+        senderPhoneNumber: senderPhone.trim() || undefined,
+        transactionId: transactionId.trim().toUpperCase() || undefined,
         deliveryArea: deliveryArea === "inside_dhaka" ? "ঢাকার ভেতরে (Inside Dhaka - ৳৬০)" : "ঢাকার বাইরে (Outside Dhaka - ৳১০০)",
-        paymentMethod,
+        paymentMethod: finalPaymentMethod,
         notes: orderNotes.trim() || undefined
       };
 
@@ -330,9 +376,34 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                   </div>
                 )}
 
+                <div className="flex items-center justify-between text-xs font-bold border-b border-zinc-200/60 dark:border-zinc-700/60 pb-2">
+                  <span className="text-zinc-600 dark:text-zinc-400">{language === "bn" ? "পেমেন্ট মাধ্যম:" : "Payment Method:"}</span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    {confirmedOrder.paymentMethod || (paymentMethod === "Cash on Delivery" ? "Cash on Delivery" : `${mobileProvider} Mobile Wallet`)}
+                  </span>
+                </div>
+
+                {confirmedOrder.senderPhoneNumber && (
+                  <div className="flex items-center justify-between text-xs font-bold border-b border-zinc-200/60 dark:border-zinc-700/60 pb-2">
+                    <span className="text-zinc-600 dark:text-zinc-400">{language === "bn" ? "প্রেরক নম্বর (Send Money From):" : "Sent Money From:"}</span>
+                    <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{confirmedOrder.senderPhoneNumber}</span>
+                  </div>
+                )}
+
+                {confirmedOrder.transactionId && (
+                  <div className="flex items-center justify-between text-xs font-bold border-b border-zinc-200/60 dark:border-zinc-700/60 pb-2 bg-emerald-50/50 dark:bg-emerald-950/20 px-2 py-1 rounded-lg">
+                    <span className="text-zinc-600 dark:text-zinc-400">{language === "bn" ? "ট্রানজেকশন আইডি (TrxID):" : "Transaction ID:"}</span>
+                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{confirmedOrder.transactionId}</span>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2 text-xs font-bold text-zinc-800 dark:text-zinc-200">
                   <Lock className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>{language === "bn" ? "১০০% নিরাপদ ক্যাশ অন ডেলিভারি" : "Privacy & Confidentiality Protected"}</span>
+                  <span>
+                    {confirmedOrder.paymentMethod && confirmedOrder.paymentMethod.includes("TrxID")
+                      ? (language === "bn" ? "মোবাইল ব্যাংকিং পেমেন্ট ভেরিফিকেশনে রয়েছে" : "Payment Verification in Progress")
+                      : (language === "bn" ? "১০০% নিরাপদ ক্যাশ অন ডেলিভারি" : "100% Secure Cash on Delivery")}
+                  </span>
                 </div>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
                   {language === "bn"
@@ -714,26 +785,33 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
 
                 {/* Payment Method Selector */}
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                    {t("payment_method")}
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                      {t("payment_method")}
+                    </label>
+                    {paymentMethod === "bKash / Mobile Wallet" && (
+                      <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-900/50">
+                        +১.২% ফি প্রযোজ্য
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Two active payment methods (Credit / Debit card temporarily disabled as requested) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {[
                       {
                         id: "Cash on Delivery",
                         label: language === "bn" ? "ক্যাশ অন ডেলিভারি" : "Cash on Delivery",
+                        subtitle: language === "bn" ? "পণ্য হাতে পেয়ে টাকা দিন" : "Pay cash upon arrival",
                         icon: Banknote
                       },
                       {
                         id: "bKash / Mobile Wallet",
-                        label: language === "bn" ? "বিকাশ / নগদ ওয়ালেট" : "bKash / Mobile Wallet",
+                        label: language === "bn" ? "বিকাশ / নগদ / রকেট" : "bKash / Nagad / Rocket",
+                        subtitle: language === "bn" ? "মোবাইল ব্যাংকিং (১.২% ফি)" : "Instant Mobile Banking (+1.2%)",
                         icon: Smartphone
-                      },
-                      {
-                        id: "Credit / Debit Card",
-                        label: language === "bn" ? "কার্ড পেমেন্ট (Card)" : "Credit / Debit Card",
-                        icon: CreditCard
                       }
+                      /* Credit / Debit Card option can be enabled here when ready in future */
                     ].map(method => {
                       const Icon = method.icon;
                       const isSelected = paymentMethod === method.id;
@@ -742,18 +820,46 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                           key={method.id}
                           type="button"
                           onClick={() => setPaymentMethod(method.id as any)}
-                          className={`flex items-center gap-2.5 p-3 rounded-xl border text-left text-xs font-medium transition-all cursor-pointer ${
+                          className={`flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                             isSelected
-                              ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-xs"
+                              ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-xs ring-1 ring-emerald-500/20"
                               : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300"
                           }`}
                         >
-                          <Icon className="w-4 h-4 shrink-0 text-emerald-500" />
-                          <span className="leading-tight">{method.label}</span>
+                          <div className={`p-2 rounded-lg shrink-0 ${
+                            isSelected ? "bg-emerald-500 text-white" : "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
+                          }`}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="font-bold text-xs sm:text-sm block text-zinc-900 dark:text-white leading-tight">
+                              {method.label}
+                            </span>
+                            <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
+                              {method.subtitle}
+                            </span>
+                          </div>
                         </button>
                       );
                     })}
                   </div>
+
+                  {/* If Mobile Banking is selected, show the exact screenshot replication gateway */}
+                  {paymentMethod === "bKash / Mobile Wallet" && (
+                    <div className="mt-3">
+                      <MobileBankingGateway
+                        selectedProvider={mobileProvider}
+                        onSelectProvider={setMobileProvider}
+                        senderPhone={senderPhone}
+                        onChangeSenderPhone={setSenderPhone}
+                        transactionId={transactionId}
+                        onChangeTransactionId={setTransactionId}
+                        finalTotal={finalTotal}
+                        orderPreviewId={orderPreviewId}
+                        feePercent={1.2}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Order Notes (Optional) */}
@@ -792,6 +898,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                   </span>
                 </div>
 
+                {/* Mobile Banking Surcharge (1.2%) */}
+                {paymentMethod === "bKash / Mobile Wallet" && (
+                  <div className="flex justify-between items-center text-xs text-rose-600 dark:text-rose-400 font-semibold bg-rose-50/60 dark:bg-rose-950/30 p-2 rounded-lg border border-rose-200/50 dark:border-rose-900/40">
+                    <span className="flex items-center gap-1.5">
+                      <span>{language === "bn" ? `মোবাইল ব্যাংকিং ফি (১.২% - ${mobileProvider})` : `Payment Gateway Fee (1.2% - ${mobileProvider})`}</span>
+                    </span>
+                    <span className="font-black">+৳{gatewayFee}</span>
+                  </div>
+                )}
+
                 {/* Total Payable */}
                 <div className="flex justify-between items-center text-base sm:text-lg font-black text-zinc-900 dark:text-white pt-2 border-t border-zinc-200/80 dark:border-zinc-800">
                   <span>{t("total_payable")}</span>
@@ -804,16 +920,24 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full mt-3 flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600/50 text-white font-extrabold text-sm sm:text-base shadow-lg shadow-emerald-600/25 transition-all hover:shadow-xl active:scale-[0.98] cursor-pointer"
+                  className={`w-full mt-3 flex items-center justify-center gap-2 py-4 px-4 rounded-2xl font-extrabold text-sm sm:text-base shadow-lg transition-all active:scale-[0.98] cursor-pointer ${
+                    paymentMethod === "bKash / Mobile Wallet"
+                      ? "bg-[#0052cc] hover:bg-[#0047b3] text-white shadow-blue-600/25"
+                      : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25"
+                  } disabled:opacity-50`}
                 >
                   {isSubmitting ? (
                     <span className="inline-flex items-center gap-2">
                       <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      {language === "bn" ? "অর্ডার নিশ্চিত করা হচ্ছে..." : "Confirming & Syncing Order..."}
+                      {language === "bn" ? "অর্ডার যাচাই ও নিশ্চিত করা হচ্ছে..." : "Verifying & Syncing Order..."}
                     </span>
                   ) : (
                     <>
-                      <span>{language === "bn" ? "অর্ডার কনফার্ম করুন (ক্যাশ অন ডেলিভারি)" : "Confirm Order (Cash on Delivery)"}</span>
+                      <span>
+                        {paymentMethod === "Cash on Delivery"
+                          ? (language === "bn" ? "অর্ডার কনফার্ম করুন (ক্যাশ অন ডেলিভারি)" : "Confirm Order (Cash on Delivery)")
+                          : (language === "bn" ? `অর্ডার ভেরিফাই ও কনফার্ম করুন (${mobileProvider})` : `Verify & Confirm Order (${mobileProvider})`)}
+                      </span>
                       <ArrowRight className="w-5 h-5" />
                     </>
                   )}
