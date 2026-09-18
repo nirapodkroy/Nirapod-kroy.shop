@@ -2078,6 +2078,23 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
 // Tabs Supported: "order sheet", "user traking" (also "user tracking"), "subscribe", "Customers"
 // ==========================================
 
+// ⭐️ জিমেইল নোটিফিকেশন চালু করার জন্য একবার রান করুন:
+// উপরে ফাংশন ড্রপডাউনে "authorizeAndTestEmail" সিলেক্ট করে ▶️ Run এ ক্লিক করুন।
+// এরপর Google এর পপ-আপ আসলে "Review Permissions" -> "Allow" করে দিন।
+function authorizeAndTestEmail() {
+  var targetMail = "adib1234@gmail.com";
+  try {
+    MailApp.sendEmail({
+      to: targetMail,
+      subject: "✅ Nirapod Kroy Apps Script Email Authorization",
+      htmlBody: "<div style='font-family: Arial; padding: 20px;'><h2>অভিনন্দন!</h2><p>আপনার গুগল শিটের Apps Script সফলভাবে জিমেইল পাঠানোর অনুমতি পেয়েছে। এখন থেকে নতুন কোনো অর্ডার সম্পন্ন হলে স্বয়ংক্রিয়ভাবে আপনার জিমেইলে অর্ডার তথ্য চলে আসবে।</p></div>"
+    });
+    Logger.log("Email sent successfully to " + targetMail);
+  } catch (e) {
+    Logger.log("Error sending test email: " + e.toString());
+  }
+}
+
 // Helper: কেস-ইনসেনসিটিভ এবং বানানের তারতম্য সত্ত্বেও শিট খুঁজে বের করার ফাংশন
 function findSheet(ss, candidates, keyword) {
   var sheets = ss.getSheets();
@@ -2353,7 +2370,7 @@ function doPost(e) {
 
           var mailSubject = "🚨 নতুন লাইভ অর্ডার! #" + targetOrderId + " - " + (data.totalPrice || ordRow[7] || "") + " (" + (data.customerName || ordRow[2] || "গ্রাহক") + ")";
           var mailHtml = 
-            '<div style="font-family: \'Segoe UI\', Arial, sans-serif; max-width: 650px; margin: auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">' +
+            '<div style="font-family: Arial, Helvetica, sans-serif; max-width: 650px; margin: auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">' +
               '<div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 18px 24px; border-radius: 12px; color: #ffffff; text-align: center; margin-bottom: 20px;">' +
                 '<h2 style="margin: 0; font-size: 22px; font-weight: bold;">🛒 নতুন অর্ডার নোটিফিকেশন (Live Alert)</h2>' +
                 '<p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.95;">Nirapod Kroy ই-কমার্স শপ থেকে সরাসরি প্রেরিত</p>' +
@@ -4690,34 +4707,52 @@ function cleanOrderSheetTrackingRows() {
                     </div>
 
                       {/* CRITICAL WARNING BOX: HOW TO DEPLOY NEW SCRIPT VERSION */}
-                      <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/50 text-xs text-amber-200 space-y-2.5 shadow-lg">
+                      <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/50 text-xs text-amber-200 space-y-3 shadow-lg">
                         <div className="flex items-center gap-2 font-bold text-amber-300 text-sm">
                           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-                          <span>⚠️ অতীব জরুরি: গুগল শিটে কোড আপডেট করার নিয়ম</span>
+                          <span>⚠️ জিমেইলে অর্ডার ডাটা যাওয়ার জন্য ২টি সহজ কাজ সম্পন্ন করুন</span>
                         </div>
-                        <p className="text-zinc-300 leading-relaxed text-xs">
-                          গুগল শিট স্ক্রিপ্ট এডিটরে কোড পেস্ট করে শুধু <strong className="text-white">Save (Ctrl+S)</strong> দিলে গুগল শিট নতুন কোড চালু করে না—আগের পুরানো কোডই চালু রাখে। নতুন কোড কার্যকর করতে মাত্র ২০ সেকেন্ডে নিচের স্টেপগুলো অনুসরণ করুন:
-                        </p>
-                        <div className="p-3 bg-zinc-900/90 rounded-xl border border-zinc-800 font-mono text-[11px] text-emerald-300 space-y-1.5">
-                          <div className="flex items-start gap-2">
-                            <span className="font-bold text-amber-400">১.</span>
-                            <span>গুগল স্ক্রিপ্ট এডিটরে ওপরের ডানে <strong>Deploy</strong> এ ক্লিক করুন &gt; <strong>Manage deployments</strong> সিলেক্ট করুন।</span>
+                        
+                        <div className="space-y-2 text-zinc-200">
+                          <div className="p-3 bg-zinc-900/90 rounded-xl border border-emerald-500/40 space-y-1.5">
+                            <div className="text-emerald-400 font-bold text-xs flex items-center gap-1.5">
+                              <span>✅ কাজ ১ (সবচেয়ে সহজ - ১ ক্লিকে জিমেইল চালু):</span>
+                            </div>
+                            <p className="text-[12px] text-zinc-300 leading-relaxed">
+                              আমরা আপনার ইমেইলে (<strong className="text-white">adib1234@gmail.com</strong> / <strong className="text-white">adib1234w@gmail.com</strong>) একটি <strong className="text-emerald-300">"Activate Form"</strong> লিংক পাঠিয়েছি। জিমেইল ইনবক্স বা স্প্যাম ফোল্ডার খুলে লিংকে একবার ক্লিক করলেই ওয়েবসাইট থেকে যেকোনো অর্ডার সরাসরি আপনার জিমেইলে চলে আসবে!
+                            </p>
                           </div>
-                          <div className="flex items-start gap-2">
-                            <span className="font-bold text-amber-400">২.</span>
-                            <span>সক্রিয় ডিপ্লয়মেন্টের পাশে <strong>Edit (পেন্সিল আইকন)</strong> এ ক্লিক করুন।</span>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <span className="font-bold text-amber-400">৩.</span>
-                            <span><strong>Version</strong> ড্রপডাউনে ক্লিক করে <strong>New version</strong> সিলেক্ট করুন।</span>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <span className="font-bold text-amber-400">৪.</span>
-                            <span>নিচে <strong>Deploy</strong> বাটনে ক্লিক করে দিন। ব্যাস!</span>
+
+                          <div className="p-3 bg-zinc-900/90 rounded-xl border border-amber-500/40 space-y-2">
+                            <div className="text-amber-300 font-bold text-xs flex items-center gap-1.5">
+                              <span>⚡ কাজ ২ (গুগল শিট থেকে অটো-ইমেইল চালু করার নিয়ম):</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-300 leading-relaxed">
+                              গুগল শিট স্ক্রিপ্ট এডিটরে নিচের সম্পূর্ণ নতুন কোডটি পেস্ট করার পর জিমেইল পারমিশন ও ডিপ্লয় করতে নিচের ধাপগুলো করুন:
+                            </p>
+                            <div className="font-mono text-[11px] text-amber-200 space-y-1.5 pl-1">
+                              <div className="flex items-start gap-2">
+                                <span className="font-bold text-amber-400">১.</span>
+                                <span>উপরে ফাংশন ড্রপডাউনে <strong className="text-emerald-300">authorizeAndTestEmail</strong> সিলেক্ট করে <strong>▶️ Run</strong> এ ক্লিক করুন।</span>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <span className="font-bold text-amber-400">২.</span>
+                                <span>Google পপ-আপ আসলে <strong>Review Permissions</strong> &gt; আপনার Gmail সিলেক্ট করুন &gt; <strong>Advanced</strong> &gt; <strong>Go to Untitled project (unsafe)</strong> &gt; <strong>Allow</strong> দিন।</span>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <span className="font-bold text-amber-400">৩.</span>
+                                <span>এরপর ওপরে ডানে <strong>Deploy</strong> &gt; <strong>Manage deployments</strong> &gt; <strong>Edit (পেন্সিল আইকন)</strong> এ ক্লিক করুন।</span>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <span className="font-bold text-amber-400">৪.</span>
+                                <span><strong>Version</strong> ড্রপডাউনে <strong>New version</strong> সিলেক্ট করে নিচে <strong>Deploy</strong> বাটনে ক্লিক করে দিন। ব্যাস!</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
+
                         <p className="text-[11px] text-zinc-400">
-                          এরপর উপরের <strong className="text-emerald-400">🧪 টেস্ট অর্ডার</strong> এবং <strong className="text-amber-400">📧 টেস্ট সাবস্ক্রাইব</strong> বাটনে ক্লিক করে পরীক্ষা করে নিন।
+                          এরপর উপরের <strong className="text-purple-400">📩 টেস্ট জিমেইল এলার্ট</strong> এবং <strong className="text-emerald-400">🧪 টেস্ট অর্ডার</strong> বাটনে ক্লিক করে সাথে সাথে চেক করে নিন।
                         </p>
                       </div>
 

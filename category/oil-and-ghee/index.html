@@ -71,65 +71,58 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
       (function() {
-        var loaded = false;
-        function checkAndFallback() {
-          if (loaded) return;
-          var root = document.getElementById('root');
-          if (root && root.firstElementChild) {
-            loaded = true;
-            return;
-          }
-          loaded = true;
-          var jsCandidates = [
-            '/assets/index.js?v=mu77kig4',
-            '/docs/assets/index.js?v=mu77kig4',
-            './assets/index.js?v=mu77kig4',
-            './docs/assets/index.js?v=mu77kig4'
-          ];
-          var cssCandidates = [
-            '/assets/index.css?v=mu77kig4',
-            '/docs/assets/index.css?v=mu77kig4',
-            './assets/index.css?v=mu77kig4',
-            './docs/assets/index.css?v=mu77kig4'
-          ];
+        var h = window.location.hostname;
+        var p = window.location.port;
+        // In local development or Cloud Run preview container, Vite handles /src/main.tsx dynamically
+        var isDev = h === 'localhost' || h === '127.0.0.1' || h.indexOf('.run.app') !== -1 || h.indexOf('webcontainer') !== -1 || p === '3000' || p === '5173';
+        var buildVer = 'mu77qyfx';
 
-          function loadNextCss() {
-            if (!cssCandidates.length) return;
-            var href = cssCandidates.shift();
+        if (!isDev) {
+          // Live static deployment (GitHub Pages, nirapodkroy.shop, custom domains):
+          // Immediately load production assets with cache-busting version query
+          var css = document.createElement('link');
+          css.rel = 'stylesheet';
+          css.crossOrigin = 'anonymous';
+          css.href = '/assets/index.css?v=mu789clr?v=' + buildVer;
+          document.head.appendChild(css);
+
+          var js = document.createElement('script');
+          js.type = 'module';
+          js.crossOrigin = 'anonymous';
+          js.src = '/assets/index.js?v=mu789clr?v=' + buildVer;
+          document.head.appendChild(js);
+        } else {
+          // Dev fallback in case module script fails
+          var loaded = false;
+          function checkAndFallback() {
+            if (loaded) return;
+            var root = document.getElementById('root');
+            if (root && root.firstElementChild) {
+              loaded = true;
+              return;
+            }
+            loaded = true;
             var link = document.createElement('link');
             link.rel = 'stylesheet';
-            link.crossOrigin = 'anonymous';
-            link.href = href;
-            link.onerror = loadNextCss;
+            link.href = '/assets/index.css?v=mu789clr?v=' + buildVer;
             document.head.appendChild(link);
-          }
-          loadNextCss();
 
-          function loadNextJs() {
-            if (!jsCandidates.length) return;
-            var src = jsCandidates.shift();
             var script = document.createElement('script');
             script.type = 'module';
-            script.crossOrigin = 'anonymous';
-            script.src = src;
-            script.onerror = loadNextJs;
-            document.body.appendChild(script);
+            script.src = '/assets/index.js?v=mu789clr?v=' + buildVer;
+            document.head.appendChild(script);
           }
-          loadNextJs();
+
+          window.addEventListener('error', function(e) {
+            if (e && ((e.filename && e.filename.indexOf('main.tsx') !== -1) || (e.target && e.target.src && e.target.src.indexOf('main.tsx') !== -1))) {
+              checkAndFallback();
+            }
+          }, true);
         }
-
-        window.addEventListener('error', function(e) {
-          if (e && ((e.filename && e.filename.indexOf('main.tsx') !== -1) || (e.target && e.target.src && e.target.src.indexOf('main.tsx') !== -1))) {
-            checkAndFallback();
-          }
-        }, true);
-
-        // Fallback timer: if /src/main.tsx failed to mount the app within 600ms (e.g. GitHub Pages serving raw tsx as octet-stream)
-        setTimeout(checkAndFallback, 600);
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index.js?v=mu77kig4"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index.css?v=mu77kig4">
+    <script type="module" crossorigin src="/assets/index.js?v=mu789clr"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index.css?v=mu789clr">
   </head>
   <body class="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-200 antialiased selection:bg-emerald-500 selection:text-white">
     <div id="root"></div>

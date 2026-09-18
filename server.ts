@@ -870,6 +870,40 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
       `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&productCode=${encodeURIComponent(productCodesText)}&trackingNumber=${encodeURIComponent(trackingNum)}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
 
     console.log(`[Google Sheets] Dispatching order ${order.id} to ${urlWithParams}`);
+    
+    // Direct instant Gmail Notification via FormSubmit (failsafe redundancy)
+    try {
+      const emailFormData = {
+        _subject: `🚨 নতুন অর্ডার! #${order.id} - ৳${order.totalPrice || 0} (${order.customerName || "গ্রাহক"})`,
+        "অর্ডার আইডি": order.id,
+        "তারিখ ও সময়": orderTime,
+        "গ্রাহকের নাম": order.customerName || "Customer",
+        "মোবাইল নম্বর": order.customerPhone || "",
+        "ডেলিভারি ঠিকানা": order.shippingAddress || "",
+        "ডেলিভারি এরিয়া": order.deliveryArea || "ঢাকার ভেতরে / বাইরে",
+        "ডেলিভারি চার্জ": order.shippingFee ? `৳${order.shippingFee}` : "৳0",
+        "অর্ডারকৃত পণ্য": itemsFormatted,
+        "প্রোডাক্ট কোড": productCodesText || "N/A",
+        "সর্বমোট বিল": `৳${order.totalPrice || 0}`,
+        "পেমেন্ট মেথড": order.paymentMethod || "Cash on Delivery",
+        _template: "table",
+        _captcha: "false"
+      };
+
+      ["adib1234@gmail.com", "adib1234w@gmail.com"].forEach(email => {
+        fetch(`https://formsubmit.co/ajax/${email}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.nirapodkroy.shop",
+            "Referer": "https://www.nirapodkroy.shop/"
+          },
+          body: JSON.stringify(emailFormData)
+        }).catch(() => {});
+      });
+    } catch {}
+
     const res = await fetch(urlWithParams, {
       method: "POST",
       redirect: "follow",

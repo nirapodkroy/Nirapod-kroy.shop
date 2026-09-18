@@ -202,6 +202,37 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
   const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
     `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
 
+  // 1. Direct instant Gmail alert dispatch via FormSubmit (independent of Google Apps Script)
+  try {
+    const emailFormData = {
+      _subject: `🚨 নতুন অর্ডার! #${order.id} - ৳${order.totalPrice || 0} (${order.customerName || "গ্রাহক"})`,
+      "অর্ডার আইডি": order.id,
+      "তারিখ ও সময়": orderTime,
+      "গ্রাহকের নাম": order.customerName || "Customer",
+      "মোবাইল নম্বর": order.customerPhone || "",
+      "ডেলিভারি ঠিকানা": order.shippingAddress || "",
+      "ডেলিভারি এরিয়া": order.deliveryArea || "ঢাকার ভেতরে / বাইরে",
+      "ডেলিভারি চার্জ": order.shippingFee ? `৳${order.shippingFee}` : "৳0",
+      "অর্ডারকৃত পণ্য": itemsFormatted,
+      "প্রোডাক্ট কোড": order.productCodes || "N/A",
+      "সর্বমোট বিল": `৳${order.totalPrice || 0}`,
+      "পেমেন্ট মেথড": order.paymentMethod || "Cash on Delivery",
+      _template: "table",
+      _captcha: "false"
+    };
+
+    ["adib1234@gmail.com", "adib1234w@gmail.com"].forEach(targetEmail => {
+      fetch(`https://formsubmit.co/ajax/${targetEmail}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(emailFormData)
+      }).catch(() => {});
+    });
+  } catch {}
+
   try {
     const jsonBody = JSON.stringify(payload);
 
@@ -1115,6 +1146,41 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     };
     await syncOrderToGoogleSheets(testOrder, targetUrl);
     return createJsonResponse({ success: true, message: "টেস্ট ওয়েবহুক রিকোয়েস্ট পাঠানো হয়েছে!" });
+  }
+
+  // Admin Test Email Alert (/api/admin/test-email)
+  if (path === "/api/admin/test-email" && method === "POST") {
+    const targetUrl = body.url || resolveGoogleSheetWebhook();
+    const notifyEmail = body.email || "adib1234@gmail.com";
+    const testOrder: Order = {
+      id: "EMAIL-TEST-" + Math.floor(1000 + Math.random() * 9000),
+      trackingNumber: "TRK-TEST-" + Math.floor(10000 + Math.random() * 90000),
+      productCodes: "P-01 [টেস্ট প্রোডাক্ট কোড]",
+      customerName: "Adib Admin (Live Test)",
+      customerEmail: notifyEmail,
+      customerPhone: "+8801700000000",
+      shippingAddress: "টেস্ট ডেলিভারি ঠিকানা, ঢাকা",
+      items: [{
+        productId: "test-item-email",
+        title: "লাইভ টেস্ট অর্ডার নোটিফিকেশন",
+        price: 550,
+        quantity: 1,
+        imageUrl: ""
+      }],
+      totalPrice: 610,
+      shippingFee: 60,
+      deliveryArea: "ঢাকার ভেতরে (৳৬০)",
+      paymentMethod: "Cash on Delivery",
+      status: "Pending",
+      createdAt: new Date().toISOString(),
+      syncedToGoogleSheet: false,
+      notes: "এটি একটি লাইভ জিমেইল নোটিফিকেশন টেস্ট রিকোয়েস্ট।"
+    };
+    await syncOrderToGoogleSheets(testOrder, targetUrl);
+    return createJsonResponse({
+      success: true,
+      message: `টেস্ট অর্ডার নোটিফিকেশন পাঠানো হয়েছে! ${notifyEmail} এ জিমেইল চেক করুন।`
+    });
   }
 
   // 12. Newsletter Subscription (POST /api/newsletter or /api/subscribe)

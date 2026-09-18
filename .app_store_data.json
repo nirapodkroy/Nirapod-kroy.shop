@@ -49,7 +49,7 @@
       "price": 850,
       "regularPrice": 1100,
       "category": "Sports",
-      "stock": 24,
+      "stock": 23,
       "imageUrl": "https://images.unsplash.com/photo-1592432678016-e910b452f9a2?auto=format&fit=crop&w=800&q=80",
       "rating": 4.8,
       "ratingCount": 74,
@@ -120,6 +120,32 @@
     }
   ],
   "orders": [
+    {
+      "id": "NK-227019",
+      "trackingNumber": "TRK-227019",
+      "productCodes": "ছবি কোড: P-01",
+      "customerName": "Ar Rakib",
+      "customerEmail": "adib1234w@gmail.com",
+      "customerPhone": "01786681134",
+      "shippingAddress": "palashbari/gaibandha\nPalashbari/gaibandha, Dhaka (ঢাকার ভেতরে)",
+      "items": [
+        {
+          "productId": "prod-sprt-1",
+          "title": "অ্যান্টি-স্লিপ হাই-ডেনসিটি ইকো যোগ ম্যাট (Yoga Mat with Strap)",
+          "price": 850,
+          "quantity": 1,
+          "imageUrl": "https://images.unsplash.com/photo-1592432678016-e910b452f9a2?auto=format&fit=crop&w=800&q=80",
+          "selectedImageCode": "P-01"
+        }
+      ],
+      "totalPrice": 910,
+      "shippingFee": 60,
+      "deliveryArea": "ঢাকার ভেতরে (Inside Dhaka - ৳৬০)",
+      "paymentMethod": "Cash on Delivery",
+      "status": "Pending",
+      "createdAt": "2026-09-18T17:07:40.391Z",
+      "syncedToGoogleSheet": true
+    },
     {
       "id": "NK-797901",
       "trackingNumber": "TRK-797901",
@@ -598,6 +624,81 @@
   ],
   "userTracking": [
     {
+      "id": "v_mu77ocu8_59x82r_checkout",
+      "time": "9/18/2026, 11:07:32 PM",
+      "page": "চেকআউট পেজ (Checkout)",
+      "ip": "103.12.173.137",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "সক্রিয় রয়েছে (Active)...",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mu77ocu8_59x82r_checkout",
+      "updatedAt": 1789751252022
+    },
+    {
+      "id": "v_mu779x5l_ei9izl_home",
+      "time": "9/18/2026, 10:56:18 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "103.12.173.137",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "11 মিনিট 14 সেকেন্ড",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mu779x5l_ei9izl_home",
+      "updatedAt": 1789751251982
+    },
+    {
+      "id": "v_mu779w61_4u0glt_home",
+      "time": "9/18/2026, 10:56:18 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "103.12.173.137",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "11 মিনিট",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mu779w61_4u0glt_home",
+      "updatedAt": 1789751237246
+    },
+    {
+      "id": "v_mu779w5f_sfxcy1_home",
+      "time": "9/18/2026, 10:56:18 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "103.12.173.137",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "1 সেকেন্ড",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mu779w5f_sfxcy1_home",
+      "updatedAt": 1789750578484
+    },
+    {
+      "id": "v_mu7778t0_bxgu6g_home",
+      "time": "9/18/2026, 10:56:13 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "103.12.173.137",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "2 মিনিট 5 সেকেন্ড",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mu7778t0_bxgu6g_home",
+      "updatedAt": 1789750578480
+    },
+    {
       "id": "v_mu76wx6m_gg9vn1_checkout",
       "time": "9/18/2026, 10:46:12 PM",
       "page": "চেকআউট পেজ (Checkout)",
@@ -636,11 +737,11 @@
       "device": "Desktop / PC",
       "os": "Windows 10/11",
       "browser": "Chrome",
-      "timeSpent": "30 সেকেন্ড",
+      "timeSpent": "10 মিনিট 17 সেকেন্ড",
       "referrer": "https://aistudio.google.com/",
       "screen": "1366x768",
       "sessionId": "v_mu76woq1_l91vcd_home",
-      "updatedAt": 1789749991010
+      "updatedAt": 1789750578479
     },
     {
       "id": "v_mu76wopi_u25ez4_home",
