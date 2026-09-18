@@ -55,6 +55,7 @@ interface Product {
   affiliateUrl?: string;
   affiliateSource?: string;
   affiliateButtonText?: string;
+  productCode?: string;
 }
 
 interface OrderItem {
@@ -63,6 +64,8 @@ interface OrderItem {
   price: number;
   quantity: number;
   imageUrl: string;
+  productCode?: string;
+  selectedImageCode?: string;
 }
 
 interface Order {
@@ -73,11 +76,15 @@ interface Order {
   shippingAddress: string;
   items: OrderItem[];
   totalPrice: number;
+  shippingFee?: number;
+  deliveryArea?: string;
   paymentMethod: 'Cash on Delivery' | 'bKash / Mobile Wallet' | 'Credit / Debit Card';
   status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
   createdAt: string;
   syncedToGoogleSheet: boolean;
   notes?: string;
+  trackingNumber?: string;
+  productCodes?: string;
 }
 
 interface Customer {
@@ -779,11 +786,11 @@ const trackingSyncThrottle = new Map<string, number>();
 const syncedOrderIdsServer = new Set<string>();
 
 // Helper: dispatch order to Google Sheets webhook
-async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promise<boolean> {
+async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceSync: boolean = false): Promise<boolean> {
   if (!order || !order.id) return false;
 
   const cleanOrderId = String(order.id).trim();
-  if (syncedOrderIdsServer.has(cleanOrderId)) {
+  if (!forceSync && syncedOrderIdsServer.has(cleanOrderId)) {
     return true; // Already synced or queued
   }
   syncedOrderIdsServer.add(cleanOrderId);
@@ -799,8 +806,19 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
 
   try {
     const itemsList = order.items && Array.isArray(order.items) ? order.items : [];
+    const trackingNum = order.trackingNumber || ("TRK-" + cleanOrderId.replace(/\D/g, ""));
+    const productCodesText = order.productCodes || itemsList.map(i => {
+      const parts: string[] = [];
+      if (i.productCode) parts.push(i.productCode);
+      if (i.selectedImageCode) parts.push(`ছবি কোড: ${i.selectedImageCode}`);
+      return parts.length > 0 ? parts.join(" / ") : (i.title || "Product");
+    }).join(", ");
+
     const itemsFormatted = itemsList.length > 0
-      ? itemsList.map(i => `${i.title || "Item"} (x${i.quantity || 1} @ ৳${i.price || 0})`).join(", ")
+      ? itemsList.map(i => {
+          const codeInfo = i.selectedImageCode ? ` [কোড: ${i.selectedImageCode}]` : (i.productCode ? ` [কোড: ${i.productCode}]` : "");
+          return `${i.title || "Item"}${codeInfo} (x${i.quantity || 1} @ ৳${i.price || 0})`;
+        }).join(", ")
       : "Ordered Items";
     
     const orderTime = order.createdAt 
@@ -814,6 +832,10 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
       sheetTab: "order sheet",
       targetSheet: "order sheet",
       orderId: order.id,
+      trackingNumber: trackingNum,
+      orderTrackingNumber: trackingNum,
+      productCode: productCodesText,
+      productCodes: productCodesText,
       timestamp: order.createdAt || new Date().toISOString(),
       orderDate: orderTime,
       customerName: order.customerName || "Customer",
@@ -824,6 +846,10 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
       totalPrice: `৳${order.totalPrice || 0}`,
       paymentMethod: order.paymentMethod || "Cash on Delivery",
       orderStatus: order.status || "Pending",
+      adminNotifyEmail: "adib1234@gmail.com,adib1234w@gmail.com",
+      deliveryArea: order.deliveryArea || "",
+      shippingFee: order.shippingFee ? `৳${order.shippingFee}` : "",
+      notes: order.notes || "",
       sheetRow: [
         order.id,
         orderTime,
@@ -834,12 +860,14 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promi
         itemsFormatted,
         `৳${order.totalPrice || 0}`,
         order.paymentMethod || "Cash on Delivery",
-        order.status || "Pending"
+        order.status || "Pending",
+        productCodesText,
+        trackingNum
       ]
     };
 
     const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
-      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}`;
+      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&productCode=${encodeURIComponent(productCodesText)}&trackingNumber=${encodeURIComponent(trackingNum)}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
 
     console.log(`[Google Sheets] Dispatching order ${order.id} to ${urlWithParams}`);
     const res = await fetch(urlWithParams, {
@@ -1685,7 +1713,9 @@ app.post("/api/orders", async (req, res) => {
       title,
       price,
       quantity: qty,
-      imageUrl
+      imageUrl,
+      selectedImageCode: item.selectedImageCode,
+      productCode: item.productCode || prod?.productCode
     });
   }
 
@@ -1701,14 +1731,31 @@ app.post("/api/orders", async (req, res) => {
     });
   }
 
+  const shippingFee = Number(req.body.shippingFee) || 0;
+  const clientTotal = Number(req.body.totalPrice);
+  const finalOrderTotal = (!isNaN(clientTotal) && clientTotal > 0) ? clientTotal : (computedTotal + shippingFee);
+
+  const productCodesStr = req.body.productCodes || processedItems.map(i => {
+    const parts = [];
+    if (i.productCode) parts.push(i.productCode);
+    if (i.selectedImageCode) parts.push(`ছবি কোড: ${i.selectedImageCode}`);
+    return parts.length > 0 ? parts.join(" / ") : i.title;
+  }).join(", ");
+
+  const trackingNum = req.body.trackingNumber || ("TRK-" + orderId.replace(/\D/g, ""));
+
   const newOrder: Order = {
     id: orderId,
+    trackingNumber: trackingNum,
+    productCodes: productCodesStr,
     customerName: customerName.trim(),
     customerEmail: customerEmail.trim().toLowerCase(),
     customerPhone: customerPhone.trim(),
     shippingAddress: shippingAddress.trim(),
     items: processedItems,
-    totalPrice: computedTotal,
+    totalPrice: finalOrderTotal,
+    shippingFee: shippingFee,
+    deliveryArea: req.body.deliveryArea ? String(req.body.deliveryArea).trim() : undefined,
     paymentMethod: paymentMethod || "Cash on Delivery",
     status: "Pending",
     createdAt: new Date().toISOString(),
@@ -2054,6 +2101,53 @@ app.post("/api/admin/test-subscribe-webhook", requireAdmin, async (req, res) => 
   }
   return res.status(502).json({ 
     error: "Webhook subscriber test failed. অনুগ্রহ করে আপনার Apps Script Webhook ইউআরএল এবং ডিপ্লয়মেন্ট চেক করুন।" 
+  });
+});
+
+// POST /api/admin/test-email - Test sending a live order alert email to adib1234@gmail.com
+app.post("/api/admin/test-email", requireAdmin, async (req, res) => {
+  const targetUrl = req.body.url || req.body.webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  const notifyEmail = req.body.email || "adib1234@gmail.com";
+
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return res.status(400).json({ error: "একটি সঠিক গুগল শিট ওয়েবহুক ইউআরএল দিন।" });
+  }
+
+  const testOrder: Order = {
+    id: "EMAIL-TEST-" + Math.floor(1000 + Math.random() * 9000),
+    trackingNumber: "TRK-TEST-" + Math.floor(10000 + Math.random() * 90000),
+    productCodes: "P-01, P-02 [টেস্ট প্রোডাক্ট কোড]",
+    customerName: "Adib Admin (Live Test)",
+    customerEmail: notifyEmail,
+    customerPhone: "+8801700000000",
+    shippingAddress: "টেস্ট ডেলিভারি ঠিকানা, ঢাকা",
+    items: [{
+      productId: "test-item-email",
+      title: "লাইভ টেস্ট অর্ডার নোটিফিকেশন",
+      price: 550,
+      quantity: 1,
+      imageUrl: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80",
+      selectedImageCode: "P-01"
+    }],
+    totalPrice: 610,
+    shippingFee: 60,
+    deliveryArea: "ঢাকার ভেতরে (৳৬০)",
+    paymentMethod: "Cash on Delivery",
+    status: "Pending",
+    createdAt: new Date().toISOString(),
+    syncedToGoogleSheet: false,
+    notes: "এটি একটি লাইভ জিমেইল নোটিফিকেশন টেস্ট রিকোয়েস্ট।"
+  };
+
+  const ok = await syncOrderToGoogleSheets(testOrder, targetUrl, true);
+  if (ok) {
+    return res.json({
+      success: true,
+      message: `টেস্ট অর্ডার রিকোয়েস্ট সফলভাবে পাঠানো হয়েছে! ${notifyEmail} এ জিমেইল চেক করুন।`
+    });
+  }
+  return res.status(502).json({
+    error: "টেস্ট ইমেইল রিকোয়েস্ট পাঠাতে সমস্যা হয়েছে। আপনার Apps Script কোড এবং Webhook URL নিশ্চিত করুন।"
   });
 });
 

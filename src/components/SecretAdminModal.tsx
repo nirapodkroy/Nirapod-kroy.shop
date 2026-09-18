@@ -140,6 +140,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isSavingWebhook, setIsSavingWebhook] = useState(false);
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [isTestingSubscribeWebhook, setIsTestingSubscribeWebhook] = useState(false);
+  const [isTestingEmailAlert, setIsTestingEmailAlert] = useState(false);
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
 
@@ -1931,6 +1932,32 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
+  // Test Live Email Alert
+  const handleTestEmailAlert = async () => {
+    setIsTestingEmailAlert(true);
+    try {
+      const res = await fetch("/api/admin/test-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ url: webhookUrl, email: "adib1234@gmail.com" })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        addToast(data.message || "টেস্ট অর্ডার নোটিফিকেশন adib1234@gmail.com এ পাঠানো হয়েছে! ইনবক্স বা স্প্যাম ফোল্ডার চেক করুন।", "success");
+      } else {
+        addToast(data.error || "Email alert test failed. অনুগ্রহ করে আপনার স্ক্রিপ্ট ডিপ্লয়মেন্ট চেক করুন।", "error");
+      }
+    } catch {
+      addToast("Email alert test failed.", "error");
+    } finally {
+      setIsTestingEmailAlert(false);
+    }
+  };
+
   // Fetch Tracking Data
   const fetchTrackingData = useCallback(async () => {
     if (!adminToken) return;
@@ -2305,6 +2332,73 @@ function doPost(e) {
       }
       if (!orderUpdated) {
         orderSheet.appendRow(ordRow);
+
+        // 📧 তাৎক্ষণিক লাইভ জিমেইল নোটিফিকেশন (Instant Live Gmail Notification)
+        try {
+          var adminEmails = ["adib1234@gmail.com", "adib1234w@gmail.com"];
+          if (data.adminNotifyEmail) {
+            var customList = String(data.adminNotifyEmail).split(",");
+            for (var c = 0; c < customList.length; c++) {
+              var cEmail = customList[c].trim();
+              if (cEmail && adminEmails.indexOf(cEmail) === -1) adminEmails.push(cEmail);
+            }
+          }
+          if (e && e.parameter && e.parameter.notifyEmail) {
+            var paramList = String(e.parameter.notifyEmail).split(",");
+            for (var p = 0; p < paramList.length; p++) {
+              var pEmail = paramList[p].trim();
+              if (pEmail && adminEmails.indexOf(pEmail) === -1) adminEmails.push(pEmail);
+            }
+          }
+
+          var mailSubject = "🚨 নতুন লাইভ অর্ডার! #" + targetOrderId + " - " + (data.totalPrice || ordRow[7] || "") + " (" + (data.customerName || ordRow[2] || "গ্রাহক") + ")";
+          var mailHtml = 
+            '<div style="font-family: \'Segoe UI\', Arial, sans-serif; max-width: 650px; margin: auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">' +
+              '<div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 18px 24px; border-radius: 12px; color: #ffffff; text-align: center; margin-bottom: 20px;">' +
+                '<h2 style="margin: 0; font-size: 22px; font-weight: bold;">🛒 নতুন অর্ডার নোটিফিকেশন (Live Alert)</h2>' +
+                '<p style="margin: 6px 0 0 0; font-size: 14px; opacity: 0.95;">Nirapod Kroy ই-কমার্স শপ থেকে সরাসরি প্রেরিত</p>' +
+              '</div>' +
+              '<p style="font-size: 15px; color: #334155; margin-bottom: 16px;">আপনার ওয়েবসাইটে একটি নতুন অর্ডার সম্পন্ন হয়েছে:</p>' +
+              '<table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #1e293b; margin-bottom: 20px;">' +
+                '<tr style="background-color: #f8fafc;"><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold; width: 35%;">অর্ডার আইডি:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold; color: #059669; font-size: 15px;">#' + targetOrderId + '</td></tr>' +
+                '<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">গ্রাহকের নাম:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: 600;">' + (data.customerName || ordRow[2] || "") + '</td></tr>' +
+                '<tr style="background-color: #f8fafc;"><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">মোবাইল নম্বর:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold; color: #2563eb; font-size: 15px;"><a href="tel:' + (data.customerPhone || ordRow[4] || "") + '" style="color: #2563eb; text-decoration: none;">' + (data.customerPhone || ordRow[4] || "") + '</a></td></tr>' +
+                '<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">ইমেইল ঠিকানা:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">' + (data.customerEmail || ordRow[3] || "প্রদান করা হয়নি") + '</td></tr>' +
+                '<tr style="background-color: #f8fafc;"><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">ডেলিভারি এরিয়া ও ঠিকানা:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">' + (data.shippingAddress || ordRow[5] || "") + '</td></tr>' +
+                '<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">অর্ডারকৃত প্রোডাক্ট ও ছবি কোড:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: 600; color: #0f172a;">' + (data.orderedItems || ordRow[6] || "") + '</td></tr>' +
+                '<tr style="background-color: #f8fafc;"><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">প্রোডাক্ট / ছবি কোড:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-family: monospace; font-weight: bold; color: #d97706;">' + (data.productCodes || data.productCode || (ordRow.length > 10 ? ordRow[10] : "") || "P-01") + '</td></tr>' +
+                '<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">সর্বমোট বিল (Total):</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-size: 16px; font-weight: bold; color: #dc2626;">' + (data.totalPrice || ordRow[7] || "") + '</td></tr>' +
+                '<tr style="background-color: #f8fafc;"><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">পেমেন্ট মেথড:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">' + (data.paymentMethod || ordRow[8] || "Cash on Delivery") + '</td></tr>' +
+                '<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: bold;">অর্ডারের সময়:</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; color: #64748b;">' + (data.orderDate || ordRow[1] || "") + '</td></tr>' +
+              '</table>' +
+              '<div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #475569; text-align: center;">' +
+                'এই অর্ডারটি গুগল শিটের <b style="color: #059669;">"order sheet"</b> ট্যাবে এবং ওয়েবসাইট অ্যাডমিন প্যানেলে স্বয়ংক্রিয়ভাবে সংরক্ষিত হয়েছে।' +
+              '</div>' +
+            '</div>';
+
+          for (var idx = 0; idx < adminEmails.length; idx++) {
+            var targetMail = adminEmails[idx].trim();
+            if (targetMail && targetMail.indexOf("@") !== -1) {
+              try {
+                MailApp.sendEmail({
+                  to: targetMail,
+                  subject: mailSubject,
+                  htmlBody: mailHtml
+                });
+              } catch(singleMailErr) {
+                try {
+                  MailApp.sendEmail(
+                    targetMail,
+                    mailSubject,
+                    "নতুন অর্ডার #" + targetOrderId + "\nগ্রাহক: " + (data.customerName || ordRow[2]) + "\nফোন: " + (data.customerPhone || ordRow[4]) + "\nঠিকানা: " + (data.shippingAddress || ordRow[5]) + "\nআইটেম: " + (data.orderedItems || ordRow[6]) + "\nমোট: " + (data.totalPrice || ordRow[7])
+                  );
+                } catch(textErr) {}
+              }
+            }
+          }
+        } catch(emailErr) {
+          // ইমেইল পাঠাতে কোনো সমস্যা হলেও গুগল শিটে ডেটা সেভ হওয়া বন্ধ হবে না
+        }
       }
 
       return ContentService.createTextOutput(JSON.stringify({ 
@@ -4552,7 +4646,7 @@ function cleanOrderSheetTrackingRows() {
                           </button>
                           <button
                             onClick={handleTestTrackingWebhook}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isCleaningOrderSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/40 disabled:opacity-50 text-cyan-200 font-bold text-xs transition-colors"
                             title="ইউজার ট্র্যাকিং ডেটা টেস্ট করতে চাপুন"
                           >
@@ -4560,14 +4654,34 @@ function cleanOrderSheetTrackingRows() {
                             <span>{isTestingTrackingWebhook ? "ট্র্যাকিং টেস্ট..." : "🧪 টেস্ট ট্র্যাকিং"}</span>
                           </button>
                           <button
+                            onClick={handleTestEmailAlert}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 disabled:opacity-50 text-purple-200 font-bold text-xs transition-colors"
+                            title="adib1234@gmail.com এ টেস্ট অর্ডার নোটিফিকেশন ইমেইল পাঠান"
+                          >
+                            <Mail className="w-3.5 h-3.5 text-purple-400" />
+                            <span>{isTestingEmailAlert ? "ইমেইল টেস্ট..." : "📩 টেস্ট জিমেইল এলার্ট"}</span>
+                          </button>
+                          <button
                             onClick={handleCleanOrderSheet}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isCleaningOrderSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/40 disabled:opacity-50 text-rose-200 font-bold text-xs transition-colors"
                             title="অর্ডার শিট থেকে ভুল করে ঢুকে যাওয়া ট্র্যাকিং রো মুছে 'user traking' এ স্থানান্তর করতে চাপুন"
                           >
                             <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                             <span>{isCleaningOrderSheet ? "ক্লিন হচ্ছে..." : "🧹 অর্ডার শিট ক্লিন করুন"}</span>
                           </button>
+                        </div>
+                        <div className="mt-3 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between flex-wrap gap-2 text-xs text-emerald-200">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                            <span>
+                              <strong>লাইভ জিমেইল নোটিফিকেশন সক্রিয়:</strong> কেউ অর্ডার করলেই স্বয়ংক্রিয়ভাবে <code className="bg-emerald-900/60 px-2 py-0.5 rounded text-emerald-300 font-mono">adib1234@gmail.com</code> এবং গুগল শিটে সাথে সাথে অর্ডার ও প্রোডাক্ট কোড চলে যাবে।
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-emerald-400/80 bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-500/30">
+                            ⚡ 100% অটোমেটিক লাইভ
+                          </span>
                         </div>
                         <p className="text-[11px] text-zinc-400 mt-1.5">
                           You can also save this into your <code>.env</code> file under <code>GOOGLE_SHEET_WEBHOOK_URL</code>.

@@ -448,7 +448,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
 
                       <button
                         onClick={() => {
-                          buyNow(product, activeImageItem?.code, activeImageItem?.url);
+                          buyNow(product, activeImageItem?.code, activeImageItem?.url, quantity);
                           onClose();
                         }}
                         className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#846F15] hover:bg-[#967F19] active:bg-[#6E5C0E] text-white font-bold text-xs sm:text-sm shadow-md shadow-[#846F15]/30 transition-all hover:shadow-lg active:scale-[0.98] cursor-pointer"

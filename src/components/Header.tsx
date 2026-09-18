@@ -64,14 +64,12 @@ export const Header: React.FC<HeaderProps> = ({
 
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const [isAroDropdownOpen, setIsAroDropdownOpen] = useState(false);
   const [isSearchCatDropdownOpen, setIsSearchCatDropdownOpen] = useState(false);
   const [tickerItems, setTickerItems] = useState<OrderTickerItem[]>([]);
   const [currentTickerIdx, setCurrentTickerIdx] = useState(0);
 
   // Category navigation refs
   const categoryScrollRef = useRef<HTMLDivElement>(null);
-  const aroDropdownRef = useRef<HTMLDivElement>(null);
   const searchCatDropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -103,9 +101,6 @@ export const Header: React.FC<HeaderProps> = ({
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
-      if (aroDropdownRef.current && !aroDropdownRef.current.contains(e.target as Node)) {
-        setIsAroDropdownOpen(false);
-      }
       if (searchCatDropdownRef.current && !searchCatDropdownRef.current.contains(e.target as Node)) {
         setIsSearchCatDropdownOpen(false);
       }
@@ -785,149 +780,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <ChevronRight className="w-4 h-4" />
           </button>
-
-          {/* 4. আরও (Aro / More) Dropdown - Quick Jump for ALL categories & Subcategories */}
-          <div className="relative overflow-visible shrink-0" ref={aroDropdownRef}>
-            <button
-              type="button"
-              id="header-subnav-aro-btn"
-              onClick={() => setIsAroDropdownOpen((prev) => !prev)}
-              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
-                isAroDropdownOpen
-                  ? "bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-300/40"
-                  : "text-zinc-200 hover:text-white hover:bg-white/10"
-              }`}
-              title={language === "bn" ? "সকল ক্যাটাগরি মেনু" : "All Categories Menu"}
-              aria-expanded={isAroDropdownOpen}
-            >
-              <span>{language === "bn" ? "আরও" : "More"}</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isAroDropdownOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {/* Dropdown containing ALL categories & subcategories - completely unclipped and floating above hero */}
-            {isAroDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-72 sm:w-80 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-2 z-[9999] animate-fadeIn max-h-[78vh] overflow-y-auto">
-                <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                    {language === "bn" ? "সকল ক্যাটাগরি ও পণ্য" : "All Categories & Products"}
-                  </span>
-                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
-                    {categories.length} টি
-                  </span>
-                </div>
-
-                <div className="py-1">
-                  {/* All Products Option */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleCategoryClick("All");
-                      setIsAroDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-                      selectedCategory === "All"
-                        ? "bg-emerald-600 text-white font-bold"
-                        : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    }`}
-                  >
-                    <span>{getCategoryDropdownLabel("All", language)}</span>
-                    {selectedCategory === "All" && <span className="text-[10px]">✓</span>}
-                  </button>
-
-                  {/* Offer Zone Option */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleCategoryClick("Offer Zone");
-                      setIsAroDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-                      selectedCategory === "Offer Zone"
-                        ? "bg-amber-500 text-zinc-950 font-bold"
-                        : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                    }`}
-                  >
-                    <span>{getCategoryDropdownLabel("Offer Zone", language)}</span>
-                    {selectedCategory === "Offer Zone" && <span className="text-[10px]">✓</span>}
-                  </button>
-
-                  {/* Groceries & Food Group with 8 Subcategories */}
-                  <div className="my-1.5 border-y border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20 py-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleCategoryClick(GROCERIES_PARENT);
-                        setIsAroDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                        selectedCategory.toLowerCase() === GROCERIES_PARENT.toLowerCase()
-                          ? "bg-emerald-600 text-white font-bold"
-                          : "text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/40"
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <span>🛒</span>
-                        <span>{getCategoryDropdownLabel(GROCERIES_PARENT, language)}</span>
-                      </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200/80 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-bold">
-                        {language === "bn" ? "৮ উপ-ক্যাটাগরি" : "8 Subcategories"}
-                      </span>
-                    </button>
-
-                    {/* 8 Subcategories under Groceries */}
-                    <div className="pl-6 pr-2 py-1 space-y-0.5">
-                      {GROCERY_SUBCATEGORIES.map((sub) => {
-                        const isSubSelected = selectedCategory.toLowerCase() === sub.toLowerCase();
-                        return (
-                          <button
-                            key={sub}
-                            type="button"
-                            onClick={() => {
-                              handleCategoryClick(sub);
-                              setIsAroDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-1.5 text-xs rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
-                              isSubSelected
-                                ? "bg-emerald-600 text-white font-bold"
-                                : "text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 hover:text-emerald-600 font-medium"
-                            }`}
-                          >
-                            <span>• {getCategoryDropdownLabel(sub, language)}</span>
-                            {isSubSelected && <span className="text-[10px]">✓</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* All Other Categories */}
-                  {categories
-                    .filter((c) => c !== "All" && c !== "Offer Zone" && c !== "Groceries" && c !== GROCERIES_PARENT && !isGrocerySubcategory(c))
-                    .map((cat) => {
-                      const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
-                      return (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => {
-                            handleCategoryClick(cat);
-                            setIsAroDropdownOpen(false);
-                          }}
-                          className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-                            isSelected
-                              ? "bg-emerald-600 text-white font-bold"
-                              : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                          }`}
-                        >
-                          <span>{getCategoryDropdownLabel(cat, language)}</span>
-                          {isSelected && <span className="text-[10px]">✓</span>}
-                        </button>
-                      );
-                    })}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 

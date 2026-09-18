@@ -168,6 +168,11 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
     sheetTab: "order sheet",
     targetSheet: "order sheet",
     orderId: order.id,
+    trackingNumber: order.trackingNumber || "",
+    productCodes: order.productCodes || "",
+    deliveryArea: order.deliveryArea || "",
+    shippingFee: order.shippingFee ? `৳${order.shippingFee}` : "",
+    adminNotifyEmail: "adib1234@gmail.com,adib1234w@gmail.com",
     timestamp: order.createdAt || new Date().toISOString(),
     orderDate: orderTime,
     customerName: order.customerName || "Customer",
@@ -188,12 +193,14 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
       itemsFormatted,
       `৳${order.totalPrice || 0}`,
       order.paymentMethod || "Cash on Delivery",
-      order.status || "Pending"
+      order.status || "Pending",
+      order.productCodes || "",
+      order.trackingNumber || ""
     ]
   };
 
   const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
-    `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}`;
+    `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
 
   try {
     const jsonBody = JSON.stringify(payload);
@@ -594,7 +601,9 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
         title,
         price,
         quantity: qty,
-        imageUrl
+        imageUrl,
+        selectedImageCode: item.selectedImageCode,
+        productCode: item.productCode || prod?.productCode
       });
     }
     setSafeStorage(PRODUCTS_KEY, products);
@@ -610,14 +619,31 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       });
     }
 
+    const shippingFee = Number(body.shippingFee) || 0;
+    const clientTotal = Number(body.totalPrice);
+    const finalOrderTotal = (!isNaN(clientTotal) && clientTotal > 0) ? clientTotal : (computedTotal + shippingFee);
+
+    const productCodesStr = body.productCodes || processedItems.map(i => {
+      const parts = [];
+      if (i.productCode) parts.push(i.productCode);
+      if (i.selectedImageCode) parts.push(`ছবি কোড: ${i.selectedImageCode}`);
+      return parts.length > 0 ? parts.join(" / ") : i.title;
+    }).join(", ");
+
+    const trackingNum = body.trackingNumber || ("TRK-" + orderId.replace(/\D/g, ""));
+
     const newOrder: Order = {
       id: orderId,
+      trackingNumber: trackingNum,
+      productCodes: productCodesStr,
       customerName: String(customerName).trim(),
       customerEmail: String(customerEmail).trim().toLowerCase(),
       customerPhone: String(customerPhone).trim(),
       shippingAddress: String(shippingAddress).trim(),
       items: processedItems,
-      totalPrice: computedTotal,
+      totalPrice: finalOrderTotal,
+      shippingFee: shippingFee,
+      deliveryArea: body.deliveryArea ? String(body.deliveryArea).trim() : undefined,
       paymentMethod: paymentMethod || "Cash on Delivery",
       status: "Pending",
       createdAt: new Date().toISOString(),

@@ -52,6 +52,7 @@ export interface OrderItem {
   quantity: number;
   imageUrl: string;
   selectedImageCode?: string;
+  productCode?: string;
 }
 
 export interface Order {
@@ -69,6 +70,8 @@ export interface Order {
   createdAt: string;
   syncedToGoogleSheet: boolean;
   notes?: string;
+  shippingFee?: number;
+  deliveryArea?: string;
 }
 
 export interface OrderTickerItem {

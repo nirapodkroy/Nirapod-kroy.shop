@@ -2,9 +2,14 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { Product, CartItem } from "../types";
 import { useToast } from "./ToastContext";
 import { safeGetLocalStorage, safeSetLocalStorage } from "../utils/storage";
+import { getProductImagesWithCodes } from "../utils/productCodeHelper";
 
 interface CartContextType {
   items: CartItem[];
+  directCheckoutItem: CartItem | null;
+  setDirectCheckoutItem: (item: CartItem | null) => void;
+  updateDirectItemCode: (code: string, imageUrl?: string) => void;
+  updateDirectItemQuantity: (delta: number) => void;
   addItem: (product: Product, quantity?: number, selectedImageCode?: string, selectedImageUrl?: string) => void;
   updateItemCode: (productId: string, code: string, imageUrl?: string) => void;
   removeItem: (productId: string) => void;
@@ -16,7 +21,8 @@ interface CartContextType {
   setIsCartOpen: (open: boolean) => void;
   isCheckoutOpen: boolean;
   setIsCheckoutOpen: (open: boolean) => void;
-  buyNow: (product: Product, selectedImageCode?: string, selectedImageUrl?: string) => void;
+  buyNow: (product: Product, selectedImageCode?: string, selectedImageUrl?: string, quantity?: number) => void;
+  openCartCheckout: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -30,6 +36,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return [];
     }
   });
+  const [directCheckoutItem, setDirectCheckoutItem] = useState<CartItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const { addToast } = useToast();
@@ -56,7 +63,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...updated[existingIdx],
           quantity: newQty,
           selectedImageCode: selectedImageCode || updated[existingIdx].selectedImageCode,
-          selectedImageUrl: selectedImageUrl || updated[existingIdx].selectedImageUrl
+          selectedImageUrl: selectedImageUrl || updated[existingIdx].selectedImageUrl,
+          productCode: product.productCode
         };
         return updated;
       } else {
@@ -66,7 +74,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             product,
             quantity,
             selectedImageCode,
-            selectedImageUrl: selectedImageUrl || product.imageUrl
+            selectedImageUrl: selectedImageUrl || product.imageUrl,
+            productCode: product.productCode
           }
         ];
       }
@@ -115,25 +124,51 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setItems([]);
   };
 
-  const buyNow = (product: Product, selectedImageCode?: string, selectedImageUrl?: string) => {
-    setItems(prev => {
-      const existsIdx = prev.findIndex(i => i.product.id === product.id);
-      if (existsIdx > -1) {
-        const updated = [...prev];
-        if (selectedImageCode) updated[existsIdx].selectedImageCode = selectedImageCode;
-        if (selectedImageUrl) updated[existsIdx].selectedImageUrl = selectedImageUrl;
-        return updated;
-      }
-      return [
-        ...prev,
-        {
-          product,
-          quantity: 1,
-          selectedImageCode,
-          selectedImageUrl: selectedImageUrl || product.imageUrl
-        }
-      ];
+  const buyNow = (
+    product: Product,
+    selectedImageCode?: string,
+    selectedImageUrl?: string,
+    quantity: number = 1
+  ) => {
+    const imageItems = getProductImagesWithCodes(product);
+    const chosenCode = selectedImageCode || imageItems[0]?.code || product.productCode || "P-01";
+    const chosenUrl = selectedImageUrl || imageItems[0]?.url || product.imageUrl;
+
+    setDirectCheckoutItem({
+      product,
+      quantity: Math.max(1, quantity),
+      selectedImageCode: chosenCode,
+      selectedImageUrl: chosenUrl,
+      productCode: product.productCode
     });
+    setIsCartOpen(false);
+    setIsCheckoutOpen(true);
+  };
+
+  const updateDirectItemCode = (code: string, imageUrl?: string) => {
+    setDirectCheckoutItem(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        selectedImageCode: code,
+        selectedImageUrl: imageUrl || prev.selectedImageUrl || prev.product.imageUrl
+      };
+    });
+  };
+
+  const updateDirectItemQuantity = (delta: number) => {
+    setDirectCheckoutItem(prev => {
+      if (!prev) return null;
+      const nextQty = Math.max(1, Math.min(prev.product.stock || 99, prev.quantity + delta));
+      return {
+        ...prev,
+        quantity: nextQty
+      };
+    });
+  };
+
+  const openCartCheckout = () => {
+    setDirectCheckoutItem(null);
     setIsCartOpen(false);
     setIsCheckoutOpen(true);
   };
@@ -145,6 +180,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <CartContext.Provider
       value={{
         items,
+        directCheckoutItem,
+        setDirectCheckoutItem,
+        updateDirectItemCode,
+        updateDirectItemQuantity,
         addItem,
         updateItemCode,
         removeItem,
@@ -156,7 +195,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsCartOpen,
         isCheckoutOpen,
         setIsCheckoutOpen,
-        buyNow
+        buyNow,
+        openCartCheckout
       }}
     >
       {children}
