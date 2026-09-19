@@ -3,6 +3,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useToast } from "../context/ToastContext";
 import { OrderTickerItem } from "../types";
 import {
   Search,
@@ -26,8 +27,7 @@ import {
   FileText,
   BadgePercent,
   Info,
-  Home,
-  Lock
+  Home
 } from "lucide-react";
 import {
   GROCERIES_PARENT,
@@ -61,12 +61,68 @@ export const Header: React.FC<HeaderProps> = ({
   const { itemCount, setIsCartOpen, subtotal } = useCart();
   const { currentUser, logoutCustomer, setIsAuthModalOpen, setAuthModalTab, setIsProfileModalOpen, setIsAdminModalOpen } = useAuth();
   const { language, setLanguage, toggleLanguage, t, getCategoryName, formatPrice } = useLanguage();
+  const { addToast } = useToast();
 
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [isSearchCatDropdownOpen, setIsSearchCatDropdownOpen] = useState(false);
   const [tickerItems, setTickerItems] = useState<OrderTickerItem[]>([]);
   const [currentTickerIdx, setCurrentTickerIdx] = useState(0);
+
+  // Secret Admin Trigger for Mobile & Desktop search bar:
+  // User can type or search :86681134Tadminpanelopennow (with or without colon/spaces)
+  const handleSearchInput = (val: string) => {
+    const cleanVal = val.trim().toLowerCase();
+    const normalized = cleanVal.replace(/^[:\s]+/, "");
+    if (
+      normalized === "86681134tadminpanelopennow" ||
+      cleanVal.includes("86681134tadminpanelopennow") ||
+      val.includes("86681134Tadminpanelopennow")
+    ) {
+      setSearchQuery("");
+      setIsAdminModalOpen(true);
+      addToast("অ্যাডমিন প্যানেল সক্রিয় হয়েছে (Admin Console Activated)", "info");
+      return;
+    }
+    setSearchQuery(val);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const cleanVal = searchQuery.trim().toLowerCase();
+      const normalized = cleanVal.replace(/^[:\s]+/, "");
+      if (
+        normalized === "86681134tadminpanelopennow" ||
+        cleanVal.includes("86681134tadminpanelopennow") ||
+        searchQuery.includes("86681134Tadminpanelopennow")
+      ) {
+        e.preventDefault();
+        setSearchQuery("");
+        setIsAdminModalOpen(true);
+        addToast("অ্যাডমিন প্যানেল সক্রিয় হয়েছে (Admin Console Activated)", "info");
+        return;
+      }
+      const catalog = document.getElementById("catalog-section");
+      if (catalog) catalog.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  const handleSearchSubmit = () => {
+    const cleanVal = searchQuery.trim().toLowerCase();
+    const normalized = cleanVal.replace(/^[:\s]+/, "");
+    if (
+      normalized === "86681134tadminpanelopennow" ||
+      cleanVal.includes("86681134tadminpanelopennow") ||
+      searchQuery.includes("86681134Tadminpanelopennow")
+    ) {
+      setSearchQuery("");
+      setIsAdminModalOpen(true);
+      addToast("অ্যাডমিন প্যানেল সক্রিয় হয়েছে (Admin Console Activated)", "info");
+      return;
+    }
+    const catalog = document.getElementById("catalog-section");
+    if (catalog) catalog.scrollIntoView({ behavior: "smooth" });
+  };
 
   // Category navigation refs
   const categoryScrollRef = useRef<HTMLDivElement>(null);
@@ -276,7 +332,8 @@ export const Header: React.FC<HeaderProps> = ({
                   id="main-header-search-input"
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => handleSearchInput(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
                   placeholder={language === "bn" ? "পণ্য খুঁজুন... (Search in...)" : "Search in..."}
                   className="w-full pl-5 pr-20 py-2.5 bg-zinc-100/90 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-full text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all shadow-inner"
                 />
@@ -298,10 +355,7 @@ export const Header: React.FC<HeaderProps> = ({
                   )}
                   <button
                     type="button"
-                    onClick={() => {
-                      const catalog = document.getElementById("catalog-section");
-                      if (catalog) catalog.scrollIntoView({ behavior: "smooth" });
-                    }}
+                    onClick={handleSearchSubmit}
                     className="p-1 text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
                     aria-label="Search"
                   >
@@ -650,7 +704,8 @@ export const Header: React.FC<HeaderProps> = ({
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchInput(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="none"
@@ -670,10 +725,7 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
                 <button
                   type="button"
-                  onClick={() => {
-                    const catalog = document.getElementById("catalog-section");
-                    if (catalog) catalog.scrollIntoView({ behavior: "smooth" });
-                  }}
+                  onClick={handleSearchSubmit}
                   className="p-1 text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer"
                   aria-label="Search"
                 >
@@ -1098,19 +1150,6 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 </button>
               </div>
-
-              {/* Secret Admin Access Button for Store Owner */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMoreOpen(false);
-                  setIsAdminModalOpen(true);
-                }}
-                className="w-full py-2 px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-dashed border-zinc-300 dark:border-zinc-700"
-              >
-                <Lock className="w-3.5 h-3.5 text-zinc-400" />
-                <span>{language === "bn" ? "অ্যাডমিন পোর্টাল (স্টোর ওনার)" : "Admin Portal (Owner)"}</span>
-              </button>
             </div>
 
             {/* Bottom Support Info & Close Button */}

@@ -199,6 +199,7 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
       order.status || "Pending",
       order.productCodes || "",
       order.trackingNumber || "",
+      (order as any).orderTrackingDetails || (order as any).trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
       (order as any).senderPhoneNumber || "N/A", // send money number
       (order as any).transactionId || "N/A",      // tranzation number
       (order as any).paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : "Cash on Delivery"))) // provider (ki teke dice)
@@ -208,7 +209,7 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
   const paymentByVal = (order as any).paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : (order.paymentMethod || "Cash on Delivery"))));
 
   const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
-    `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&paymentBy=${encodeURIComponent(paymentByVal)}&sendMoneyNumber=${encodeURIComponent((order as any).senderPhoneNumber || "")}&transactionId=${encodeURIComponent((order as any).transactionId || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
+    `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&trackingNumber=${encodeURIComponent(order.trackingNumber || "")}&trackingDetails=${encodeURIComponent((order as any).orderTrackingDetails || (order as any).trackingDetails || "")}&orderTrackingDetails=${encodeURIComponent((order as any).orderTrackingDetails || (order as any).trackingDetails || "")}&paymentBy=${encodeURIComponent(paymentByVal)}&sendMoneyNumber=${encodeURIComponent((order as any).senderPhoneNumber || "")}&transactionId=${encodeURIComponent((order as any).transactionId || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
 
   // 1. Direct instant Gmail alert dispatch via FormSubmit (independent of Google Apps Script)
   try {
@@ -690,7 +691,9 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       status: "Pending",
       createdAt: new Date().toISOString(),
       syncedToGoogleSheet: false,
-      notes: notes ? String(notes).trim() : undefined
+      notes: notes ? String(notes).trim() : undefined,
+      orderTrackingDetails: body.orderTrackingDetails || body.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
+      trackingDetails: body.orderTrackingDetails || body.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।"
     };
 
     orders.unshift(newOrder);

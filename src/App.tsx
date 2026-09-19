@@ -45,8 +45,27 @@ const StoreContent: React.FC = () => {
   });
 
   const { language, getCategoryName } = useLanguage();
+  const { setIsAdminModalOpen } = useAuth();
+  const { addToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Secret Admin Trigger: If phone/desktop search query is :86681134Tadminpanelopennow
+  useEffect(() => {
+    if (!searchQuery) return;
+    const cleanVal = searchQuery.trim().toLowerCase();
+    const normalized = cleanVal.replace(/^[:\s]+/, "");
+    if (
+      normalized === "86681134tadminpanelopennow" ||
+      cleanVal.includes("86681134tadminpanelopennow") ||
+      searchQuery.includes("86681134Tadminpanelopennow")
+    ) {
+      setSearchQuery("");
+      setIsAdminModalOpen(true);
+      addToast("অ্যাডমিন প্যানেল সক্রিয় হয়েছে (Admin Console Activated)", "info");
+    }
+  }, [searchQuery, setIsAdminModalOpen, addToast]);
+
   // Category state initialized directly from URL path, query (?category=), or hash
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
     return getCategoryFromUrl(BASE_CATEGORIES) || "All";
@@ -167,7 +186,6 @@ const StoreContent: React.FC = () => {
   });
 
   const { isCheckoutOpen, setIsCheckoutOpen } = useCart();
-  const { addToast } = useToast();
 
   // Dynamically include categories present in the active products and future additions
   const dynamicCategories = useMemo(() => {

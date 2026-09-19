@@ -191,37 +191,28 @@ async function dispatchTrackingEvent(payload: {
 }) {
   const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
   
-  // Enforce single initial visit rule:
-  // If an initial visit (!isHeartbeat) has already been sent for this session,
-  // all subsequent events for this session MUST be updates (isHeartbeat: true).
-  let effectiveIsHeartbeat = Boolean(payload.isHeartbeat);
-  if (!effectiveIsHeartbeat) {
-    if (initialVisitDispatchedSessions.has(payload.sessionId)) {
-      effectiveIsHeartbeat = true;
-    } else {
-      initialVisitDispatchedSessions.add(payload.sessionId);
-    }
+  // Enforce single initial visit registration:
+  const isInitialVisit = !payload.isHeartbeat && !initialVisitDispatchedSessions.has(payload.sessionId);
+  if (isInitialVisit) {
+    initialVisitDispatchedSessions.add(payload.sessionId);
   }
 
-  // 1. Notify server API for admin live dashboard ONLY (skip Google Sheets to avoid duplicate entries)
+  // 1. Notify server API for admin live dashboard AND authoritative Google Sheets sync
   try {
     fetch("/api/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, isHeartbeat: effectiveIsHeartbeat, skipGoogleSheets: true, syncToGoogleSheet: false }),
+      body: JSON.stringify({ 
+        ...payload, 
+        isHeartbeat: !isInitialVisit,
+        skipGoogleSheets: false
+      }),
       keepalive: true
     }).catch(() => {});
   } catch {}
 
-  // 2. Direct client-side dispatch to Google Sheets Webhook (works on mobile and desktop without server proxy blocking)
-  // STRICT RULE: Dispatch to Google Sheets EXACTLY ONCE per session.
-  // This guarantees that "user traking" tab gets exactly ONE row per visitor, never duplicate rows!
-  if (initialVisitDispatchedSessions.has(payload.sessionId)) {
-    return; // Session already recorded in Google Sheets. Do not create duplicate rows.
-  }
-  initialVisitDispatchedSessions.add(payload.sessionId);
-
-  {
+  // 2. Direct client-side dispatch to Google Sheets Webhook for the initial visit
+  if (isInitialVisit) {
     lastSheetDispatchMap.set(payload.sessionId, Date.now());
 
     const sheetPayload = {
@@ -235,25 +226,25 @@ async function dispatchTrackingEvent(payload: {
       isHeartbeat: false,
       timeSpent: "সক্রিয় ভিজিটর (Active)",
       page: payload.page,
-      ip: payload.clientIp,
-      location: payload.location,
-      device: payload.device,
-      os: payload.os,
-      browser: payload.browser,
-      referrer: payload.referrer,
-      screen: payload.screen,
+      ip: payload.clientIp || "Unknown",
+      location: payload.location || "Bangladesh",
+      device: payload.device || "Desktop",
+      os: payload.os || "Unknown",
+      browser: payload.browser || "Browser",
+      referrer: payload.referrer || "Direct",
+      screen: payload.screen || "1920x1080",
       time: timestamp,
       sheetRow: [
         timestamp,
         payload.page,
-        payload.clientIp,
-        payload.location,
-        payload.device,
-        payload.os,
-        payload.browser,
+        payload.clientIp || "Unknown",
+        payload.location || "Bangladesh",
+        payload.device || "Desktop",
+        payload.os || "Unknown",
+        payload.browser || "Browser",
         "সক্রিয় ভিজিটর (Active)",
-        payload.referrer,
-        payload.screen,
+        payload.referrer || "Direct",
+        payload.screen || "1920x1080",
         payload.sessionId
       ]
     };

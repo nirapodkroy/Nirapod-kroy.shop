@@ -69,11 +69,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   // Admin keyboard shortcut listener:
-  // Supports:
-  // 1. Ctrl/Cmd + Alt + Shift + T (original)
-  // 2. Ctrl/Cmd + Alt + T (easier 3-key combo, avoids Chrome 'reopen tab' collision)
-  // 3. Ctrl/Cmd + Shift + A or Ctrl/Cmd + Alt + A (A for Admin)
-  // Works with English, Bengali (Avro/Bijoy), and physical keycodes
+  // Strictly requires Ctrl/Cmd + Shift + Alt + T (all 4 keys together)
+  // No other combination is permitted
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
@@ -85,15 +82,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const keyCode = e.keyCode || e.which;
 
       const isT = code === "KeyT" || keyCode === 84 || key === "t" || key === "ট" || key === "ত";
-      const isA = code === "KeyA" || keyCode === 65 || key === "a" || key === "অ" || key === "া";
 
-      // Match either:
-      // (Ctrl+Alt+Shift + T) OR (Ctrl+Alt + T) OR (Ctrl+Shift + A) OR (Ctrl+Alt + A)
-      const matchesOriginal = isCtrlOrCmd && isAlt && isShift && isT;
-      const matchesCtrlAltT = isCtrlOrCmd && isAlt && isT;
-      const matchesAdminA = isCtrlOrCmd && (isShift || isAlt) && isA;
+      // Strictly Ctrl + Shift + Alt + T only
+      const matchesStrictShortcut = isCtrlOrCmd && isAlt && isShift && isT;
 
-      if (matchesOriginal || matchesCtrlAltT || matchesAdminA) {
+      if (matchesStrictShortcut) {
         e.preventDefault();
         e.stopPropagation();
         const willOpen = !isAdminModalOpenRef.current;

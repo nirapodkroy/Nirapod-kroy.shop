@@ -2135,23 +2135,27 @@ function authorizeAndTestEmail() {
   }
 }
 
-// Helper: কেস-ইনসেনসিটিভ এবং বানানের তারতম্য সত্ত্বেও শিট খুঁজে বের করার ফাংশন
-function findSheet(ss, candidates, keyword) {
+// Helper: কেস-ইনসেনসিটিভ এবং বানানের তারতম্য সত্ত্বেও শিট খুঁজে বের করার ফাংশন (অর্ডার ও কাস্টমার সম্পূর্ণ আলাদা রাখার জন্য এক্সক্লুশন সাপোর্টসহ)
+function findSheet(ss, candidates, keyword, exclude1, exclude2) {
   var sheets = ss.getSheets();
   // ১. হুবহু নাম চেক (ছোট/বড় হাতের অক্ষর বা স্পেস অগ্রাহ্য করে)
   for (var i = 0; i < sheets.length; i++) {
-    var sheetName = sheets[i].getName().trim().toLowerCase();
+    var sName = sheets[i].getName().trim().toLowerCase();
+    if (exclude1 && sName.indexOf(exclude1.toLowerCase().trim()) !== -1) continue;
+    if (exclude2 && sName.indexOf(exclude2.toLowerCase().trim()) !== -1) continue;
     for (var j = 0; j < candidates.length; j++) {
-      if (sheetName === candidates[j].toLowerCase().trim()) {
+      if (sName === candidates[j].toLowerCase().trim()) {
         return sheets[i];
       }
     }
   }
-  // ২. কিওয়ার্ড চেক (যেমন 'trak' বা 'track')
+  // ২. কিওয়ার্ড চেক
   if (keyword) {
     var kw = keyword.toLowerCase().trim();
     for (var i = 0; i < sheets.length; i++) {
       var sName = sheets[i].getName().trim().toLowerCase();
+      if (exclude1 && sName.indexOf(exclude1.toLowerCase().trim()) !== -1) continue;
+      if (exclude2 && sName.indexOf(exclude2.toLowerCase().trim()) !== -1) continue;
       if (sName.indexOf(kw) !== -1) {
         return sheets[i];
       }
@@ -2174,8 +2178,8 @@ function doGet(e) {
 
     var result = { orders: [], customers: [], subscribers: [], tracking: [] };
     
-    // 1. Orders tab ("order sheet" বা "Orders")
-    var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Customer_Order_Tracking", "Orders", "অর্ডার_লিস্ট", "অর্ডার"], "order");
+    // 1. Orders tab ("order sheet" বা "Orders" - কাস্টমার শিট সম্পূর্ণ বাদ)
+    var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Orders", "orders", "অর্ডার_লিস্ট", "অর্ডার"], "order", "custom", "coustom");
     if (orderSheet && orderSheet.getLastRow() > 1) {
       var lastCol = Math.min(orderSheet.getLastColumn(), 16);
       var rows = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, lastCol).getValues();
@@ -2207,7 +2211,7 @@ function doGet(e) {
     }
 
     // 2. Subscribers tab ("subscribe")
-    var subSheet = findSheet(ss, ["subscribe", "Subscribe", "Subscribers", "সাবস্ক্রাইব"], "subscrib");
+    var subSheet = findSheet(ss, ["subscribe", "Subscribe", "Subscribers", "সাবস্ক্রাইব"], "subscrib", "order", "custom");
     if (subSheet && subSheet.getLastRow() > 1) {
       var sRows = subSheet.getRange(2, 1, subSheet.getLastRow() - 1, Math.min(subSheet.getLastColumn(), 4)).getValues();
       result.subscribers = sRows.map(function(r) {
@@ -2221,7 +2225,7 @@ function doGet(e) {
     }
 
     // 3. User Tracking tab ("user traking" বা "user tracking")
-    var trackSheet = findSheet(ss, ["user traking", "user tracking", "User Traking", "User Tracking"], "trak") || findSheet(ss, [], "track");
+    var trackSheet = findSheet(ss, ["user traking", "user tracking", "User Traking", "User Tracking"], "trak", "order", "custom") || findSheet(ss, [], "track", "order", "custom");
     if (trackSheet && trackSheet.getLastRow() > 1) {
       var maxRowsToRead = Math.min(trackSheet.getLastRow() - 1, 200);
       var tRows = trackSheet.getRange(2, 1, maxRowsToRead, 11).getValues();
@@ -2242,8 +2246,9 @@ function doGet(e) {
       });
     }
 
-    // 4. Customers tab ("Customers" বা "গ্রাহক")
-    var custSheet = findSheet(ss, ["Customers", "customers", "Customer", "গ্রাহক_নিবন্ধন", "গ্রাহক"], "custom");
+    // 4. Customers tab ("Customers" বা "coustomer sheet" বা "গ্রাহক" - অর্ডার শিট সম্পূর্ণ বাদ)
+    var custSheet = findSheet(ss, ["Customers", "customers", "Customer", "customer", "coustomer sheet", "customer sheet", "coustomer", "গ্রাহক_নিবন্ধন", "গ্রাহক"], "custom", "order") ||
+                    findSheet(ss, ["coustomer sheet", "coustomer"], "coustom", "order");
     if (custSheet && custSheet.getLastRow() > 1) {
       var maxCustRows = Math.min(custSheet.getLastRow() - 1, 500);
       var cRows = custSheet.getRange(2, 1, maxCustRows, Math.min(custSheet.getLastColumn(), 7)).getValues();
@@ -2295,24 +2300,8 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
     
-    // ১. অর্ডার চেক (সবার আগে অর্ডার পৃথক করা যাতে কোনোভাবেই কাস্টমার বা ট্র্যাকিংয়ে না যায়)
-    var isOrder = Boolean(
-      data.action === "new_order" ||
-      data.action === "order" ||
-      data.type === "order" ||
-      data.orderId ||
-      String(data.sheetTab || data.targetSheet || "").toLowerCase().indexOf("order") !== -1 ||
-      (e && e.parameter && (
-        String(e.parameter.tab || "").toLowerCase().indexOf("order") !== -1 ||
-        String(e.parameter.action || "").toLowerCase().indexOf("order") !== -1 ||
-        String(e.parameter.type || "").toLowerCase().indexOf("order") !== -1 ||
-        e.parameter.orderId
-      )) ||
-      (data.sheetRow && data.sheetRow.length === 10)
-    );
-
-    // ২. ইউজার ট্র্যাকিং ডেটা নিখুঁতভাবে শনাক্তকরণ (user traking / user tracking)
-    var isTracking = !isOrder && Boolean(
+    // ১. ইউজার ট্র্যাকিং ডেটা নিখুঁতভাবে শনাক্তকরণ (user traking / user tracking)
+    var isTracking = Boolean(
       data.action === "user_tracking" || 
       data.action === "user_traking" || 
       data.type === "user_tracking" ||
@@ -2329,8 +2318,8 @@ function doPost(e) {
       Boolean(data.sessionId && (data.page || data.timeSpent))
     );
 
-    // ৩. সাবস্ক্রাইবার বা নিউজলেটার নির্ধারণ
-    var isSubscriber = !isOrder && !isTracking && Boolean(
+    // ২. সাবস্ক্রাইবার বা নিউজলেটার নির্ধারণ
+    var isSubscriber = !isTracking && Boolean(
       data.action === "subscribe" || 
       data.action === "newsletter_subscription" || 
       data.type === "subscriber" ||
@@ -2339,20 +2328,40 @@ function doPost(e) {
       (data.sheetRow && data.sheetRow.length === 4 && String(data.sheetRow[1]).indexOf("@") !== -1)
     );
 
-    // ৪. গ্রাহক রেজিস্ট্রেশন চেক (শুধুমাত্র অ্যাকাউন্ট নিবন্ধন, অর্ডার কখনোই নয়)
-    var isCustomer = !isOrder && !isTracking && !isSubscriber && Boolean(
+    // ৩. গ্রাহক রেজিস্ট্রেশন চেক (শুধুমাত্র নতুন অ্যাকাউন্ট সাইন-আপ, অর্ডার কখনোই নয়!)
+    var isCustomer = !isTracking && !isSubscriber && Boolean(
       data.action === "customer_registration" || 
       data.type === "customer" ||
-      (e && e.parameter && (e.parameter.type === "customer" || e.parameter.action === "customer_registration")) ||
+      (e && e.parameter && (
+        e.parameter.type === "customer" || 
+        e.parameter.action === "customer_registration" ||
+        (e.parameter.tab && (e.parameter.tab.toLowerCase().indexOf("custom") !== -1 || e.parameter.tab.toLowerCase().indexOf("coustom") !== -1))
+      )) ||
       (data.sheetRow && data.sheetRow.length === 7 && String(data.sheetRow[0]).toLowerCase().indexOf("cust-") !== -1) ||
       Boolean(data.customerId && (data.password || data.registeredAt))
+    );
+
+    // ৪. অর্ডার চেক (সরাসরি এবং নিশ্চিতভাবে order sheet এ যাবে, কাস্টমার শিটে কখনোই নয়)
+    var isOrder = !isTracking && !isSubscriber && !isCustomer && Boolean(
+      data.action === "new_order" ||
+      data.action === "order" ||
+      data.type === "order" ||
+      data.orderId ||
+      String(data.sheetTab || data.targetSheet || "").toLowerCase().indexOf("order") !== -1 ||
+      (e && e.parameter && (
+        String(e.parameter.tab || "").toLowerCase().indexOf("order") !== -1 ||
+        String(e.parameter.action || "").toLowerCase().indexOf("order") !== -1 ||
+        String(e.parameter.type || "").toLowerCase().indexOf("order") !== -1 ||
+        e.parameter.orderId
+      )) ||
+      Boolean(data.orderedItems || data.totalPrice || data.shippingAddress)
     );
 
     // ===============================================
     // ১. নতুন অর্ডার -> strictly "order sheet" ট্যাবে
     // ===============================================
     if (isOrder) {
-      var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Customer_Order_Tracking", "Orders", "অর্ডার"], "order") || 
+      var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Orders", "orders", "অর্ডার"], "order", "custom", "coustom") || 
                        ss.getSheetByName("order sheet") || 
                        ss.insertSheet("order sheet");
       if (orderSheet.getLastRow() === 0) {
@@ -2608,10 +2617,11 @@ function doPost(e) {
     // ৪. গ্রাহক নিবন্ধন -> strictly "Customers" ট্যাবে
     // ===============================================
     else if (isCustomer) {
-      var customerSheet = findSheet(ss, ["Customers", "customers", "Customer", "গ্রাহক_নিবন্ধন"], "custom");
-      if (!customerSheet) {
-        customerSheet = ss.insertSheet("Customers");
-      }
+      var customerSheet = findSheet(ss, ["Customers", "customers", "Customer", "customer", "coustomer sheet", "customer sheet", "coustomer", "গ্রাহক_নিবন্ধন"], "custom", "order") ||
+                          findSheet(ss, ["coustomer sheet", "coustomer"], "coustom", "order") ||
+                          ss.getSheetByName("Customers") ||
+                          ss.getSheetByName("coustomer sheet") ||
+                          ss.insertSheet("Customers");
       if (customerSheet.getLastRow() === 0) {
         customerSheet.appendRow([
           "Customer ID", "Registration Date", "Name", "Phone", "Email", "Address", "Password"
@@ -2650,6 +2660,7 @@ function doPost(e) {
 
       return ContentService.createTextOutput(JSON.stringify({ 
         status: "success", 
+        type: "customer",
         target: customerSheet.getName(),
         updatedExisting: custUpdated
       })).setMimeType(ContentService.MimeType.JSON);
@@ -2659,7 +2670,19 @@ function doPost(e) {
     // ৫. অন্যান্য ডেটা ফলব্যাক
     // ===============================================
     else {
-      var fallbackSheet = findSheet(ss, ["order sheet", "user traking", "Sheet1"], null) || ss.getSheets()[0];
+      // যদি কোনো কারণে মিস হয় কিন্তু অর্ডার সংক্রান্ত ফিল্ড থাকে তবে নিশ্চিতভাবে orderSheet এ যাবে (কখনোই কাস্টমার বা ট্র্যাকিংয়ে যাবে না)
+      if (data.orderId || data.totalPrice || (data.sheetRow && data.sheetRow.length >= 10)) {
+        var safeOrdSheet = findSheet(ss, ["order sheet", "Order Sheet", "Orders"], "order", "custom", "coustom") || 
+                           ss.getSheetByName("order sheet") || 
+                           ss.insertSheet("order sheet");
+        safeOrdSheet.appendRow(data.sheetRow || [data.orderId || ("NK-" + new Date().getTime()), new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" })]);
+        return ContentService.createTextOutput(JSON.stringify({ 
+          status: "success", 
+          type: "order", 
+          target: safeOrdSheet.getName() 
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var fallbackSheet = ss.getSheetByName("order sheet") || ss.getSheets()[0];
       if (data.sheetRow) {
         fallbackSheet.appendRow(data.sheetRow);
       }
@@ -2682,8 +2705,8 @@ function doPost(e) {
 // ==========================================
 function cleanOrderSheetTrackingRows() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Customer_Order_Tracking", "Orders"], "order") || ss.getSheets()[0];
-  var trackSheet = findSheet(ss, ["user traking", "user tracking"], "trak") || findSheet(ss, [], "track") || ss.insertSheet("user traking");
+  var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Orders", "orders", "অর্ডার"], "order", "custom", "coustom") || ss.getSheetByName("order sheet");
+  var trackSheet = findSheet(ss, ["user traking", "user tracking"], "trak", "order", "custom") || findSheet(ss, [], "track", "order", "custom") || ss.insertSheet("user traking");
   
   if (trackSheet.getLastRow() === 0) {
     trackSheet.appendRow([

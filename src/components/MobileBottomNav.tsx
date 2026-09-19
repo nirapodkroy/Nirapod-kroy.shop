@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { Home, Layers, Heart, Package, ShoppingCart, Lock, X, ChevronRight, Sparkles, Tag } from "lucide-react";
+import { Home, Layers, Heart, Package, ShoppingCart, X, ChevronRight, Sparkles, Tag } from "lucide-react";
 import { useCart } from "../context/CartContext";
-import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { formatCategoryDisplayLabel } from "../data/categories";
 
@@ -23,27 +22,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   categories
 }) => {
   const { itemCount, setIsCartOpen, subtotal } = useCart();
-  const { setIsAdminModalOpen } = useAuth();
   const { language, formatPrice, getCategoryName } = useLanguage();
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
-
-  // Discreet Admin access for Phone / Tablet users without keyboard
-  const [adminTapCount, setAdminTapCount] = useState(0);
-
-  const handleAdminTap = () => {
-    setAdminTapCount((prev) => {
-      const next = prev + 1;
-      if (next >= 5) {
-        setIsAdminModalOpen(true);
-        return 0;
-      }
-      return next;
-    });
-    // Auto reset tap count if inactive for 3 seconds
-    setTimeout(() => {
-      setAdminTapCount(0);
-    }, 3000);
-  };
 
   const isHomeActive = selectedCategory === "All" && !isCategorySheetOpen;
 
