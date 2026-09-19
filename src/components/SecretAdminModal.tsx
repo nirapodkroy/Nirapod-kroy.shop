@@ -83,6 +83,18 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   } = useAuth();
   const { addToast } = useToast();
 
+  // Helper to reliably get valid admin token for API headers
+  const getAdminAuthToken = useCallback((): string => {
+    return (
+      adminToken ||
+      localStorage.getItem("auracart_admin_token") ||
+      sessionStorage.getItem("auracart_admin_token") ||
+      localStorage.getItem("nirapod_admin_token") ||
+      sessionStorage.getItem("nirapod_admin_token") ||
+      "adm_master_session"
+    );
+  }, [adminToken]);
+
   // Login Form State
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
@@ -520,7 +532,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     // 1. Stats
     try {
       const statsRes = await safeAdminFetch("/api/admin/stats", {
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (statsRes.ok) {
         const statsData = await statsRes.json();
@@ -542,7 +554,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setIsLoadingOrders(true);
     try {
       const ordersRes = await safeAdminFetch("/api/admin/orders", {
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (ordersRes.ok) {
         const ordersData = await ordersRes.json();
@@ -561,7 +573,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setIsLoadingCustomers(true);
     try {
       const custRes = await safeAdminFetch("/api/admin/customers", {
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (custRes.ok) {
         const custData = await custRes.json();
@@ -577,7 +589,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setIsLoadingSubscribers(true);
     try {
       const subsRes = await safeAdminFetch("/api/admin/subscribers", {
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (subsRes.ok) {
         const subsData = await subsRes.json();
@@ -593,7 +605,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setIsLoadingTracking(true);
     try {
       const trackRes = await safeAdminFetch("/api/admin/tracking", {
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (trackRes.ok) {
         const trackData = await trackRes.json();
@@ -615,7 +627,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     // 3. Settings
     try {
       const settingsRes = await safeAdminFetch("/api/admin/settings", {
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (settingsRes.ok) {
         const sData = await settingsRes.json();
@@ -628,7 +640,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     // 4. Products (All products including inactive)
     try {
       const prodsRes = await safeAdminFetch("/api/admin/products", {
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (prodsRes.ok) {
         const pData = await prodsRes.json();
@@ -650,7 +662,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify(payload)
       });
@@ -723,17 +735,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  // Helper to reliably get valid admin token for API headers
-  const getAdminAuthToken = (): string => {
-    return (
-      adminToken ||
-      localStorage.getItem("auracart_admin_token") ||
-      sessionStorage.getItem("auracart_admin_token") ||
-      localStorage.getItem("nirapod_admin_token") ||
-      sessionStorage.getItem("nirapod_admin_token") ||
-      "adm_master_session"
-    );
-  };
+
 
   // Test GitHub Token and Repo access
   const handleTestGithubConnection = async () => {
@@ -977,6 +979,40 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         setLastGithubSyncTime(timeStr);
         localStorage.setItem("nirapod_gh_last_commit", commitUrl);
         localStorage.setItem("nirapod_gh_last_time", timeStr);
+
+        // Also commit docs/products.json so GitHub Pages (/docs) updates live!
+        try {
+          const docsFilePath = "docs/products.json";
+          const getDocsUrl = `https://api.github.com/repos/${cleanRepo}/contents/${docsFilePath}?ref=${cleanBranch}`;
+          const getDocsRes = await fetch(getDocsUrl, {
+            headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
+          });
+          let docsSha = "";
+          if (getDocsRes.ok) {
+            const docsData = await getDocsRes.json();
+            docsSha = docsData.sha;
+          }
+          await fetch(`https://api.github.com/repos/${cleanRepo}/contents/${docsFilePath}`, {
+            method: "PUT",
+            headers: {
+              Authorization: authHeader,
+              Accept: "application/vnd.github.v3+json",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              message: `chore(catalog): sync ${adminProducts.length} products to docs/products.json (live site)`,
+              content: base64Content,
+              sha: docsSha || undefined,
+              branch: cleanBranch,
+              committer: {
+                name: "Nirapod Kroy Admin",
+                email: "admin@nirapodkroy.shop"
+              }
+            })
+          });
+        } catch (docsErr) {
+          console.warn("[Client GitHub Push] Warning committing docs/products.json:", docsErr);
+        }
 
         try {
           const publicCatalog = adminProducts.filter(p => p.isActive !== false);
@@ -1273,7 +1309,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method,
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify(payload)
       });
@@ -1298,7 +1334,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         // Auto sync to live backend
         safeAdminFetch("/api/admin/publish-live", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
           body: JSON.stringify({ products: updatedList })
         }).catch(() => {});
 
@@ -1349,13 +1385,13 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     try {
       const res = await safeAdminFetch(`/api/products/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
 
       // Auto sync remaining to live server
       safeAdminFetch("/api/admin/publish-live", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
         body: JSON.stringify({ products: remaining })
       }).catch(() => {});
 
@@ -1397,13 +1433,13 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     try {
       const res = await safeAdminFetch(`/api/products/${id}/toggle-active`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
 
       // Auto sync to live
       safeAdminFetch("/api/admin/publish-live", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
         body: JSON.stringify({ products: updated })
       }).catch(() => {});
 
@@ -1440,13 +1476,13 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     try {
       const res = await safeAdminFetch(`/api/products/${id}/toggle-offer-zone`, {
         method: "PUT",
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
 
       // Auto sync to live
       safeAdminFetch("/api/admin/publish-live", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
         body: JSON.stringify({ products: updated })
       }).catch(() => {});
 
@@ -1478,7 +1514,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ customTotalRevenue: num })
       });
@@ -1512,7 +1548,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ reset: true })
       });
@@ -1543,7 +1579,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ status: newStatus })
       });
@@ -1565,7 +1601,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({
           trackingNumber,
@@ -1599,7 +1635,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/sync`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
 
       const data = await res.json();
@@ -1632,7 +1668,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     try {
       const res = await safeAdminFetch(`/api/admin/orders/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (res.ok) {
         fetchAdminData();
@@ -1661,7 +1697,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     try {
       const res = await safeAdminFetch(`/api/admin/customers/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (res.ok) {
         fetchAdminData();
@@ -1679,7 +1715,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       addToast(`সাবস্ক্রাইবার "${email}" মুছে ফেলা হয়েছে`, "info");
       const res = await safeAdminFetch(`/api/admin/subscribers/${encodeURIComponent(email)}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (res.ok) {
         fetchAdminData();
@@ -1718,7 +1754,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ webhookUrl })
       });
@@ -1773,7 +1809,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({
           orders,
@@ -1789,7 +1825,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         addToast(data.message || "অ্যাডমিন প্যানেলে ডেটা সফলভাবে সেভ করা হয়েছে!", "success");
         if (adminToken) {
           const statsRes = await safeAdminFetch("/api/admin/stats", {
-            headers: { Authorization: `Bearer ${adminToken}` }
+            headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
           });
           if (statsRes.ok) {
             const statsData = await statsRes.json();
@@ -1814,7 +1850,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         }
       });
       const data = await res.json();
@@ -1895,7 +1931,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${adminToken}`
+            Authorization: `Bearer ${getAdminAuthToken()}`
           },
           body: JSON.stringify({ webhookUrl: cleanUrl })
         });
@@ -1904,7 +1940,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${adminToken}`
+            Authorization: `Bearer ${getAdminAuthToken()}`
           },
           body: JSON.stringify({ webhookUrl: cleanUrl })
         });
@@ -1930,7 +1966,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ url: webhookUrl })
       });
@@ -1956,7 +1992,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ url: webhookUrl })
       });
@@ -1982,7 +2018,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ url: webhookUrl, email: "adib1234@gmail.com" })
       });
@@ -2006,7 +2042,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setIsLoadingTracking(true);
     try {
       const res = await safeAdminFetch("/api/admin/tracking", {
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
       if (res.ok) {
         const data = await res.json();
@@ -2043,7 +2079,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ url: webhookUrl })
       });
@@ -2070,7 +2106,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ url: webhookUrl })
       });
@@ -2095,7 +2131,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ url: webhookUrl })
       });
@@ -2120,7 +2156,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({ url: webhookUrl })
       });

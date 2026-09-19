@@ -727,19 +727,43 @@ function loadState() {
       if (parsed.products && Array.isArray(parsed.products)) {
         storeState = parsed;
         storeState.isDataSaved = Boolean(parsed.isDataSaved);
-        // Ensure all products have images array populated
-        storeState.products = storeState.products.map(p => {
-          const imgs = Array.isArray(p.images) && p.images.length > 0 ? p.images : [p.imageUrl];
-          const defaultMatch = DEFAULT_PRODUCTS.find(dp => dp.id === p.id);
-          if (defaultMatch && defaultMatch.images && defaultMatch.images.length > 1 && imgs.length <= 1) {
-            return { ...p, images: defaultMatch.images };
-          }
-          return { ...p, images: imgs };
-        });
-        if (!storeState.webhookUrl || storeState.webhookUrl.includes("AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4")) {
-          storeState.webhookUrl = DEFAULT_GOOGLE_SHEET_WEBHOOK;
-        }
       }
+    }
+
+    // Check if public/products.json exists and has new/updated products (e.g. manual edits or direct commits)
+    const publicDir = path.join(process.cwd(), "public");
+    const publicJsonPath = path.join(publicDir, "products.json");
+    if (fs.existsSync(publicJsonPath)) {
+      try {
+        const pubRaw = fs.readFileSync(publicJsonPath, "utf-8");
+        const pubList = JSON.parse(pubRaw);
+        if (Array.isArray(pubList) && pubList.length > 0) {
+          const currentIds = new Set((storeState.products || []).map(p => p.id));
+          const missingInStore = pubList.filter((p: any) => !currentIds.has(p.id));
+          if (missingInStore.length > 0) {
+            console.log(`[Store] Found ${missingInStore.length} new products in public/products.json, merging into live store.`);
+            storeState.products = [...missingInStore, ...(storeState.products || [])];
+          } else if (!storeState.products || storeState.products.length === 0) {
+            storeState.products = pubList;
+          }
+        }
+      } catch (err) {
+        console.warn("[Store] Error parsing public/products.json:", err);
+      }
+    }
+
+    // Ensure all products have images array populated
+    storeState.products = (storeState.products || []).map(p => {
+      const imgs = Array.isArray(p.images) && p.images.length > 0 ? p.images : [p.imageUrl];
+      const defaultMatch = DEFAULT_PRODUCTS.find(dp => dp.id === p.id);
+      if (defaultMatch && defaultMatch.images && defaultMatch.images.length > 1 && imgs.length <= 1) {
+        return { ...p, images: defaultMatch.images };
+      }
+      return { ...p, images: imgs };
+    });
+
+    if (!storeState.webhookUrl || storeState.webhookUrl.includes("AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4")) {
+      storeState.webhookUrl = DEFAULT_GOOGLE_SHEET_WEBHOOK;
     }
   } catch (e) {
     console.error("Error loading store data file:", e);
@@ -769,11 +793,12 @@ function saveState() {
       fs.writeFileSync(path.join(distDir, "products.json"), JSON.stringify(storeState.products, null, 2), "utf-8");
     }
 
-    // 5. Write docs/products.json if docs folder exists
+    // 5. Always write docs/products.json so GitHub Pages deployment from /docs stays 100% updated
     const docsDir = path.join(process.cwd(), "docs");
-    if (fs.existsSync(docsDir)) {
-      fs.writeFileSync(path.join(docsDir, "products.json"), JSON.stringify(storeState.products, null, 2), "utf-8");
+    if (!fs.existsSync(docsDir)) {
+      fs.mkdirSync(docsDir, { recursive: true });
     }
+    fs.writeFileSync(path.join(docsDir, "products.json"), JSON.stringify(storeState.products, null, 2), "utf-8");
 
     console.log(`[Store] Live state synchronized across all targets (${storeState.products.length} products).`);
   } catch (e) {
@@ -1696,79 +1721,109 @@ app.post("/api/admin/github/push", async (req, res) => {
     const cleanToken = String(token).trim();
     const targetProducts = Array.isArray(products) && products.length > 0 ? products : storeState.products;
 
-    // 1. Update local files immediately
+    // 1. Update local files immediately across all targets
     storeState.products = targetProducts;
     saveState();
 
     const authHeader = cleanToken.startsWith("ghp_") ? `token ${cleanToken}` : `Bearer ${cleanToken}`;
-    const filePath = "public/products.json";
 
-    // 2. Fetch existing file SHA
-    const getUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}?ref=${cleanBranch}`;
-    const getRes = await fetch(getUrl, {
-      headers: {
-        Authorization: authHeader,
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "NirapodKroy-Admin"
-      }
-    });
-
-    let sha = "";
-    if (getRes.ok) {
-      const fileData: any = await getRes.json();
-      sha = fileData.sha;
-    } else if (getRes.status === 401 || getRes.status === 403) {
-      return res.status(getRes.status).json({
-        error: "GitHub Token সঠিক নয় বা পারমিশন নেই। সঠিক Token ('repo' scope সহ) ব্যবহার করুন।"
+    // Helper to commit a single file to GitHub contents API
+    async function commitSingleFile(filePath: string, contentStr: string, commitMsg: string) {
+      const getUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}?ref=${cleanBranch}`;
+      const getRes = await fetch(getUrl, {
+        headers: {
+          Authorization: authHeader,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "NirapodKroy-Admin"
+        }
       });
+      let sha = "";
+      if (getRes.ok) {
+        const fileData: any = await getRes.json();
+        sha = fileData.sha;
+      } else if (getRes.status === 401 || getRes.status === 403) {
+        throw new Error("AUTH_ERROR");
+      }
+
+      const base64Content = Buffer.from(contentStr, "utf-8").toString("base64");
+      const putUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}`;
+      const putRes = await fetch(putUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: authHeader,
+          Accept: "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
+          "User-Agent": "NirapodKroy-Admin"
+        },
+        body: JSON.stringify({
+          message: commitMsg,
+          content: base64Content,
+          sha: sha || undefined,
+          branch: cleanBranch,
+          committer: {
+            name: "Nirapod Kroy Admin",
+            email: "admin@nirapodkroy.shop"
+          }
+        })
+      });
+      return putRes;
     }
 
-    // 3. Encode content safely via native Buffer
     const jsonStr = JSON.stringify(targetProducts, null, 2);
-    const base64Content = Buffer.from(jsonStr, "utf-8").toString("base64");
+    const tsContent = `import { Product } from "../types";\n\nexport const DEFAULT_PRODUCTS: Product[] = ${jsonStr};\n`;
 
-    // 4. PUT commit to GitHub
-    const putUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}`;
-    const putRes = await fetch(putUrl, {
-      method: "PUT",
-      headers: {
-        Authorization: authHeader,
-        Accept: "application/vnd.github.v3+json",
-        "Content-Type": "application/json",
-        "User-Agent": "NirapodKroy-Admin"
-      },
-      body: JSON.stringify({
-        message: `chore(catalog): sync ${targetProducts.length} products via admin panel`,
-        content: base64Content,
-        sha: sha || undefined,
-        branch: cleanBranch,
-        committer: {
-          name: "Nirapod Kroy Admin",
-          email: "admin@nirapodkroy.shop"
-        }
-      })
-    });
+    // 2. Commit public/products.json
+    let lastCommitUrl = `https://github.com/${cleanRepo}/commits/${cleanBranch}`;
+    try {
+      const pubRes = await commitSingleFile(
+        "public/products.json",
+        jsonStr,
+        `chore(catalog): sync ${targetProducts.length} products to public/products.json`
+      );
+      if (!pubRes.ok) {
+        const errData: any = await pubRes.json().catch(() => ({}));
+        let friendlyError = errData.message || "Failed to commit public/products.json";
+        if (pubRes.status === 409) friendlyError = "GitHub Conflict: ফাইলের ভার্সন মেলেনি। অনুগ্রহ করে আবার পুশ বাটনে ক্লিক করুন।";
+        if (pubRes.status === 404) friendlyError = `Repository '${cleanRepo}' বা ব্রাঞ্চ '${cleanBranch}' খুঁজে পাওয়া যায়নি।`;
+        return res.status(pubRes.status).json({ error: friendlyError, raw: errData });
+      }
+      const pubData: any = await pubRes.json();
+      if (pubData.commit?.html_url) lastCommitUrl = pubData.commit.html_url;
 
-    if (putRes.ok) {
-      const putData: any = await putRes.json();
-      const commitUrl = putData.commit?.html_url || `https://github.com/${cleanRepo}/commits/${cleanBranch}`;
+      // 3. Also commit docs/products.json so GitHub Pages (/docs) updates live!
+      try {
+        await commitSingleFile(
+          "docs/products.json",
+          jsonStr,
+          `chore(catalog): sync ${targetProducts.length} products to docs/products.json (live site)`
+        );
+      } catch (docsErr) {
+        console.warn("[GitHub Push] Warning committing docs/products.json:", docsErr);
+      }
+
+      // 4. Optionally commit src/data/defaultProducts.ts
+      try {
+        await commitSingleFile(
+          "src/data/defaultProducts.ts",
+          tsContent,
+          `chore(catalog): sync defaultProducts.ts`
+        );
+      } catch (tsErr) {
+        console.warn("[GitHub Push] Warning committing defaultProducts.ts:", tsErr);
+      }
+
       return res.json({
         success: true,
-        commitUrl,
-        sha: putData.content?.sha,
-        message: "সফলভাবে GitHub-এ পুশ ও কমিট হয়েছে! GitHub Actions ১ মিনিটের মধ্যে লাইভ সাইট আপডেট করে ফেলবে।"
+        commitUrl: lastCommitUrl,
+        message: "সফলভাবে GitHub-এ পুশ ও কমিট হয়েছে! GitHub Pages (docs) ও সাইট লাইভ আপডেট হয়ে যাবে।"
       });
-    } else {
-      const errData: any = await putRes.json().catch(() => ({}));
-      let friendlyError = errData.message || "Failed to commit";
-      if (putRes.status === 409) {
-        friendlyError = "GitHub Conflict: ফাইলের ভার্সন মেলেনি। অনুগ্রহ করে আবার পুশ বাটনে ক্লিক করুন।";
-      } else if (putRes.status === 404) {
-        friendlyError = `Repository '${cleanRepo}' বা ব্রাঞ্চ '${cleanBranch}' খুঁজে পাওয়া যায়নি।`;
-      } else if (putRes.status === 422) {
-        friendlyError = `GitHub Validation Error: ${errData.message || "ফাইল বা ডেটা ফরমেট সঠিক নয়।"}`;
+    } catch (pushErr: any) {
+      if (pushErr.message === "AUTH_ERROR") {
+        return res.status(401).json({
+          error: "GitHub Token সঠিক নয় বা পারমিশন নেই। সঠিক Token ('repo' scope সহ) ব্যবহার করুন।"
+        });
       }
-      return res.status(putRes.status).json({ error: friendlyError, raw: errData });
+      throw pushErr;
     }
   } catch (err: any) {
     return res.status(500).json({ error: `পুশ করার সময় সার্ভার এরর: ${err.message}` });
