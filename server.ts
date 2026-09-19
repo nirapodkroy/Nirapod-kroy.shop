@@ -837,6 +837,12 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
       : (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : (order.paymentMethod || "Cash on Delivery"))));
 
     // Payload formatted for standard Google Apps Script Webhook
+    const userEmail = (order.customerEmail || "").trim();
+    const productCodesVal = productCodesText || order.productCodes || "";
+    const deliveryAreaVal = order.deliveryArea || (Number(order.shippingFee) === 100 ? "ঢাকার বাইরে" : "ঢাকার ভেতরে");
+    const shippingFeeVal = order.shippingFee ? `৳${order.shippingFee}` : (deliveryAreaVal.includes("100") || deliveryAreaVal.includes("বাইরে") ? "৳100" : "৳60");
+    const trackingDetailsText = order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে";
+
     const payload = {
       action: "new_order",
       type: "order",
@@ -845,16 +851,37 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
       orderId: order.id,
       trackingNumber: trackingNum,
       orderTrackingNumber: trackingNum,
-      productCode: productCodesText,
-      productCodes: productCodesText,
+
+      // Customer Email (নিশ্চিত করে জিমেইল / ইমেইল কলামে গ্রাহকের আসল ইমেইল যাওয়ার ব্যবস্থা)
+      customerEmail: userEmail,
+      email: userEmail,
+      userEmail: userEmail,
+      gmail: userEmail,
+      // ওল্ড স্ক্রিপ্টে Col 4 (Gmail) এ data.productCodes লেখা হতো; তাই ওল্ড স্ক্রিপ্ট চললে যাতে জিমেইল কলামে গ্রাহকের ইমেইলটাই যায়:
+      productCodes: userEmail || productCodesVal,
+
+      // Product Code (প্রোডাক্ট / ছবি কোড)
+      productCode: productCodesVal,
+      actualProductCodes: productCodesVal,
+      productCodeText: productCodesVal,
+      productCodesActual: productCodesVal,
+      // ওল্ড স্ক্রিপ্টে Col 11 (Product Code) এ data.deliveryArea লেখা হতো; তাই ওল্ড স্ক্রিপ্ট চললে যাতে প্রোডাক্ট কোড কলামে আসল কোডটাই যায়:
+      deliveryArea: productCodesVal || deliveryAreaVal,
+
+      // Delivery Area & Shipping Fee (ডেলিভারি এরিয়া ও ডেলিভারি চার্জ)
+      actualDeliveryArea: deliveryAreaVal,
+      deliveryAreaName: deliveryAreaVal,
+      shippingFee: shippingFeeVal,
+      deliveryCharge: shippingFeeVal,
+      actualShippingFee: shippingFeeVal,
+
       timestamp: order.createdAt || new Date().toISOString(),
       orderDate: orderTime,
       customerName: order.customerName || "Customer",
-      customerEmail: order.customerEmail || "",
       customerPhone: order.customerPhone || "",
       shippingAddress: order.shippingAddress || "",
       orderedItems: itemsFormatted,
-      totalPrice: `৳${order.totalPrice || 0}`,
+      totalPrice: Number(order.totalPrice) || 0,
       paymentMethod: order.paymentMethod || "Cash on Delivery",
       paymentBy: paymentByMethod,
       paymentProvider: order.paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : ""))),
@@ -866,8 +893,6 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
       paymentGatewayFee: order.paymentGatewayFee ? `৳${order.paymentGatewayFee}` : "",
       orderStatus: order.status || "Pending",
       adminNotifyEmail: "adib1234@gmail.com,adib1234w@gmail.com",
-      deliveryArea: order.deliveryArea || "",
-      shippingFee: order.shippingFee ? `৳${order.shippingFee}` : "",
       notes: order.notes || "",
       orderTrackingDetails: order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
       orderTrackingDetis: order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
@@ -876,17 +901,17 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
         order.id,                                // Col A (1): Order ID
         orderTime,                               // Col B (2): Order Date
         order.customerName || "Customer",        // Col C (3): Customer Name
-        order.customerEmail || "",               // Col D (4): Customer Email (Gmail)
+        userEmail,                               // Col D (4): Customer Email (Gmail)
         order.customerPhone || "",               // Col E (5): Customer Phone
         order.shippingAddress || "",             // Col F (6): Shipping Address
         `৳${order.totalPrice || 0}`,             // Col G (7): Total Price (৳)
         order.paymentMethod || "Cash on Delivery",// Col H (8): Payment Method
         order.status || "Pending",               // Col I (9): Status
         itemsFormatted,                          // Col J (10): Order Items Summary
-        productCodesText,                        // Col K (11): product number (Product / Picture Code)
-        order.shippingFee ? `৳${order.shippingFee}` : (order.deliveryArea?.includes("100") || order.deliveryArea?.includes("বাইরে") ? "৳100" : "৳60"), // Col L (12): Delivery Charge
+        productCodesVal,                         // Col K (11): product number (Product / Picture Code)
+        shippingFeeVal,                          // Col L (12): Delivery Charge
         trackingNum,                             // Col M (13): Traking id
-        order.deliveryArea || (Number(order.shippingFee) === 100 ? "ঢাকার বাইরে" : "ঢাকার ভেতরে"), // Col N (14): Delivery Area
+        deliveryAreaVal,                         // Col N (14): Delivery Area
         order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।", // Col O (15): Order Tracking Details
         order.senderPhoneNumber || "N/A",        // Col P (16): Send Money Number
         order.transactionId || "N/A",             // Col Q (17): Transaction Number (TrxID)
@@ -894,10 +919,8 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
       ]
     };
 
-    const trackingDetailsText = order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে";
-    const shippingFeeText = order.shippingFee ? `৳${order.shippingFee}` : (order.deliveryArea?.includes("100") || order.deliveryArea?.includes("বাইরে") ? "৳100" : "৳60");
     const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
-      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&customerEmail=${encodeURIComponent(order.customerEmail || "")}&email=${encodeURIComponent(order.customerEmail || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&totalPrice=${encodeURIComponent(`৳${order.totalPrice || 0}`)}&paymentMethod=${encodeURIComponent(order.paymentMethod || "Cash on Delivery")}&productCode=${encodeURIComponent(productCodesText)}&productCodes=${encodeURIComponent(productCodesText)}&trackingNumber=${encodeURIComponent(trackingNum)}&trackingDetails=${encodeURIComponent(trackingDetailsText)}&orderTrackingDetails=${encodeURIComponent(trackingDetailsText)}&orderTrackingDetis=${encodeURIComponent(trackingDetailsText)}&paymentBy=${encodeURIComponent(paymentByMethod)}&sendMoneyNumber=${encodeURIComponent(order.senderPhoneNumber || "")}&transactionId=${encodeURIComponent(order.transactionId || "")}&provider=${encodeURIComponent(order.paymentProvider || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}&shippingFee=${encodeURIComponent(shippingFeeText)}&deliveryCharge=${encodeURIComponent(shippingFeeText)}`;
+      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&customerEmail=${encodeURIComponent(userEmail)}&email=${encodeURIComponent(userEmail)}&userEmail=${encodeURIComponent(userEmail)}&gmail=${encodeURIComponent(userEmail)}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&totalPrice=${encodeURIComponent(String(order.totalPrice || 0))}&paymentMethod=${encodeURIComponent(order.paymentMethod || "Cash on Delivery")}&productCode=${encodeURIComponent(productCodesVal)}&actualProductCodes=${encodeURIComponent(productCodesVal)}&productCodeText=${encodeURIComponent(productCodesVal)}&productCodes=${encodeURIComponent(userEmail || productCodesVal)}&trackingNumber=${encodeURIComponent(trackingNum)}&trackingDetails=${encodeURIComponent(trackingDetailsText)}&orderTrackingDetails=${encodeURIComponent(trackingDetailsText)}&orderTrackingDetis=${encodeURIComponent(trackingDetailsText)}&paymentBy=${encodeURIComponent(paymentByMethod)}&sendMoneyNumber=${encodeURIComponent(order.senderPhoneNumber || "")}&transactionId=${encodeURIComponent(order.transactionId || "")}&provider=${encodeURIComponent(order.paymentProvider || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(productCodesVal || deliveryAreaVal)}&actualDeliveryArea=${encodeURIComponent(deliveryAreaVal)}&deliveryAreaName=${encodeURIComponent(deliveryAreaVal)}&shippingFee=${encodeURIComponent(shippingFeeVal)}&deliveryCharge=${encodeURIComponent(shippingFeeVal)}`;
 
     console.log(`[Google Sheets] Dispatching order ${order.id} to ${urlWithParams}`);
     

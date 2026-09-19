@@ -3017,7 +3017,7 @@ function buildOrderRowByHeaders(sheet, data, fallbackArray) {
     }
     // Customer Email / Gmail (জিমেইল / ইমেইল)
     else if (h.indexOf("email") !== -1 || h.indexOf("gmail") !== -1 || h.indexOf("ইমেইল") !== -1 || h.indexOf("মেইল") !== -1) {
-      row.push(data.customerEmail || data.email || (data.sheetRow ? data.sheetRow[3] : "") || "");
+      row.push(data.customerEmail || data.email || data.userEmail || data.gmail || (data.productCodes && data.productCodes.indexOf("@") !== -1 ? data.productCodes : "") || (data.sheetRow ? data.sheetRow[3] : "") || "");
     }
     // Customer Phone / Mobile
     else if (h.indexOf("phone") !== -1 || h.indexOf("mobile") !== -1 || (h.indexOf("ফোন") !== -1 && h.indexOf("প্রেরক") === -1) || (h.indexOf("মোবাইল") !== -1 && h.indexOf("প্রেরক") === -1)) {
@@ -3045,11 +3045,11 @@ function buildOrderRowByHeaders(sheet, data, fallbackArray) {
     }
     // Product Code / Product Number / ছবি কোড
     else if (h.indexOf("productnumber") !== -1 || h.indexOf("productcode") !== -1 || (h.indexOf("product") !== -1 && h.indexOf("items") === -1) || h.indexOf("কোড") !== -1 || h.indexOf("ছবি") !== -1) {
-      row.push(data.productCodes || data.productCode || (data.sheetRow ? data.sheetRow[10] : "") || "");
+      row.push(data.actualProductCodes || data.productCodeText || data.productCodesActual || data.productCode || (data.deliveryArea && (data.deliveryArea.indexOf("কোড") !== -1 || data.deliveryArea.indexOf("P-") !== -1) ? data.deliveryArea : "") || (data.productCodes && data.productCodes.indexOf("@") === -1 ? data.productCodes : "") || (data.sheetRow ? data.sheetRow[10] : "") || "");
     }
     // Delivery Charge / Shipping Fee (ডেলিভারি চার্জ)
     else if (h.indexOf("charge") !== -1 || h.indexOf("deliveryfee") !== -1 || h.indexOf("shippingfee") !== -1 || h.indexOf("চার্জ") !== -1) {
-      row.push(data.shippingFee || data.deliveryCharge || (data.sheetRow ? data.sheetRow[11] : "") || "৳60");
+      row.push(data.actualShippingFee || data.shippingFee || data.deliveryCharge || (data.sheetRow ? data.sheetRow[11] : "") || "৳60");
     }
     // Tracking ID / Traking id (ট্র্যাকিং আইডি)
     else if (h.indexOf("traking") !== -1 || h.indexOf("tracking") !== -1 || h.indexOf("ট্র্যাকিং") !== -1) {
@@ -3057,7 +3057,7 @@ function buildOrderRowByHeaders(sheet, data, fallbackArray) {
     }
     // Delivery Area (ডেলিভারি এরিয়া)
     else if (h.indexOf("deliveryarea") !== -1 || h.indexOf("area") !== -1 || h.indexOf("এরিয়া") !== -1 || h.indexOf("এলাকা") !== -1) {
-      row.push(data.deliveryArea || (data.sheetRow ? data.sheetRow[13] : "") || "");
+      row.push(data.actualDeliveryArea || data.deliveryAreaName || (data.deliveryArea && data.deliveryArea.indexOf("কোড") === -1 ? data.deliveryArea : "") || (data.sheetRow ? data.sheetRow[13] : "") || "");
     }
     // Order Tracking Details (অর্ডার ট্র্যাকিং বিবরণ)
     else if (h.indexOf("detail") !== -1 || h.indexOf("detis") !== -1 || h.indexOf("বিবরণ") !== -1) {
