@@ -7,7 +7,7 @@ import { LanguageProvider, useLanguage } from "./context/LanguageContext";
 import { Product } from "./types";
 import { DEFAULT_PRODUCTS } from "./data/defaultProducts";
 import { safeGetLocalStorage, safeSetLocalStorage } from "./utils/storage";
-import { getCategoryFromUrl, updateCategoryUrl } from "./utils/categoryRouting";
+import { getCategoryFromUrl, updateCategoryUrl, isReturnPolicyUrl, isPrivacyPolicyUrl, isDeliveryPolicyUrl, categoryToSlug } from "./utils/categoryRouting";
 import { Header } from "./components/Header";
 import { HeroSection } from "./components/HeroSection";
 import { ProductGrid } from "./components/ProductGrid";
@@ -18,6 +18,9 @@ import { CustomerAuthModal } from "./components/CustomerAuthModal";
 import { CustomerProfileModal } from "./components/CustomerProfileModal";
 import { TrackOrderModal } from "./components/TrackOrderModal";
 import { WishlistDrawer } from "./components/WishlistDrawer";
+import { ReturnPolicyModal } from "./components/ReturnPolicyModal";
+import { PrivacyPolicyModal } from "./components/PrivacyPolicyModal";
+import { DeliveryPolicyModal } from "./components/DeliveryPolicyModal";
 import { FloatingWhatsApp } from "./components/FloatingWhatsApp";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import { SecretAdminModal } from "./components/SecretAdminModal";
@@ -53,6 +56,105 @@ const StoreContent: React.FC = () => {
   // Modals & Drawers
   const [isTrackOrderOpen, setIsTrackOrderOpen] = useState(false);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
+  const [isReturnPolicyOpen, setIsReturnPolicyOpen] = useState<boolean>(() => {
+    return isReturnPolicyUrl();
+  });
+  const [isPrivacyPolicyOpen, setIsPrivacyPolicyOpen] = useState<boolean>(() => {
+    return isPrivacyPolicyUrl();
+  });
+  const [isDeliveryPolicyOpen, setIsDeliveryPolicyOpen] = useState<boolean>(() => {
+    return isDeliveryPolicyUrl();
+  });
+
+  // Open Return & Refund Policy with URL synchronization (/return-refund)
+  const openReturnPolicy = useCallback(() => {
+    setIsReturnPolicyOpen(true);
+    if (typeof window !== "undefined") {
+      const currentPath = window.location.pathname;
+      if (currentPath !== "/return-refund" && window.location.hash !== "#return-refund") {
+        const fullCurrentUrl = currentPath + window.location.search;
+        window.history.pushState({ modal: "return-refund", previousUrl: fullCurrentUrl }, "", "/return-refund");
+      }
+    }
+  }, []);
+
+  // Close Return & Refund Policy and cleanly revert URL
+  const closeReturnPolicy = useCallback(() => {
+    setIsReturnPolicyOpen(false);
+    if (typeof window !== "undefined") {
+      if (window.location.pathname === "/return-refund" || window.location.hash === "#return-refund") {
+        const prevState = window.history.state;
+        if (prevState && prevState.modal === "return-refund" && prevState.previousUrl) {
+          window.history.pushState(null, "", prevState.previousUrl);
+        } else {
+          const fallbackUrl = selectedCategory && selectedCategory !== "All"
+            ? `/${categoryToSlug(selectedCategory)}`
+            : "/";
+          window.history.pushState(null, "", fallbackUrl);
+        }
+      }
+    }
+  }, [selectedCategory]);
+
+  // Open Privacy Policy with URL synchronization (/privacy-policy)
+  const openPrivacyPolicy = useCallback(() => {
+    setIsPrivacyPolicyOpen(true);
+    if (typeof window !== "undefined") {
+      const currentPath = window.location.pathname;
+      if (currentPath !== "/privacy-policy" && window.location.hash !== "#privacy-policy") {
+        const fullCurrentUrl = currentPath + window.location.search;
+        window.history.pushState({ modal: "privacy-policy", previousUrl: fullCurrentUrl }, "", "/privacy-policy");
+      }
+    }
+  }, []);
+
+  // Close Privacy Policy and cleanly revert URL
+  const closePrivacyPolicy = useCallback(() => {
+    setIsPrivacyPolicyOpen(false);
+    if (typeof window !== "undefined") {
+      if (window.location.pathname === "/privacy-policy" || window.location.hash === "#privacy-policy") {
+        const prevState = window.history.state;
+        if (prevState && prevState.modal === "privacy-policy" && prevState.previousUrl) {
+          window.history.pushState(null, "", prevState.previousUrl);
+        } else {
+          const fallbackUrl = selectedCategory && selectedCategory !== "All"
+            ? `/${categoryToSlug(selectedCategory)}`
+            : "/";
+          window.history.pushState(null, "", fallbackUrl);
+        }
+      }
+    }
+  }, [selectedCategory]);
+
+  // Open Delivery Policy with URL synchronization (/delivery-policy)
+  const openDeliveryPolicy = useCallback(() => {
+    setIsDeliveryPolicyOpen(true);
+    if (typeof window !== "undefined") {
+      const currentPath = window.location.pathname;
+      if (currentPath !== "/delivery-policy" && window.location.hash !== "#delivery-policy") {
+        const fullCurrentUrl = currentPath + window.location.search;
+        window.history.pushState({ modal: "delivery-policy", previousUrl: fullCurrentUrl }, "", "/delivery-policy");
+      }
+    }
+  }, []);
+
+  // Close Delivery Policy and cleanly revert URL
+  const closeDeliveryPolicy = useCallback(() => {
+    setIsDeliveryPolicyOpen(false);
+    if (typeof window !== "undefined") {
+      if (window.location.pathname === "/delivery-policy" || window.location.hash === "#delivery-policy") {
+        const prevState = window.history.state;
+        if (prevState && prevState.modal === "delivery-policy" && prevState.previousUrl) {
+          window.history.pushState(null, "", prevState.previousUrl);
+        } else {
+          const fallbackUrl = selectedCategory && selectedCategory !== "All"
+            ? `/${categoryToSlug(selectedCategory)}`
+            : "/";
+          window.history.pushState(null, "", fallbackUrl);
+        }
+      }
+    }
+  }, [selectedCategory]);
 
   // Wishlist persistence
   const [wishlistIds, setWishlistIds] = useState<string[]>(() => {
@@ -87,9 +189,17 @@ const StoreContent: React.FC = () => {
   // Listen for browser Back/Forward navigation (popstate)
   useEffect(() => {
     const handlePopState = () => {
+      // Check if user navigated to or from /return-refund, /privacy-policy, or /delivery-policy
+      const isReturn = isReturnPolicyUrl();
+      const isPrivacy = isPrivacyPolicyUrl();
+      const isDelivery = isDeliveryPolicyUrl();
+      setIsReturnPolicyOpen(isReturn);
+      setIsPrivacyPolicyOpen(isPrivacy);
+      setIsDeliveryPolicyOpen(isDelivery);
+
       const catFromUrl = getCategoryFromUrl(dynamicCategories);
       setSelectedCategory(catFromUrl || "All");
-      if (typeof window !== "undefined") {
+      if (typeof window !== "undefined" && !isReturn && !isPrivacy && !isDelivery) {
         window.scrollTo({ top: 0, left: 0, behavior: "instant" });
       }
     };
@@ -122,20 +232,35 @@ const StoreContent: React.FC = () => {
     }
   }, [dynamicCategories]);
 
-  // Dynamically update document title to reflect category page
+  // Dynamically update document title to reflect category page, return policy, privacy policy, or delivery policy
   useEffect(() => {
     if (typeof document !== "undefined") {
-      if (selectedCategory && selectedCategory !== "All") {
+      if (isDeliveryPolicyOpen) {
+        document.title = language === "bn"
+          ? "ডেলিভারি পলিসি (Delivery Policy) - ২-৫ কার্যদিবস | Nirapod Kroy"
+          : "Delivery Policy - 2-5 Business Days | Nirapod Kroy";
+      } else if (isPrivacyPolicyOpen) {
+        document.title = language === "bn"
+          ? "গোপনীয়তা নীতি (Privacy Policy) | Nirapod Kroy"
+          : "Privacy Policy | Nirapod Kroy";
+      } else if (isReturnPolicyOpen) {
+        document.title = language === "bn"
+          ? "রিটার্ন ও রিফান্ড পলিসি - ৭ দিন | Nirapod Kroy"
+          : "Return & Refund Policy - 7 Days | Nirapod Kroy";
+      } else if (selectedCategory && selectedCategory !== "All") {
         const catName = getCategoryName(selectedCategory);
         document.title = `${catName} - নিরাপদ ক্রয় | Nirapod Kroy`;
       } else {
         document.title = "Nirapod Kroy | নিরাপদ ক্রয় - সব ধরনের বিশ্বস্ত পণ্য";
       }
     }
-  }, [selectedCategory, language, getCategoryName]);
+  }, [isDeliveryPolicyOpen, isPrivacyPolicyOpen, isReturnPolicyOpen, selectedCategory, language, getCategoryName]);
 
   // Active page resolution for real-time user tracking
   const activePageInfo = useMemo(() => {
+    if (isDeliveryPolicyOpen) return { title: "ডেলিভারি পলিসি (Delivery Policy)", slug: "delivery_policy" };
+    if (isPrivacyPolicyOpen) return { title: "গোপনীয়তা নীতি (Privacy Policy)", slug: "privacy_policy" };
+    if (isReturnPolicyOpen) return { title: "রিটার্ন ও রিফান্ড পলিসি (Return Policy)", slug: "return_refund" };
     if (isCheckoutOpen) return { title: "চেকআউট পেজ (Checkout)", slug: "checkout" };
     if (quickViewProduct) return { title: `পণ্য ভিউ: ${quickViewProduct.title.slice(0, 30)}`, slug: `product_${quickViewProduct.id}` };
     if (isTrackOrderOpen) return { title: "অর্ডার ট্র্যাকিং (Track Order)", slug: "track_order" };
@@ -145,7 +270,7 @@ const StoreContent: React.FC = () => {
       return { title: `ক্যাটাগরি: ${catName}`, slug: `cat_${selectedCategory.toLowerCase().replace(/\s+/g, '_')}` };
     }
     return { title: "হোমপেজ (Home)", slug: "home" };
-  }, [isCheckoutOpen, quickViewProduct, isTrackOrderOpen, isWishlistOpen, selectedCategory, getCategoryName]);
+  }, [isDeliveryPolicyOpen, isPrivacyPolicyOpen, isReturnPolicyOpen, isCheckoutOpen, quickViewProduct, isTrackOrderOpen, isWishlistOpen, selectedCategory, getCategoryName]);
 
   // Track page view and active visitor time
   useEffect(() => {
@@ -286,7 +411,13 @@ const StoreContent: React.FC = () => {
       <main className="flex-1">
         {selectedCategory === "All" && (
           /* Full Hero Carousel shown on Home Page */
-          <HeroSection onExploreClick={handleExploreClick} onDealsClick={handleDealsClick} />
+          <HeroSection
+            onExploreClick={handleExploreClick}
+            onDealsClick={handleDealsClick}
+            onOpenReturnPolicy={openReturnPolicy}
+            onOpenPrivacyPolicy={openPrivacyPolicy}
+            onOpenDeliveryPolicy={openDeliveryPolicy}
+          />
         )}
 
         {/* Product Catalog Grid - Handles both Home and dedicated single Category Page seamlessly */}
@@ -313,6 +444,10 @@ const StoreContent: React.FC = () => {
             handleExploreClick();
           }
         }}
+        onOpenTrackOrder={() => setIsTrackOrderOpen(true)}
+        onOpenReturnPolicy={openReturnPolicy}
+        onOpenPrivacyPolicy={openPrivacyPolicy}
+        onOpenDeliveryPolicy={openDeliveryPolicy}
       />
 
       {/* Persistent Floating WhatsApp Support Button */}
@@ -338,12 +473,47 @@ const StoreContent: React.FC = () => {
         onOrderSuccess={() => {
           fetchProducts(); // Refresh inventory counts
         }}
+        onOpenReturnPolicy={openReturnPolicy}
+        onOpenPrivacyPolicy={openPrivacyPolicy}
+        onOpenDeliveryPolicy={openDeliveryPolicy}
       />
 
       {/* Track Order Modal */}
       <TrackOrderModal
         isOpen={isTrackOrderOpen}
         onClose={() => setIsTrackOrderOpen(false)}
+      />
+
+      {/* Return & Refund Policy Modal (7-Day Policy with clean URL /return-refund) */}
+      <ReturnPolicyModal
+        isOpen={isReturnPolicyOpen}
+        onClose={closeReturnPolicy}
+        onOpenTrackOrder={() => {
+          closeReturnPolicy();
+          setIsTrackOrderOpen(true);
+        }}
+        onOpenPrivacyPolicy={openPrivacyPolicy}
+        onOpenDeliveryPolicy={openDeliveryPolicy}
+      />
+
+      {/* Privacy Policy Modal (with clean URL /privacy-policy) */}
+      <PrivacyPolicyModal
+        isOpen={isPrivacyPolicyOpen}
+        onClose={closePrivacyPolicy}
+        onOpenReturnPolicy={openReturnPolicy}
+        onOpenDeliveryPolicy={openDeliveryPolicy}
+      />
+
+      {/* Delivery Policy Modal (with clean URL /delivery-policy) */}
+      <DeliveryPolicyModal
+        isOpen={isDeliveryPolicyOpen}
+        onClose={closeDeliveryPolicy}
+        onOpenTrackOrder={() => {
+          closeDeliveryPolicy();
+          setIsTrackOrderOpen(true);
+        }}
+        onOpenReturnPolicy={openReturnPolicy}
+        onOpenPrivacyPolicy={openPrivacyPolicy}
       />
 
       {/* Wishlist Drawer */}
@@ -367,6 +537,9 @@ const StoreContent: React.FC = () => {
       <ProductDetailModal
         product={quickViewProduct}
         onClose={() => setQuickViewProduct(null)}
+        onOpenReturnPolicy={openReturnPolicy}
+        onOpenPrivacyPolicy={openPrivacyPolicy}
+        onOpenDeliveryPolicy={openDeliveryPolicy}
       />
 
       {/* Secret Admin Panel (Triggered solely by Ctrl + Alt + Shift + T) */}

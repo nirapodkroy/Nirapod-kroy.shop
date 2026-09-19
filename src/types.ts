@@ -58,6 +58,9 @@ export interface OrderItem {
 export interface Order {
   id: string;
   trackingNumber?: string;
+  orderTrackingDetails?: string; // Order Tracking Details (order traking detis) from Google Sheet or Admin
+  trackingDetails?: string;
+  trackingStage?: 'confirmed' | 'processing' | 'dispatched' | 'out_for_delivery' | 'delivered' | string;
   productCodes?: string;
   customerName: string;
   customerEmail: string;
@@ -70,7 +73,7 @@ export interface Order {
   transactionId?: string;
   paymentGatewayFee?: number;
   paymentProvider?: 'bKash' | 'Nagad' | 'Rocket' | string;
-  status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled' | string;
   createdAt: string;
   syncedToGoogleSheet: boolean;
   notes?: string;

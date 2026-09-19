@@ -117,6 +117,90 @@ export function getCategoryFromUrl(availableCategories: string[] = []): string |
   return null;
 }
 
+export const RETURN_POLICY_SLUGS = [
+  "return-refund",
+  "refund-policy",
+  "return-policy",
+  "returns",
+  "refund"
+];
+
+export const PRIVACY_POLICY_SLUGS = [
+  "privacy-policy",
+  "privacy",
+  "goponiyota-niti",
+  "terms-privacy"
+];
+
+export const DELIVERY_POLICY_SLUGS = [
+  "delivery-policy",
+  "delivery",
+  "shipping-policy",
+  "shipping",
+  "delivery-charge"
+];
+
+export const ALL_POLICY_SLUGS = [
+  ...RETURN_POLICY_SLUGS,
+  ...PRIVACY_POLICY_SLUGS,
+  ...DELIVERY_POLICY_SLUGS,
+  "policy"
+];
+
+/**
+ * Check if the current browser URL points to the Return & Refund Policy
+ */
+export function isReturnPolicyUrl(): boolean {
+  if (typeof window === "undefined") return false;
+  const path = normalizeSlug(window.location.pathname);
+  if (RETURN_POLICY_SLUGS.includes(path)) return true;
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const policyQuery = searchParams.get("policy") || searchParams.get("modal") || searchParams.get("page");
+  if (policyQuery && RETURN_POLICY_SLUGS.includes(normalizeSlug(policyQuery))) return true;
+
+  const hash = window.location.hash.toLowerCase();
+  if (hash === "#return-refund" || hash === "#/return-refund" || hash === "#refund-policy" || hash === "#return") return true;
+
+  return false;
+}
+
+/**
+ * Check if the current browser URL points to the Privacy Policy
+ */
+export function isPrivacyPolicyUrl(): boolean {
+  if (typeof window === "undefined") return false;
+  const path = normalizeSlug(window.location.pathname);
+  if (PRIVACY_POLICY_SLUGS.includes(path)) return true;
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const policyQuery = searchParams.get("policy") || searchParams.get("modal") || searchParams.get("page");
+  if (policyQuery && PRIVACY_POLICY_SLUGS.includes(normalizeSlug(policyQuery))) return true;
+
+  const hash = window.location.hash.toLowerCase();
+  if (hash === "#privacy-policy" || hash === "#/privacy-policy" || hash === "#privacy") return true;
+
+  return false;
+}
+
+/**
+ * Check if the current browser URL points to the Delivery Policy
+ */
+export function isDeliveryPolicyUrl(): boolean {
+  if (typeof window === "undefined") return false;
+  const path = normalizeSlug(window.location.pathname);
+  if (DELIVERY_POLICY_SLUGS.includes(path)) return true;
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const policyQuery = searchParams.get("policy") || searchParams.get("modal") || searchParams.get("page");
+  if (policyQuery && DELIVERY_POLICY_SLUGS.includes(normalizeSlug(policyQuery))) return true;
+
+  const hash = window.location.hash.toLowerCase();
+  if (hash === "#delivery-policy" || hash === "#/delivery-policy" || hash === "#delivery" || hash === "#shipping") return true;
+
+  return false;
+}
+
 /**
  * Match a raw slug or string to known categories.
  * Works seamlessly with any current category OR future dynamically added category.
@@ -124,6 +208,11 @@ export function getCategoryFromUrl(availableCategories: string[] = []): string |
 export function matchCategory(rawSlug: string, availableCategories: string[] = []): string | null {
   const clean = normalizeSlug(rawSlug);
   if (!clean || clean === "all") return "All";
+
+  // If this is a policy route, do NOT treat it as a product category
+  if (ALL_POLICY_SLUGS.includes(clean)) {
+    return null;
+  }
 
   // Check alias table first
   if (SLUG_ALIASES[clean]) {

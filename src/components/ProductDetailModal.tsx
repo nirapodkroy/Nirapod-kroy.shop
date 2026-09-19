@@ -24,9 +24,18 @@ import { motion, AnimatePresence } from "motion/react";
 interface ProductDetailModalProps {
   product: Product | null;
   onClose: () => void;
+  onOpenReturnPolicy?: () => void;
+  onOpenPrivacyPolicy?: () => void;
+  onOpenDeliveryPolicy?: () => void;
 }
 
-export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose }) => {
+export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
+  product,
+  onClose,
+  onOpenReturnPolicy,
+  onOpenPrivacyPolicy,
+  onOpenDeliveryPolicy
+}) => {
   const { addItem, buyNow, items } = useCart();
   const { language, t, formatPrice, getCategoryName } = useLanguage();
   const [quantity, setQuantity] = useState(1);
@@ -326,28 +335,43 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
 
                 {/* Benefits */}
                 <div className="mt-6 pt-5 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-                    <Truck className="w-4 h-4 text-emerald-500" />
-                    <span>
+                  <div
+                    onClick={onOpenDeliveryPolicy}
+                    className={`flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 ${
+                      onOpenDeliveryPolicy ? "cursor-pointer hover:text-amber-600 dark:hover:text-amber-400 group" : ""
+                    }`}
+                  >
+                    <Truck className="w-4 h-4 text-emerald-500 group-hover:scale-105 transition-transform" />
+                    <span className={onOpenDeliveryPolicy ? "group-hover:underline underline-offset-2" : ""}>
                       {language === "bn"
-                        ? "৳১৫০০ এর বেশি অর্ডারে দ্রুত ফ্রি হোম ডেলিভারি"
-                        : "Free express delivery on orders over ৳1,500"}
+                        ? "সারা দেশে ২–৫ দিনে নিরাপদ ডেলিভারি (পলিসি দেখুন)"
+                        : "Nationwide safe delivery in 2–5 days (View Policy)"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-                    <ShieldCheck className="w-4 h-4 text-indigo-500" />
-                    <span>
+                  <div
+                    onClick={onOpenPrivacyPolicy}
+                    className={`flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 ${
+                      onOpenPrivacyPolicy ? "cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 group" : ""
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4 text-indigo-500 group-hover:scale-105 transition-transform" />
+                    <span className={onOpenPrivacyPolicy ? "group-hover:underline underline-offset-2" : ""}>
                       {language === "bn"
-                        ? "১০০% অরিজিনাল প্রোডাক্ট ও অফিসিয়াল ওয়ারেন্টি গ্যারান্টি"
-                        : "100% genuine product & manufacturer guarantee"}
+                        ? "১০০% অরিজিনাল প্রোডাক্ট ও তথ্য নিরাপত্তা গ্যারান্টি (পলিসি দেখুন)"
+                        : "100% genuine product & secure store (View Policy)"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-                    <RotateCcw className="w-4 h-4 text-amber-500" />
-                    <span>
+                  <div
+                    onClick={onOpenReturnPolicy}
+                    className={`flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 ${
+                      onOpenReturnPolicy ? "cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 group" : ""
+                    }`}
+                  >
+                    <RotateCcw className="w-4 h-4 text-amber-500 group-hover:rotate-45 transition-transform" />
+                    <span className={onOpenReturnPolicy ? "group-hover:underline underline-offset-2" : ""}>
                       {language === "bn"
-                        ? "৭ দিনের সহজ ও নির্ঝঞ্ঝাট রিটার্ন পলিসি"
-                        : "7-day hassle-free return window"}
+                        ? "৭ দিনের সহজ ও নির্ঝঞ্ঝাট রিটার্ন পলিসি (বিস্তারিত দেখুন)"
+                        : "7-day hassle-free return window (View Policy)"}
                     </span>
                   </div>
                 </div>

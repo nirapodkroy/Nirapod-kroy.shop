@@ -37,7 +37,7 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
     setTimeout(() => setCopied(false), 2500);
   };
 
-  // Provider metadata matching user's reference screenshots
+  // Provider metadata matching user's reference screenshots & real logos
   const providerMeta = {
     bKash: {
       name: "bKash",
@@ -47,7 +47,8 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
       brandColor: "#D12053",
       accentBg: "bg-pink-50 dark:bg-pink-950/30",
       accentBorder: "border-[#D12053]",
-      textColor: "text-[#D12053]"
+      textColor: "text-[#D12053]",
+      logoSrc: "/bkash.png"
     },
     Nagad: {
       name: "Nagad",
@@ -57,7 +58,8 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
       brandColor: "#D62828",
       accentBg: "bg-red-50 dark:bg-red-950/30",
       accentBorder: "border-[#D62828]",
-      textColor: "text-[#D62828]"
+      textColor: "text-[#D62828]",
+      logoSrc: "/nagad.png"
     },
     Rocket: {
       name: "Rocket",
@@ -67,7 +69,8 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
       brandColor: "#7E22CE",
       accentBg: "bg-purple-50 dark:bg-purple-950/30",
       accentBorder: "border-[#7E22CE]",
-      textColor: "text-[#7E22CE]"
+      textColor: "text-[#7E22CE]",
+      logoSrc: "/rocket.svg"
     }
   };
 
@@ -88,32 +91,30 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
           </span>
         </div>
 
-        {/* 3 Provider Grid Cards (Image 5 style) */}
+        {/* 3 Provider Grid Cards with Official Real Logos */}
         <div className="p-3 grid grid-cols-3 gap-2.5 bg-zinc-50/70 dark:bg-zinc-900/60">
           {/* bKash Card */}
           <button
             type="button"
             onClick={() => onSelectProvider("bKash")}
-            className={`relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all cursor-pointer bg-white dark:bg-zinc-800 ${
+            className={`relative flex flex-col items-center justify-center p-2 sm:p-3 rounded-xl border-2 transition-all cursor-pointer bg-white dark:bg-zinc-800 ${
               selectedProvider === "bKash"
-                ? "border-[#D12053] shadow-md shadow-[#D12053]/15 scale-[1.02]"
+                ? "border-[#D12053] shadow-md shadow-[#D12053]/15 scale-[1.02] ring-2 ring-[#D12053]/20"
                 : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 opacity-80 hover:opacity-100"
             }`}
           >
             {selectedProvider === "bKash" && (
-              <span className="absolute -top-2 right-2 bg-[#D12053] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full">
+              <span className="absolute -top-2 right-2 bg-[#D12053] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full shadow-xs">
                 ✓
               </span>
             )}
-            <div className="h-9 flex items-center justify-center">
-              <svg className="h-7 w-auto" viewBox="0 0 160 56" fill="none">
-                {/* bKash Origami bird */}
-                <path d="M125 6 L148 24 L132 30 Z" fill="#E2136E" />
-                <path d="M148 24 L160 14 L142 6 Z" fill="#D12053" />
-                <path d="M132 30 L146 50 L118 36 Z" fill="#C2185B" />
-                <path d="M118 36 L110 20 L125 6 Z" fill="#E2136E" />
-                <text x="5" y="38" fill="#E2136E" fontSize="34" fontWeight="800" fontFamily="sans-serif">bKash</text>
-              </svg>
+            <div className="h-10 w-full flex items-center justify-center p-1 bg-white rounded-lg">
+              <img
+                src="/bkash.png"
+                alt="bKash Official Logo"
+                className="h-8 max-h-8 w-auto max-w-[90px] object-contain"
+                loading="eager"
+              />
             </div>
             <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mt-1">বিকাশ</span>
           </button>
@@ -122,25 +123,24 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
           <button
             type="button"
             onClick={() => onSelectProvider("Nagad")}
-            className={`relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all cursor-pointer bg-white dark:bg-zinc-800 ${
+            className={`relative flex flex-col items-center justify-center p-2 sm:p-3 rounded-xl border-2 transition-all cursor-pointer bg-white dark:bg-zinc-800 ${
               selectedProvider === "Nagad"
-                ? "border-[#D62828] shadow-md shadow-[#D62828]/15 scale-[1.02]"
+                ? "border-[#D62828] shadow-md shadow-[#D62828]/15 scale-[1.02] ring-2 ring-[#D62828]/20"
                 : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 opacity-80 hover:opacity-100"
             }`}
           >
             {selectedProvider === "Nagad" && (
-              <span className="absolute -top-2 right-2 bg-[#D62828] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full">
+              <span className="absolute -top-2 right-2 bg-[#D62828] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full shadow-xs">
                 ✓
               </span>
             )}
-            <div className="h-9 flex items-center justify-center">
-              <svg className="h-7 w-auto" viewBox="0 0 160 56" fill="none">
-                {/* Nagad swirl */}
-                <circle cx="135" cy="28" r="18" fill="#F33E3E" opacity="0.15" />
-                <path d="M135 12 C145 12, 150 20, 145 28 C140 36, 125 32, 130 22 C133 16, 140 18, 138 24" stroke="#F33E3E" strokeWidth="4" strokeLinecap="round" fill="none" />
-                <circle cx="135" cy="24" r="3.5" fill="#F37021" />
-                <text x="8" y="38" fill="#D62828" fontSize="32" fontWeight="800" fontFamily="sans-serif">নগদ</text>
-              </svg>
+            <div className="h-10 w-full flex items-center justify-center p-1 bg-white rounded-lg">
+              <img
+                src="/nagad.png"
+                alt="Nagad Official Logo"
+                className="h-8 max-h-8 w-auto max-w-[90px] object-contain"
+                loading="eager"
+              />
             </div>
             <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mt-1">নগদ</span>
           </button>
@@ -149,24 +149,24 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
           <button
             type="button"
             onClick={() => onSelectProvider("Rocket")}
-            className={`relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all cursor-pointer bg-white dark:bg-zinc-800 ${
+            className={`relative flex flex-col items-center justify-center p-2 sm:p-3 rounded-xl border-2 transition-all cursor-pointer bg-white dark:bg-zinc-800 ${
               selectedProvider === "Rocket"
-                ? "border-[#7E22CE] shadow-md shadow-[#7E22CE]/15 scale-[1.02]"
+                ? "border-[#7E22CE] shadow-md shadow-[#7E22CE]/15 scale-[1.02] ring-2 ring-[#7E22CE]/20"
                 : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 opacity-80 hover:opacity-100"
             }`}
           >
             {selectedProvider === "Rocket" && (
-              <span className="absolute -top-2 right-2 bg-[#7E22CE] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full">
+              <span className="absolute -top-2 right-2 bg-[#7E22CE] text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full shadow-xs">
                 ✓
               </span>
             )}
-            <div className="h-9 flex items-center justify-center">
-              <svg className="h-7 w-auto" viewBox="0 0 160 56" fill="none">
-                {/* Rocket plane */}
-                <path d="M115 42 L132 10 L152 26 L128 32 L122 42 Z" fill="#8C1D82" />
-                <path d="M128 32 L132 10 L122 42 Z" fill="#6B21A8" />
-                <text x="6" y="38" fill="#7E22CE" fontSize="30" fontWeight="800" fontFamily="sans-serif">রকেট</text>
-              </svg>
+            <div className="h-10 w-full flex items-center justify-center p-1 bg-white rounded-lg">
+              <img
+                src="/rocket.svg"
+                alt="Rocket Official Logo"
+                className="h-8 max-h-8 w-auto max-w-[90px] object-contain"
+                loading="eager"
+              />
             </div>
             <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mt-1">রকেট</span>
           </button>
@@ -176,13 +176,18 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
       {/* 2. Top Summary White Box (Exact match with Image 1, 2, 3) */}
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 shadow-sm flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-600 dark:text-emerald-400 font-black text-xl">
-            S
+          <div className="h-12 w-14 rounded-xl bg-white border border-zinc-200 dark:border-zinc-700 flex items-center justify-center shrink-0 p-1 shadow-xs">
+            <img src={current.logoSrc} alt={current.name} className="h-8 max-h-8 w-auto object-contain" />
           </div>
           <div className="min-w-0">
-            <h4 className="font-extrabold text-sm sm:text-base text-zinc-900 dark:text-white truncate">
-              Nirapod Kroy
-            </h4>
+            <div className="flex items-center gap-1.5">
+              <h4 className="font-extrabold text-sm sm:text-base text-zinc-900 dark:text-white truncate">
+                Nirapod Kroy
+              </h4>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300">
+                {current.label}
+              </span>
+            </div>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
               ইনভয়েস আইডি: <span className="font-mono font-semibold text-zinc-700 dark:text-zinc-300">#{orderPreviewId}</span>
             </p>
@@ -202,7 +207,11 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
       {/* 3. Themed Color Container (Exact replica of Image 1, 2, 3) */}
       <div className={`rounded-2xl ${current.bgGradient} text-white p-4 sm:p-5 shadow-lg space-y-4`}>
         {/* Title */}
-        <div className="text-center space-y-1">
+        <div className="text-center space-y-1.5">
+          <div className="inline-flex items-center gap-2 bg-white/95 text-zinc-900 px-3 py-1 rounded-full shadow-xs">
+            <img src={current.logoSrc} alt={current.name} className="h-5 w-auto object-contain" />
+            <span className="text-xs font-black">{current.label} অফিসিয়াল পেমেন্ট</span>
+          </div>
           <h3 className="text-base sm:text-lg font-extrabold tracking-wide text-white">
             পেমেন্ট তথ্য দিন (Payment Information)
           </h3>

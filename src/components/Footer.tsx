@@ -7,9 +7,19 @@ import { handleLocalApi, syncNewsletterToGoogleSheets } from "../lib/mockApi";
 
 interface FooterProps {
   onCategorySelect: (cat: string) => void;
+  onOpenTrackOrder?: () => void;
+  onOpenReturnPolicy?: () => void;
+  onOpenPrivacyPolicy?: () => void;
+  onOpenDeliveryPolicy?: () => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
+export const Footer: React.FC<FooterProps> = ({
+  onCategorySelect,
+  onOpenTrackOrder,
+  onOpenReturnPolicy,
+  onOpenPrivacyPolicy,
+  onOpenDeliveryPolicy
+}) => {
   const { language, t, getCategoryName } = useLanguage();
   const { addToast } = useToast();
   const { setIsAdminModalOpen } = useAuth();
@@ -189,24 +199,73 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <a href="#catalog-section" className="hover:text-emerald-500 transition-colors">
-                  {t("order_tracking")}
-                </a>
+                {onOpenTrackOrder ? (
+                  <button
+                    type="button"
+                    onClick={onOpenTrackOrder}
+                    className="hover:text-emerald-500 transition-colors text-left cursor-pointer"
+                  >
+                    {t("order_tracking")}
+                  </button>
+                ) : (
+                  <a href="#catalog-section" className="hover:text-emerald-500 transition-colors">
+                    {t("order_tracking")}
+                  </a>
+                )}
               </li>
               <li>
-                <a href="#catalog-section" className="hover:text-emerald-500 transition-colors">
-                  {t("delivery_policy")}
-                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenDeliveryPolicy) {
+                      onOpenDeliveryPolicy();
+                    } else if (typeof window !== "undefined") {
+                      window.location.hash = "#delivery-policy";
+                    }
+                  }}
+                  className="hover:text-emerald-500 transition-colors text-left cursor-pointer flex items-center gap-1.5 group"
+                >
+                  <span className="underline-offset-2 group-hover:underline">{t("delivery_policy")}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">
+                    ২–৫ দিন
+                  </span>
+                </button>
               </li>
               <li>
-                <a href="#catalog-section" className="hover:text-emerald-500 transition-colors">
-                  {t("refund_policy")}
-                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenReturnPolicy) {
+                      onOpenReturnPolicy();
+                    } else if (typeof window !== "undefined") {
+                      window.location.hash = "#return-refund";
+                    }
+                  }}
+                  className="hover:text-emerald-500 transition-colors text-left cursor-pointer flex items-center gap-1.5 group"
+                >
+                  <span className="underline-offset-2 group-hover:underline">{t("refund_policy")}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold">
+                    ৭ দিন
+                  </span>
+                </button>
               </li>
               <li>
-                <a href="#catalog-section" className="hover:text-emerald-500 transition-colors">
-                  {t("privacy_policy")}
-                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenPrivacyPolicy) {
+                      onOpenPrivacyPolicy();
+                    } else if (typeof window !== "undefined") {
+                      window.location.hash = "#privacy-policy";
+                    }
+                  }}
+                  className="hover:text-emerald-500 transition-colors text-left cursor-pointer flex items-center gap-1.5 group"
+                >
+                  <span className="underline-offset-2 group-hover:underline">{t("privacy_policy")}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold">
+                    সুরক্ষিত
+                  </span>
+                </button>
               </li>
             </ul>
           </div>
@@ -298,16 +357,19 @@ export const Footer: React.FC<FooterProps> = ({ onCategorySelect }) => {
 
           <div className="flex items-center gap-2 flex-wrap justify-center">
             <span className="text-[11px] text-zinc-400 mr-1">{language === "bn" ? "পেমেন্ট মাধ্যম:" : "Accepted Payments:"}</span>
-            <span className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] font-bold">
-              bKash
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <img src="/bkash.png" alt="bKash" className="h-4 w-auto object-contain" />
+              <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200">bKash</span>
             </span>
-            <span className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] font-bold">
-              Nagad
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <img src="/nagad.png" alt="Nagad" className="h-4 w-auto object-contain" />
+              <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200">Nagad</span>
             </span>
-            <span className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] font-bold">
-              Rocket
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <img src="/rocket.svg" alt="Rocket" className="h-4 w-auto object-contain" />
+              <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200">Rocket</span>
             </span>
-            <span className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] font-bold">
+            <span className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] font-bold border border-zinc-200/50 dark:border-zinc-700/50">
               Cash on Delivery
             </span>
           </div>

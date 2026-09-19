@@ -16,6 +16,7 @@ import {
   Edit2,
   Trash2,
   RefreshCw,
+  Truck,
   CheckCircle2,
   AlertCircle,
   AlertTriangle,
@@ -150,6 +151,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isSavingSyncedData, setIsSavingSyncedData] = useState(false);
   const [isClearingSavedData, setIsClearingSavedData] = useState(false);
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
+  const [orderTrackingDrafts, setOrderTrackingDrafts] = useState<Record<string, { trackingNumber?: string; orderTrackingDetails?: string; status?: string }>>({});
+  const [isUpdatingTracking, setIsUpdatingTracking] = useState<Record<string, boolean>>({});
 
   // Admin Products State (Includes inactive products)
   const [adminProducts, setAdminProducts] = useState<Product[]>(products);
@@ -1552,6 +1555,43 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
+  // Update Order Tracking Details & Tracking Number (Syncs to Google Sheets & memory)
+  const handleUpdateOrderTracking = async (orderId: string, trackingNumber?: string, orderTrackingDetails?: string, status?: string) => {
+    setIsUpdatingTracking(prev => ({ ...prev, [orderId]: true }));
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/tracking`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          trackingNumber,
+          orderTrackingDetails,
+          status
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(prev => prev.map(o => o.id === orderId ? {
+          ...o,
+          trackingNumber: trackingNumber || o.trackingNumber,
+          orderTrackingDetails: orderTrackingDetails || o.orderTrackingDetails,
+          trackingDetails: orderTrackingDetails || o.trackingDetails,
+          ...(status ? { status: status as any } : {})
+        } : o));
+        addToast(data.message || "ট্র্যাকিং তথ্য সেভ ও গুগল শিটে আপডেট সম্পন্ন!", "success");
+      } else {
+        addToast("ট্র্যাকিং তথ্য আপডেট করতে সমস্যা হয়েছে", "error");
+      }
+    } catch {
+      addToast("Failed to update tracking info", "error");
+    } finally {
+      setIsUpdatingTracking(prev => ({ ...prev, [orderId]: false }));
+    }
+  };
+
   // Trigger Google Sheet Webhook Sync for Order
   const handleSyncOrderToSheets = async (orderId: string) => {
     try {
@@ -2137,7 +2177,7 @@ function doGet(e) {
     // 1. Orders tab ("order sheet" বা "Orders")
     var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Customer_Order_Tracking", "Orders", "অর্ডার_লিস্ট", "অর্ডার"], "order");
     if (orderSheet && orderSheet.getLastRow() > 1) {
-      var lastCol = Math.min(orderSheet.getLastColumn(), 10);
+      var lastCol = Math.min(orderSheet.getLastColumn(), 16);
       var rows = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, lastCol).getValues();
       result.orders = rows
         .filter(function(r) {
@@ -2157,7 +2197,11 @@ function doGet(e) {
             itemsText: String(r[6] || ""),
             totalPrice: String(r[7] || ""),
             paymentMethod: String(r[8] || ""),
-            status: String(r[9] || "Pending")
+            status: String(r[9] || "Pending"),
+            productCodes: String(r[10] || ""),
+            trackingNumber: String(r[11] || ""),
+            orderTrackingDetails: String(r[12] || ""),
+            trackingDetails: String(r[12] || "")
           };
         });
     }
@@ -2316,9 +2360,9 @@ function doPost(e) {
           "Order ID", "Date/Time", "Customer Name", "Customer Email", 
           "Customer Phone", "Shipping Address", "Ordered Items", 
           "Total Price", "Payment Method", "Status", "Product Code", "Tracking Number",
-          "Send Money Number", "Tranzation Number", "Payment Provider"
+          "Order Tracking Details", "Send Money Number", "Tranzation Number", "Payment Provider"
         ]);
-        orderSheet.getRange(1, 1, 1, 15).setFontWeight("bold").setBackground("#e6f4ea");
+        orderSheet.getRange(1, 1, 1, 16).setFontWeight("bold").setBackground("#e6f4ea");
       }
       var ordRow = data.sheetRow;
       if (!ordRow || ordRow.length < 10) {
@@ -2335,6 +2379,7 @@ function doPost(e) {
           data.orderStatus || "Pending",
           data.productCodes || data.productCode || "",
           data.trackingNumber || "",
+          data.orderTrackingDetails || data.trackingDetails || data.orderTrackingDetis || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে",
           data.senderPhoneNumber || data.sendMoneyNumber || data.senderPhone || "",
           data.transactionId || data.tranzationNumber || "",
           data.paymentProvider || data.paymentBy || (data.paymentMethod && data.paymentMethod.indexOf("bKash") !== -1 ? "bKash" : (data.paymentMethod && data.paymentMethod.indexOf("Nagad") !== -1 ? "Nagad" : (data.paymentMethod && data.paymentMethod.indexOf("Rocket") !== -1 ? "Rocket" : "Cash on Delivery")))
@@ -2343,17 +2388,20 @@ function doPost(e) {
 
       // অর্ডার ডুপ্লিকেট চেক (Order ID দিয়ে)
       var targetOrderId = String(ordRow[0] || data.orderId || "").trim();
-      var orderUpdated = false;
+      var orderRowIndex = -1;
       if (orderSheet.getLastRow() > 1 && targetOrderId) {
         var existingOrders = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, 1).getValues();
         for (var o = 0; o < existingOrders.length; o++) {
           if (String(existingOrders[o][0]).trim() === targetOrderId) {
-            orderUpdated = true;
+            orderRowIndex = o + 2;
             break;
           }
         }
       }
-      if (!orderUpdated) {
+      if (orderRowIndex !== -1) {
+        // অর্ডার আগে থাকলে রো আপডেট করুন (যাতে ট্র্যাকিং ও স্ট্যাটাস পরিবর্তন শিটে সিঙ্ক হয়)
+        orderSheet.getRange(orderRowIndex, 1, 1, ordRow.length).setValues([ordRow]);
+      } else {
         orderSheet.appendRow(ordRow);
 
         // 📧 তাৎক্ষণিক লাইভ জিমেইল নোটিফিকেশন (Instant Live Gmail Notification)
@@ -3930,6 +3978,105 @@ function cleanOrderSheetTrackingRows() {
                                     {item.title} <strong className="text-emerald-400">x{item.quantity}</strong> (${(item.price * item.quantity).toFixed(2)})
                                   </span>
                                 ))}
+                              </div>
+                            </div>
+
+                            {/* 📦 Order Tracking & Google Sheet Details Management */}
+                            <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-emerald-500/30 space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                                    <Truck className="w-3.5 h-3.5" />
+                                  </div>
+                                  <span className="text-xs font-bold text-white">
+                                    অর্ডার ট্র্যাকিং ও গুগল শিট বিবরণ (Order Tracking Details)
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-emerald-400 font-medium">
+                                  গ্রাহক Order Tracking এ এই তথ্য দেখতে পাবেন
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                {/* Tracking Number Input */}
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                    ট্র্যাকিং নম্বর (Tracking ID)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={
+                                      orderTrackingDrafts[order.id]?.trackingNumber !== undefined
+                                        ? orderTrackingDrafts[order.id].trackingNumber
+                                        : (order.trackingNumber || ("TRK-" + order.id.replace(/\D/g, "")))
+                                    }
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setOrderTrackingDrafts((prev) => ({
+                                        ...prev,
+                                        [order.id]: {
+                                          ...prev[order.id],
+                                          trackingNumber: val
+                                        }
+                                      }));
+                                    }}
+                                    placeholder="যেমন: TRK-123456 বা কুরিয়ার আইডি"
+                                    className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs font-mono text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  />
+                                </div>
+
+                                {/* Order Tracking Details Input */}
+                                <div className="space-y-1 sm:col-span-2">
+                                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                    অর্ডার ট্র্যাকিং বিবরণ (Order Tracking Details - শিটের রো/কলামে যাবে)
+                                  </label>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="text"
+                                      value={
+                                        orderTrackingDrafts[order.id]?.orderTrackingDetails !== undefined
+                                          ? orderTrackingDrafts[order.id].orderTrackingDetails
+                                          : (order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। প্যাকেজিং ও কুরিয়ারে পাঠানোর কাজ চলছে।")
+                                      }
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setOrderTrackingDrafts((prev) => ({
+                                          ...prev,
+                                          [order.id]: {
+                                            ...prev[order.id],
+                                            orderTrackingDetails: val
+                                          }
+                                        }));
+                                      }}
+                                      placeholder="যেমন: সুন্দরবন কুরিয়ারে বুকিং হয়েছে, ট্র্যাকিং নং: SB-99201"
+                                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                    />
+
+                                    <button
+                                      type="button"
+                                      disabled={isUpdatingTracking[order.id]}
+                                      onClick={() => {
+                                        const draft = orderTrackingDrafts[order.id] || {};
+                                        const tNum = draft.trackingNumber !== undefined
+                                          ? draft.trackingNumber
+                                          : (order.trackingNumber || ("TRK-" + order.id.replace(/\D/g, "")));
+                                        const tDet = draft.orderTrackingDetails !== undefined
+                                          ? draft.orderTrackingDetails
+                                          : (order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।");
+                                        const st = draft.status || order.status;
+                                        handleUpdateOrderTracking(order.id, tNum, tDet, st);
+                                      }}
+                                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0"
+                                    >
+                                      {isUpdatingTracking[order.id] ? (
+                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Check className="w-3.5 h-3.5" />
+                                      )}
+                                      <span>সেভ ও শিট আপডেট</span>
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>

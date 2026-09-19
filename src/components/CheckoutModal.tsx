@@ -29,9 +29,19 @@ interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOrderSuccess: () => void;
+  onOpenReturnPolicy?: () => void;
+  onOpenPrivacyPolicy?: () => void;
+  onOpenDeliveryPolicy?: () => void;
 }
 
-export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, onOrderSuccess }) => {
+export const CheckoutModal: React.FC<CheckoutModalProps> = ({
+  isOpen,
+  onClose,
+  onOrderSuccess,
+  onOpenReturnPolicy,
+  onOpenPrivacyPolicy,
+  onOpenDeliveryPolicy
+}) => {
   const {
     items,
     directCheckoutItem,
@@ -608,9 +618,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                     <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     <span>{language === "bn" ? "ডেলিভারি এরিয়া নির্বাচন করুন" : "Select Delivery Area"} <span className="text-rose-500">*</span></span>
                   </label>
-                  <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                    {language === "bn" ? "চার্জ স্বয়ংক্রিয়ভাবে মোট বিলে যুক্ত হবে" : "Charge applied automatically"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                      {language === "bn" ? "চার্জ মোট বিলে যুক্ত হবে" : "Charge applied automatically"}
+                    </span>
+                    {onOpenDeliveryPolicy && (
+                      <button
+                        type="button"
+                        onClick={onOpenDeliveryPolicy}
+                        className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                      >
+                        {language === "bn" ? "(পলিসি দেখুন)" : "(Policy)"}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -831,10 +852,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                           }`}>
                             <Icon className="w-4 h-4" />
                           </div>
-                          <div>
-                            <span className="font-bold text-xs sm:text-sm block text-zinc-900 dark:text-white leading-tight">
-                              {method.label}
-                            </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-bold text-xs sm:text-sm block text-zinc-900 dark:text-white leading-tight">
+                                {method.label}
+                              </span>
+                              {method.id === "bKash / Mobile Wallet" && (
+                                <div className="flex items-center gap-1 bg-white dark:bg-zinc-700/80 px-1.5 py-0.5 rounded border border-zinc-200/80 dark:border-zinc-600 shrink-0">
+                                  <img src="/bkash.png" alt="bKash" className="h-3.5 w-auto object-contain" />
+                                  <img src="/nagad.png" alt="Nagad" className="h-3.5 w-auto object-contain" />
+                                  <img src="/rocket.svg" alt="Rocket" className="h-3.5 w-auto object-contain" />
+                                </div>
+                              )}
+                            </div>
                             <span className="text-[11px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
                               {method.subtitle}
                             </span>
@@ -943,13 +973,42 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
                   )}
                 </button>
 
-                <div className="flex items-center justify-center gap-2 text-[11px] text-zinc-400 pt-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>
-                    {language === "bn"
-                      ? "১০০% নিরাপদ ডেলিভারি ও দ্রুত পণ্য প্রাপ্তির নিশ্চয়তা"
-                      : "100% Genuine & Safe Store • Fast Nationwide Delivery"}
-                  </span>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-3 text-[11px] text-zinc-400 pt-1 text-center">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span>
+                      {language === "bn"
+                        ? "১০০% নিরাপদ ডেলিভারি ও দ্রুত পণ্য প্রাপ্তির নিশ্চয়তা"
+                        : "100% Genuine & Safe Store • Fast Delivery"}
+                    </span>
+                  </div>
+                  {onOpenReturnPolicy && (
+                    <button
+                      type="button"
+                      onClick={onOpenReturnPolicy}
+                      className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      {language === "bn" ? "• ৭ দিনের রিটার্ন পলিসি" : "• 7-Day Return Policy"}
+                    </button>
+                  )}
+                  {onOpenDeliveryPolicy && (
+                    <button
+                      type="button"
+                      onClick={onOpenDeliveryPolicy}
+                      className="text-amber-600 dark:text-amber-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      {language === "bn" ? "• ডেলিভারি পলিসি" : "• Delivery Policy"}
+                    </button>
+                  )}
+                  {onOpenPrivacyPolicy && (
+                    <button
+                      type="button"
+                      onClick={onOpenPrivacyPolicy}
+                      className="text-blue-600 dark:text-blue-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      {language === "bn" ? "• গোপনীয়তা নীতি" : "• Privacy Policy"}
+                    </button>
+                  )}
                 </div>
               </div>
             </form>

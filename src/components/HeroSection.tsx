@@ -6,6 +6,9 @@ import { useLanguage } from "../context/LanguageContext";
 interface HeroSectionProps {
   onExploreClick: () => void;
   onDealsClick: () => void;
+  onOpenReturnPolicy?: () => void;
+  onOpenPrivacyPolicy?: () => void;
+  onOpenDeliveryPolicy?: () => void;
 }
 
 const SLIDES = [
@@ -71,7 +74,13 @@ const SLIDES = [
   }
 ];
 
-export const HeroSection: React.FC<HeroSectionProps> = ({ onExploreClick, onDealsClick }) => {
+export const HeroSection: React.FC<HeroSectionProps> = ({
+  onExploreClick,
+  onDealsClick,
+  onOpenReturnPolicy,
+  onOpenPrivacyPolicy,
+  onOpenDeliveryPolicy
+}) => {
   const { language } = useLanguage();
   const [currentSlide, setCurrentSlide] = useState(0);
 
@@ -185,44 +194,64 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onExploreClick, onDeal
 
         {/* Value Proposition Highlights Bar */}
         <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs">
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+          <div
+            onClick={onOpenDeliveryPolicy}
+            role="button"
+            tabIndex={0}
+            className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs hover:border-amber-500/50 dark:hover:border-amber-500/40 hover:shadow-md transition-all cursor-pointer group"
+          >
+            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 group-hover:scale-105 transition-transform">
               <Truck className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              <p className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
                 {language === "bn" ? "সারা দেশে দ্রুত ডেলিভারি" : "Fast Nationwide Delivery"}
               </p>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                {language === "bn" ? "ক্যাশ অন ডেলিভারি সুবিধা সহ" : "Cash on delivery available"}
+                {language === "bn" ? "২–৫ কার্যদিবস • পলিসি দেখুন" : "2–5 business days • View policy"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs">
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
+          <div
+            onClick={onOpenPrivacyPolicy}
+            role="button"
+            tabIndex={0}
+            className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs hover:border-blue-500/50 dark:hover:border-blue-500/40 hover:shadow-md transition-all cursor-pointer group"
+          >
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0 group-hover:scale-105 transition-transform">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              <p className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                 {language === "bn" ? "১০০% আসল ও নিরাপদ পণ্য" : "100% Genuine & Safe"}
               </p>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                {language === "bn" ? "প্রতিটি পণ্যের গুণগত মান যাচাইকৃত" : "Strict quality verified items"}
+                {language === "bn" ? "তথ্য সুরক্ষা ও গোপনীয়তা নীতি দেখুন" : "Strict data & quality protection"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs">
-            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+          <div
+            onClick={onOpenReturnPolicy}
+            role="button"
+            tabIndex={0}
+            className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs hover:border-emerald-500/50 dark:hover:border-emerald-500/40 hover:shadow-md transition-all cursor-pointer group"
+          >
+            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 group-hover:scale-105 transition-transform">
               <RefreshCw className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                {language === "bn" ? "সহজ রিটার্ন পলিসি" : "Easy 7-Day Returns"}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                  {language === "bn" ? "সহজ রিটার্ন পলিসি" : "Easy 7-Day Returns"}
+                </p>
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  ৭ দিন
+                </span>
+              </div>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                {language === "bn" ? "৭ দিনের নির্ভরযোগ্য এক্সচেঞ্জ সুবিধা" : "Hassle-free replacement guarantee"}
+                {language === "bn" ? "৭ দিনের নির্ভরযোগ্য এক্সচেঞ্জ সুবিধা (পলিসি দেখুন)" : "Hassle-free replacement guarantee"}
               </p>
             </div>
           </div>

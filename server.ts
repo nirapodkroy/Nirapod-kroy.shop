@@ -83,11 +83,13 @@ interface Order {
   transactionId?: string;
   paymentGatewayFee?: number;
   paymentProvider?: string;
-  status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled' | string;
   createdAt: string;
   syncedToGoogleSheet: boolean;
   notes?: string;
   trackingNumber?: string;
+  orderTrackingDetails?: string; // "Order Tracking Details" (order traking detis) beside tracking number
+  trackingDetails?: string;
   productCodes?: string;
 }
 
@@ -867,6 +869,9 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
       deliveryArea: order.deliveryArea || "",
       shippingFee: order.shippingFee ? `৳${order.shippingFee}` : "",
       notes: order.notes || "",
+      orderTrackingDetails: order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
+      orderTrackingDetis: order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
+      trackingDetails: order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
       sheetRow: [
         order.id,
         orderTime,
@@ -880,14 +885,16 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
         order.status || "Pending",
         productCodesText,
         trackingNum,
+        order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।", // "Order Tracking Details" (order traking detis) row/col beside tracking number
         order.senderPhoneNumber || "N/A", // send money number (যে নম্বর থেকে টাকা পাঠানো হয়েছে)
         order.transactionId || "N/A",      // tranzation number (ট্রানজেকশন আইডি)
         order.paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : "Cash on Delivery"))) // ki teke dice (bKash / Nagad / Rocket)
       ]
     };
 
+    const trackingDetailsText = order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে";
     const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
-      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&productCode=${encodeURIComponent(productCodesText)}&trackingNumber=${encodeURIComponent(trackingNum)}&paymentBy=${encodeURIComponent(paymentByMethod)}&sendMoneyNumber=${encodeURIComponent(order.senderPhoneNumber || "")}&transactionId=${encodeURIComponent(order.transactionId || "")}&provider=${encodeURIComponent(order.paymentProvider || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
+      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&productCode=${encodeURIComponent(productCodesText)}&trackingNumber=${encodeURIComponent(trackingNum)}&trackingDetails=${encodeURIComponent(trackingDetailsText)}&orderTrackingDetails=${encodeURIComponent(trackingDetailsText)}&orderTrackingDetis=${encodeURIComponent(trackingDetailsText)}&paymentBy=${encodeURIComponent(paymentByMethod)}&sendMoneyNumber=${encodeURIComponent(order.senderPhoneNumber || "")}&transactionId=${encodeURIComponent(order.transactionId || "")}&provider=${encodeURIComponent(order.paymentProvider || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
 
     console.log(`[Google Sheets] Dispatching order ${order.id} to ${urlWithParams}`);
     
@@ -898,6 +905,8 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
         _subject: `🚨 নতুন অর্ডার! #${order.id} - ৳${order.totalPrice || 0} (${order.customerName || "গ্রাহক"})`,
         "অর্ডার আইডি": order.id,
         "তারিখ ও সময়": orderTime,
+        "ট্র্যাকিং নম্বর": trackingNum,
+        "অর্ডার ট্র্যাকিং বিবরণ (Tracking Details)": trackingDetailsText,
         "গ্রাহকের নাম": order.customerName || "Customer",
         "মোবাইল নম্বর": order.customerPhone || "",
         "ডেলিভারি ঠিকানা": order.shippingAddress || "",
@@ -1869,6 +1878,145 @@ app.post("/api/orders", async (req, res) => {
   });
 });
 
+// GET /api/orders (Public orders lookup for tracking and customer access)
+app.get("/api/orders", (_req, res) => {
+  const safeOrders = storeState.orders.map(o => ({
+    id: o.id,
+    trackingNumber: o.trackingNumber || ("TRK-" + o.id.replace(/\D/g, "")),
+    orderTrackingDetails: o.orderTrackingDetails || o.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। ডেলিভারি এরিয়া অনুযায়ী প্যাকেজিং ও কুরিয়ারে হস্তান্তরের কাজ চলছে।",
+    trackingDetails: o.orderTrackingDetails || o.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। ডেলিভারি এরিয়া অনুযায়ী প্যাকেজিং ও কুরিয়ারে হস্তান্তরের কাজ চলছে।",
+    status: o.status || "Pending",
+    customerName: o.customerName,
+    customerEmail: o.customerEmail,
+    customerPhone: o.customerPhone,
+    shippingAddress: o.shippingAddress,
+    deliveryArea: o.deliveryArea || "ঢাকার ভেতরে / বাইরে",
+    totalPrice: o.totalPrice,
+    paymentMethod: o.paymentMethod,
+    items: o.items,
+    createdAt: o.createdAt
+  }));
+  res.json({ orders: safeOrders });
+});
+
+// GET /api/orders/track and /api/orders/track/:query
+// Live tracking lookup with Google Sheets bidirectional synchronization
+app.get(["/api/orders/track", "/api/orders/track/:query"], async (req, res) => {
+  const rawParam = (req.params.query || req.query.q || req.query.id || req.query.trackingNumber || req.query.orderId || req.query.query || "").toString().trim();
+  if (!rawParam) {
+    return res.status(400).json({ error: "অনুগ্রহ করে একটি অর্ডার নম্বর বা ট্র্যাকিং আইডি প্রদান করুন।" });
+  }
+
+  const query = rawParam.toLowerCase();
+  const digitsOnly = rawParam.replace(/\D/g, "");
+
+  // 1. First search local memory/storeState.orders
+  let matchedOrder = storeState.orders.find(o => {
+    const oId = (o.id || "").toLowerCase();
+    const oTrk = (o.trackingNumber || "").toLowerCase();
+    const oPhone = (o.customerPhone || "").replace(/\D/g, "");
+
+    return (
+      oId === query ||
+      oTrk === query ||
+      oId.includes(query) ||
+      oTrk.includes(query) ||
+      (digitsOnly.length >= 4 && (oId.replace(/\D/g, "").includes(digitsOnly) || oTrk.replace(/\D/g, "").includes(digitsOnly))) ||
+      (digitsOnly.length >= 6 && oPhone.includes(digitsOnly))
+    );
+  });
+
+  // 2. Fetch live data from Google Sheet if webhook URL is configured
+  // This satisfies: "ar amr je order sehhet ar traking number ace or pase akta row banaw row nambe order traking detis ami oi traking number a ja likbo order traking like kew serch korle sheet ar data ami ja likbo ta asbe seta coustomer dekte parbe"
+  const webhookUrl = storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (webhookUrl && webhookUrl.startsWith("http")) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 second timeout
+      const sheetUrl = `${webhookUrl}${webhookUrl.includes("?") ? "&" : "?"}action=get_orders&tab=order+sheet`;
+      
+      const sheetRes = await fetch(sheetUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (sheetRes.ok) {
+        const sheetData = (await sheetRes.json()) as any;
+        if (sheetData && Array.isArray(sheetData.orders)) {
+          const sheetMatch = sheetData.orders.find((so: any) => {
+            const sId = String(so.id || "").toLowerCase();
+            const sTrk = String(so.trackingNumber || "").toLowerCase();
+            const sPhone = String(so.customerPhone || "").replace(/\D/g, "");
+
+            return (
+              sId === query ||
+              sTrk === query ||
+              sId.includes(query) ||
+              sTrk.includes(query) ||
+              (digitsOnly.length >= 4 && (sId.replace(/\D/g, "").includes(digitsOnly) || sTrk.replace(/\D/g, "").includes(digitsOnly))) ||
+              (digitsOnly.length >= 6 && sPhone.includes(digitsOnly))
+            );
+          });
+
+          if (sheetMatch) {
+            const liveTrackingDetails = sheetMatch.orderTrackingDetails || sheetMatch.trackingDetails || sheetMatch.orderTrackingDetis || "";
+            const liveStatus = sheetMatch.status || "";
+            const liveTrackingNum = sheetMatch.trackingNumber || "";
+
+            if (matchedOrder) {
+              if (liveTrackingDetails) {
+                matchedOrder.orderTrackingDetails = liveTrackingDetails;
+                matchedOrder.trackingDetails = liveTrackingDetails;
+              }
+              if (liveStatus) matchedOrder.status = liveStatus;
+              if (liveTrackingNum) matchedOrder.trackingNumber = liveTrackingNum;
+              saveState();
+            } else {
+              // Found directly in Google Sheet!
+              matchedOrder = {
+                id: sheetMatch.id || rawParam,
+                trackingNumber: liveTrackingNum || ("TRK-" + rawParam.replace(/\D/g, "")),
+                orderTrackingDetails: liveTrackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
+                trackingDetails: liveTrackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
+                status: liveStatus || "Pending",
+                customerName: sheetMatch.customerName || "Customer",
+                customerEmail: sheetMatch.customerEmail || "",
+                customerPhone: sheetMatch.customerPhone || "",
+                shippingAddress: sheetMatch.shippingAddress || "",
+                items: [],
+                totalPrice: Number(String(sheetMatch.totalPrice || "0").replace(/[^\d.]/g, "")) || 0,
+                paymentMethod: sheetMatch.paymentMethod || "Cash on Delivery",
+                createdAt: sheetMatch.createdAt || new Date().toISOString(),
+                syncedToGoogleSheet: true
+              };
+            }
+          }
+        }
+      }
+    } catch {
+      // Graceful fallback to local storeState
+    }
+  }
+
+  if (!matchedOrder) {
+    return res.status(404).json({
+      success: false,
+      message: "প্রদত্ত ট্র্যাকিং নম্বর বা অর্ডার আইডি দিয়ে কোনো অর্ডার পাওয়া যায়নি।"
+    });
+  }
+
+  const trackingNum = matchedOrder.trackingNumber || ("TRK-" + matchedOrder.id.replace(/\D/g, ""));
+  const trackingDetails = matchedOrder.orderTrackingDetails || matchedOrder.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। ডেলিভারি এরিয়া অনুযায়ী প্যাকেজিং ও কুরিয়ারে হস্তান্তরের কাজ চলছে।";
+
+  res.json({
+    success: true,
+    order: {
+      ...matchedOrder,
+      trackingNumber: trackingNum,
+      orderTrackingDetails: trackingDetails,
+      trackingDetails: trackingDetails
+    }
+  });
+});
+
 // GET /api/orders/customer/:email (Customer viewing their own orders)
 app.get("/api/orders/customer/:email", (req, res) => {
   const email = req.params.email.trim().toLowerCase();
@@ -1933,6 +2081,39 @@ app.put("/api/admin/orders/:id/status", requireAdmin, (req, res) => {
   order.status = status;
   saveState();
   res.json({ success: true, order });
+});
+
+// PUT /api/admin/orders/:id/tracking (Admin update tracking number, order tracking details, and status)
+app.put("/api/admin/orders/:id/tracking", requireAdmin, async (req, res) => {
+  const { trackingNumber, orderTrackingDetails, status } = req.body;
+  const order = storeState.orders.find(o => o.id === req.params.id);
+  if (!order) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+
+  if (trackingNumber !== undefined) {
+    order.trackingNumber = String(trackingNumber).trim();
+  }
+  if (orderTrackingDetails !== undefined) {
+    order.orderTrackingDetails = String(orderTrackingDetails).trim();
+    order.trackingDetails = String(orderTrackingDetails).trim();
+  }
+  if (status !== undefined) {
+    order.status = String(status).trim();
+  }
+
+  saveState();
+
+  // Background dispatch to Google Sheets to update the row
+  syncOrderToGoogleSheets(order, storeState.webhookUrl).catch((err) => {
+    console.error("Failed to sync updated tracking to Google Sheet:", err);
+  });
+
+  res.json({
+    success: true,
+    message: "অর্ডার ট্র্যাকিং বিবরণ সফলভাবে সংরক্ষিত হয়েছে এবং গুগল শিটে পাঠানো হয়েছে!",
+    order
+  });
 });
 
 // POST /api/admin/orders/:id/sync
