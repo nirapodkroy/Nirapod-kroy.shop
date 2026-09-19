@@ -106,6 +106,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isTestingTrackingWebhook, setIsTestingTrackingWebhook] = useState(false);
   const [isCleaningOrderSheet, setIsCleaningOrderSheet] = useState(false);
   const [isFixingCustomersSheet, setIsFixingCustomersSheet] = useState(false);
+  const [isFixingOrderSheet, setIsFixingOrderSheet] = useState(false);
 
   // Subscribers State
   const [subscribers, setSubscribers] = useState<{ email: string; source: string; subscribedAt: string }[]>([]);
@@ -2111,6 +2112,31 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
+  // Fix Order Sheet: fixes shifted columns in "order sheet" so every field goes to its exact column
+  const handleFixOrderSheet = async () => {
+    setIsFixingOrderSheet(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/fix-order-sheet", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ url: webhookUrl })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addToast(data.message || "অর্ডার শিটের ভুল কলাম ডেটা সফলভাবে ঠিক করা হয়েছে!", "success");
+      } else {
+        addToast(data.error || "অপারেশন সম্পন্ন করা সম্ভব হয়নি। গুগল স্ক্রিপ্ট কোড আপডেট করুন।", "error");
+      }
+    } catch {
+      addToast("অর্ডার শিট মেরামত করা সম্ভব হয়নি।", "error");
+    } finally {
+      setIsFixingOrderSheet(false);
+    }
+  };
+
   // Export Tracking Logs to CSV
   const exportTrackingToCsv = () => {
     if (userTracking.length === 0) {
@@ -2208,6 +2234,13 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // অর্ডার শিট কলাম ফিক্স ও রি-অ্যালাইন (?action=fix_order_sheet)
+    if (e && e.parameter && (e.parameter.action === "fix_order_sheet" || e.parameter.action === "fix_orders")) {
+      var fixOrderMsg = cleanAndFixOrderSheetRows();
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: fixOrderMsg }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     // কাস্টমার শিট হেডার ফিক্স ও ক্লিনআপ (?action=fix_customers)
     if (e && e.parameter && (e.parameter.action === "fix_customers" || e.parameter.action === "clean_customers")) {
       var fixCustMsg = fixAndCleanCustomersSheet();
@@ -2220,8 +2253,33 @@ function doGet(e) {
     // 1. Orders tab ("order sheet" বা "Orders" - কাস্টমার শিট সম্পূর্ণ বাদ)
     var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Orders", "orders", "অর্ডার_লিস্ট", "অর্ডার"], "order", "custom", "coustom");
     if (orderSheet && orderSheet.getLastRow() > 1) {
-      var lastCol = Math.min(orderSheet.getLastColumn(), 16);
-      var rows = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, lastCol).getValues();
+      var lastCol = Math.max(orderSheet.getLastColumn(), 18);
+      var allData = orderSheet.getRange(1, 1, orderSheet.getLastRow(), lastCol).getValues();
+      var headers = allData[0];
+      var rows = allData.slice(1);
+      
+      // ডাইনামিক হেডার ম্যাপিং (যাতে কলামের অবস্থান পরিবর্তিত হলেও সঠিক ডেটা পাওয়া যায়)
+      var colMap = { id: 0, createdAt: 1, customerName: 2, customerEmail: 3, customerPhone: 4, shippingAddress: 5, totalPrice: 6, paymentMethod: 7, status: 8, orderedItems: 9, productCodes: 10, shippingFee: 11, trackingNumber: 12, deliveryArea: 13, orderTrackingDetails: 14 };
+      
+      for (var h = 0; h < headers.length; h++) {
+        var hStr = String(headers[h] || "").toLowerCase().replace(/[^a-z0-9\u0980-\u09FF]/g, "");
+        if (hStr === "id" || hStr.indexOf("orderid") !== -1 || (hStr.indexOf("আইডি") !== -1 && hStr.indexOf("ট্র্যাকিং") === -1)) colMap.id = h;
+        else if (hStr.indexOf("date") !== -1 || hStr.indexOf("time") !== -1 || hStr.indexOf("তারিখ") !== -1) colMap.createdAt = h;
+        else if (hStr.indexOf("customername") !== -1 || (hStr.indexOf("name") !== -1 && hStr.indexOf("item") === -1 && hStr.indexOf("product") === -1)) colMap.customerName = h;
+        else if (hStr.indexOf("email") !== -1 || hStr.indexOf("gmail") !== -1 || hStr.indexOf("ইমেইল") !== -1 || hStr.indexOf("মেইল") !== -1) colMap.customerEmail = h;
+        else if (hStr.indexOf("phone") !== -1 || hStr.indexOf("mobile") !== -1 || (hStr.indexOf("ফোন") !== -1 && hStr.indexOf("প্রেরক") === -1)) colMap.customerPhone = h;
+        else if (hStr.indexOf("address") !== -1 || hStr.indexOf("ঠিকানা") !== -1) colMap.shippingAddress = h;
+        else if (hStr.indexOf("total") !== -1 || hStr.indexOf("price") !== -1 || hStr.indexOf("সর্বমোট") !== -1 || hStr.indexOf("মূল্য") !== -1) colMap.totalPrice = h;
+        else if (hStr.indexOf("payment") !== -1 || hStr.indexOf("পেমেন্ট") !== -1) colMap.paymentMethod = h;
+        else if (hStr.indexOf("status") !== -1 || hStr.indexOf("স্ট্যাটাস") !== -1) colMap.status = h;
+        else if (hStr.indexOf("item") !== -1 || hStr.indexOf("ordered") !== -1 || hStr.indexOf("পণ্য") !== -1) colMap.orderedItems = h;
+        else if (hStr.indexOf("product") !== -1 || hStr.indexOf("code") !== -1 || hStr.indexOf("কোড") !== -1 || hStr.indexOf("ছবি") !== -1) colMap.productCodes = h;
+        else if (hStr.indexOf("charge") !== -1 || hStr.indexOf("fee") !== -1 || hStr.indexOf("চার্জ") !== -1) colMap.shippingFee = h;
+        else if (hStr.indexOf("track") !== -1 || hStr.indexOf("trak") !== -1 || hStr.indexOf("ট্র্যাকিং") !== -1) colMap.trackingNumber = h;
+        else if (hStr.indexOf("area") !== -1 || hStr.indexOf("এরিয়া") !== -1) colMap.deliveryArea = h;
+        else if (hStr.indexOf("detail") !== -1 || hStr.indexOf("detis") !== -1 || hStr.indexOf("বিবরণ") !== -1) colMap.orderTrackingDetails = h;
+      }
+
       result.orders = rows
         .filter(function(r) {
           // ট্র্যাকিংয়ের ভুল রো বাদ দিয়ে শুধু আসল অর্ডার ফিল্টার
@@ -2231,20 +2289,22 @@ function doGet(e) {
         })
         .map(function(r) {
           return {
-            id: String(r[0] || ""),
-            createdAt: String(r[1] || ""),
-            customerName: String(r[2] || ""),
-            customerEmail: String(r[3] || ""),
-            customerPhone: String(r[4] || ""),
-            shippingAddress: String(r[5] || ""),
-            itemsText: String(r[6] || ""),
-            totalPrice: String(r[7] || ""),
-            paymentMethod: String(r[8] || ""),
-            status: String(r[9] || "Pending"),
-            productCodes: String(r[10] || ""),
-            trackingNumber: String(r[11] || ""),
-            orderTrackingDetails: String(r[12] || ""),
-            trackingDetails: String(r[12] || "")
+            id: String(r[colMap.id] || ""),
+            createdAt: String(r[colMap.createdAt] || ""),
+            customerName: String(r[colMap.customerName] || ""),
+            customerEmail: String(r[colMap.customerEmail] || ""),
+            customerPhone: String(r[colMap.customerPhone] || ""),
+            shippingAddress: String(r[colMap.shippingAddress] || ""),
+            totalPrice: String(r[colMap.totalPrice] || ""),
+            paymentMethod: String(r[colMap.paymentMethod] || ""),
+            status: String(r[colMap.status] || "Pending"),
+            itemsText: String(r[colMap.orderedItems] || ""),
+            productCodes: String(r[colMap.productCodes] || ""),
+            shippingFee: String(r[colMap.shippingFee] || ""),
+            trackingNumber: String(r[colMap.trackingNumber] || ""),
+            deliveryArea: String(r[colMap.deliveryArea] || ""),
+            orderTrackingDetails: String(r[colMap.orderTrackingDetails] || ""),
+            trackingDetails: String(r[colMap.orderTrackingDetails] || "")
           };
         });
     }
@@ -2339,6 +2399,13 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // অর্ডার শিট কলাম ফিক্স ও রি-অ্যালাইন করার স্পেশাল কমান্ড
+    if (data.action === "fix_order_sheet" || data.action === "fix_orders" || (e && e.parameter && (e.parameter.action === "fix_order_sheet" || e.parameter.action === "fix_orders"))) {
+      var fixOrdMsg = cleanAndFixOrderSheetRows();
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: fixOrdMsg }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     // কাস্টমার শিট হেডার ঠিক করা ও ক্লিনআপ করার স্পেশাল কমান্ড
     if (data.action === "fix_customers" || data.action === "clean_customers" || (e && e.parameter && (e.parameter.action === "fix_customers" || e.parameter.action === "clean_customers"))) {
       var fixCustMsg = fixAndCleanCustomersSheet();
@@ -2413,33 +2480,36 @@ function doPost(e) {
       if (orderSheet.getLastRow() === 0) {
         orderSheet.appendRow([
           "Order ID", "Date/Time", "Customer Name", "Customer Email", 
-          "Customer Phone", "Shipping Address", "Ordered Items", 
-          "Total Price", "Payment Method", "Status", "Product Code", "Tracking Number",
-          "Order Tracking Details", "Send Money Number", "Tranzation Number", "Payment Provider"
+          "Customer Phone", "Shipping Address", "Total Price (৳)", "Payment Method", 
+          "Status", "Order Items Summary", "product number", "Delivery Charge", "Traking id",
+          "Delivery Area", "Order Tracking Details", "Send Money Number", "Tranzation Number", "Payment Provider"
         ]);
-        orderSheet.getRange(1, 1, 1, 16).setFontWeight("bold").setBackground("#e6f4ea");
+        orderSheet.getRange(1, 1, 1, 18).setFontWeight("bold").setBackground("#e6f4ea");
       }
-      var ordRow = data.sheetRow;
-      if (!ordRow || ordRow.length < 10) {
-        ordRow = [
-          data.orderId || ("NK-" + new Date().getTime()),
-          data.orderDate || data.timestamp || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
-          data.customerName || "Customer",
-          data.customerEmail || "",
-          data.customerPhone || "",
-          data.shippingAddress || "",
-          data.orderedItems || "",
-          data.totalPrice || "৳0",
-          data.paymentMethod || "Cash on Delivery",
-          data.orderStatus || "Pending",
-          data.productCodes || data.productCode || "",
-          data.trackingNumber || "",
-          data.orderTrackingDetails || data.trackingDetails || data.orderTrackingDetis || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে",
-          data.senderPhoneNumber || data.sendMoneyNumber || data.senderPhone || "",
-          data.transactionId || data.tranzationNumber || "",
-          data.paymentProvider || data.paymentBy || (data.paymentMethod && data.paymentMethod.indexOf("bKash") !== -1 ? "bKash" : (data.paymentMethod && data.paymentMethod.indexOf("Nagad") !== -1 ? "Nagad" : (data.paymentMethod && data.paymentMethod.indexOf("Rocket") !== -1 ? "Rocket" : "Cash on Delivery")))
-        ];
-      }
+
+      var defaultOrdRow = [
+        data.orderId || ("NK-" + new Date().getTime()),
+        data.orderDate || data.timestamp || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+        data.customerName || "Customer",
+        data.customerEmail || "",
+        data.customerPhone || "",
+        data.shippingAddress || "",
+        data.totalPrice || "৳0",
+        data.paymentMethod || "Cash on Delivery",
+        data.orderStatus || "Pending",
+        data.orderedItems || "",
+        data.productCodes || data.productCode || "",
+        data.shippingFee || (data.deliveryArea && (data.deliveryArea.indexOf("100") !== -1 || data.deliveryArea.indexOf("বাইরে") !== -1) ? "৳100" : "৳60"),
+        data.trackingNumber || "",
+        data.deliveryArea || (data.shippingFee === 100 || data.shippingFee === "100" || data.shippingFee === "৳100" ? "ঢাকার বাইরে" : "ঢাকার ভেতরে"),
+        data.orderTrackingDetails || data.trackingDetails || data.orderTrackingDetis || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
+        data.senderPhoneNumber || data.sendMoneyNumber || data.senderPhone || "N/A",
+        data.transactionId || data.tranzationNumber || "N/A",
+        data.paymentProvider || data.paymentBy || (data.paymentMethod && data.paymentMethod.indexOf("bKash") !== -1 ? "bKash" : (data.paymentMethod && data.paymentMethod.indexOf("Nagad") !== -1 ? "Nagad" : (data.paymentMethod && data.paymentMethod.indexOf("Rocket") !== -1 ? "Rocket" : "Cash on Delivery")))
+      ];
+
+      // ডাইনামিক হেডার-অনুযায়ী রো ম্যাপিং (যাতে ব্যবহারকারীর শিটের কলাম নাম অনুসারে ডেটা ১০০% নির্ভুল কলামে যায়)
+      var ordRow = buildOrderRowByHeaders(orderSheet, data, data.sheetRow || defaultOrdRow);
 
       // অর্ডার ডুপ্লিকেট চেক (Order ID দিয়ে)
       var targetOrderId = String(ordRow[0] || data.orderId || "").trim();
@@ -2913,6 +2983,198 @@ function fixAndCleanCustomersSheet() {
   }
 
   return "Customers শিট ঠিক করা হয়েছে! হেডার নিখুঁত করা হয়েছে এবং " + ordersMoved + " টি অর্ডার রো সরানো হয়েছে!";
+}
+
+// ==========================================
+// ৪. ডাইনামিক হেডার-ম্যাপিং ফাংশন (যেটা যেখানে যাওয়ার কথা সেখানেই যাবে)
+// ==========================================
+function buildOrderRowByHeaders(sheet, data, fallbackArray) {
+  if (!sheet || sheet.getLastRow() < 1) return fallbackArray;
+  var lastCol = Math.max(sheet.getLastColumn(), fallbackArray.length);
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (!headers || headers.length === 0 || !headers[0]) return fallbackArray;
+  
+  var row = [];
+  for (var colIdx = 0; colIdx < headers.length; colIdx++) {
+    var rawHeader = String(headers[colIdx] || "").trim();
+    if (!rawHeader) {
+      row.push(colIdx < fallbackArray.length ? fallbackArray[colIdx] : "");
+      continue;
+    }
+    var h = rawHeader.toLowerCase().replace(/[^a-z0-9\u0980-\u09FF]/g, "");
+    
+    // Order ID
+    if (h === "id" || h.indexOf("orderid") !== -1 || (h.indexOf("আইডি") !== -1 && h.indexOf("ট্র্যাকিং") === -1 && h.indexOf("ট্রানজেকশন") === -1)) {
+      row.push(data.orderId || (data.sheetRow ? data.sheetRow[0] : "") || "");
+    }
+    // Date / Time
+    else if (h.indexOf("date") !== -1 || h.indexOf("time") !== -1 || h.indexOf("তারিখ") !== -1 || h.indexOf("সময়") !== -1) {
+      row.push(data.orderDate || data.timestamp || (data.sheetRow ? data.sheetRow[1] : "") || "");
+    }
+    // Customer Name
+    else if (h === "name" || h.indexOf("customername") !== -1 || (h.indexOf("নাম") !== -1 && h.indexOf("প্রোডাক্ট") === -1 && h.indexOf("পণ্য") === -1 && h.indexOf("প্রেরক") === -1)) {
+      row.push(data.customerName || (data.sheetRow ? data.sheetRow[2] : "") || "Customer");
+    }
+    // Customer Email / Gmail (জিমেইল / ইমেইল)
+    else if (h.indexOf("email") !== -1 || h.indexOf("gmail") !== -1 || h.indexOf("ইমেইল") !== -1 || h.indexOf("মেইল") !== -1) {
+      row.push(data.customerEmail || data.email || (data.sheetRow ? data.sheetRow[3] : "") || "");
+    }
+    // Customer Phone / Mobile
+    else if (h.indexOf("phone") !== -1 || h.indexOf("mobile") !== -1 || (h.indexOf("ফোন") !== -1 && h.indexOf("প্রেরক") === -1) || (h.indexOf("মোবাইল") !== -1 && h.indexOf("প্রেরক") === -1)) {
+      row.push(data.customerPhone || data.phone || (data.sheetRow ? data.sheetRow[4] : "") || "");
+    }
+    // Shipping Address
+    else if (h.indexOf("address") !== -1 || h.indexOf("shipping") !== -1 || h.indexOf("ঠিকানা") !== -1) {
+      row.push(data.shippingAddress || (data.sheetRow ? data.sheetRow[5] : "") || "");
+    }
+    // Total Price (সর্বমোট বিল / মূল্য)
+    else if (h.indexOf("totalprice") !== -1 || h.indexOf("total") !== -1 || h.indexOf("সর্বমোট") !== -1 || h.indexOf("মূল্য") !== -1 || h.indexOf("বিল") !== -1) {
+      row.push(data.totalPrice || (data.sheetRow ? data.sheetRow[6] : "") || "৳0");
+    }
+    // Payment Method (পেমেন্ট পদ্ধতি)
+    else if (h.indexOf("paymentmethod") !== -1 || (h.indexOf("payment") !== -1 && h.indexOf("provider") === -1 && h.indexOf("by") === -1) || h.indexOf("পেমেন্ট") !== -1) {
+      row.push(data.paymentMethod || (data.sheetRow ? data.sheetRow[7] : "") || "Cash on Delivery");
+    }
+    // Status (স্ট্যাটাস)
+    else if (h.indexOf("status") !== -1 || h.indexOf("স্ট্যাটাস") !== -1 || h.indexOf("অবস্থা") !== -1) {
+      row.push(data.orderStatus || data.status || (data.sheetRow ? data.sheetRow[8] : "") || "Pending");
+    }
+    // Order Items Summary / Ordered Items (পণ্য / অর্ডারকৃত প্রোডাক্ট)
+    else if (h.indexOf("item") !== -1 || h.indexOf("ordered") !== -1 || h.indexOf("পণ্য") !== -1 || h.indexOf("আইটেম") !== -1) {
+      row.push(data.orderedItems || (data.sheetRow ? data.sheetRow[9] : "") || "");
+    }
+    // Product Code / Product Number / ছবি কোড
+    else if (h.indexOf("productnumber") !== -1 || h.indexOf("productcode") !== -1 || (h.indexOf("product") !== -1 && h.indexOf("items") === -1) || h.indexOf("কোড") !== -1 || h.indexOf("ছবি") !== -1) {
+      row.push(data.productCodes || data.productCode || (data.sheetRow ? data.sheetRow[10] : "") || "");
+    }
+    // Delivery Charge / Shipping Fee (ডেলিভারি চার্জ)
+    else if (h.indexOf("charge") !== -1 || h.indexOf("deliveryfee") !== -1 || h.indexOf("shippingfee") !== -1 || h.indexOf("চার্জ") !== -1) {
+      row.push(data.shippingFee || data.deliveryCharge || (data.sheetRow ? data.sheetRow[11] : "") || "৳60");
+    }
+    // Tracking ID / Traking id (ট্র্যাকিং আইডি)
+    else if (h.indexOf("traking") !== -1 || h.indexOf("tracking") !== -1 || h.indexOf("ট্র্যাকিং") !== -1) {
+      row.push(data.trackingNumber || (data.sheetRow ? data.sheetRow[12] : "") || "");
+    }
+    // Delivery Area (ডেলিভারি এরিয়া)
+    else if (h.indexOf("deliveryarea") !== -1 || h.indexOf("area") !== -1 || h.indexOf("এরিয়া") !== -1 || h.indexOf("এলাকা") !== -1) {
+      row.push(data.deliveryArea || (data.sheetRow ? data.sheetRow[13] : "") || "");
+    }
+    // Order Tracking Details (অর্ডার ট্র্যাকিং বিবরণ)
+    else if (h.indexOf("detail") !== -1 || h.indexOf("detis") !== -1 || h.indexOf("বিবরণ") !== -1) {
+      row.push(data.orderTrackingDetails || data.trackingDetails || data.orderTrackingDetis || (data.sheetRow ? data.sheetRow[14] : "") || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।");
+    }
+    // Send Money Number (যে নম্বর থেকে টাকা পাঠানো হয়েছে)
+    else if (h.indexOf("sendmoney") !== -1 || h.indexOf("sender") !== -1 || h.indexOf("প্রেরক") !== -1) {
+      row.push(data.senderPhoneNumber || data.sendMoneyNumber || data.senderPhone || (data.sheetRow ? data.sheetRow[15] : "") || "N/A");
+    }
+    // Transaction ID / Tranzation Number (ট্রানজেকশন আইডি)
+    else if (h.indexOf("trans") !== -1 || h.indexOf("tranz") !== -1 || h.indexOf("trx") !== -1 || h.indexOf("ট্রানজেকশন") !== -1) {
+      row.push(data.transactionId || data.tranzationNumber || (data.sheetRow ? data.sheetRow[16] : "") || "N/A");
+    }
+    // Payment Provider / Payment By (পেমেন্ট প্রোভাইডার)
+    else if (h.indexOf("provider") !== -1 || h.indexOf("paymentby") !== -1 || h.indexOf("প্রোভাইডার") !== -1) {
+      row.push(data.paymentProvider || data.paymentBy || (data.sheetRow ? data.sheetRow[17] : "") || "Cash on Delivery");
+    }
+    else {
+      row.push(colIdx < fallbackArray.length ? fallbackArray[colIdx] : "");
+    }
+  }
+  return row;
+}
+
+// ==========================================
+// ৫. অর্ডার শিটের পূর্বের ভুল কলাম স্বয়ংক্রিয়ভাবে ঠিক করার ফাংশন
+// ==========================================
+function cleanAndFixOrderSheetRows() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Orders", "orders", "অর্ডার"], "order", "custom", "coustom");
+  if (!orderSheet || orderSheet.getLastRow() < 2) return "কোনো অর্ডার রো পাওয়া যায়নি";
+
+  // নিশ্চিত করুন হেডার ঠিক আছে কিনা
+  if (orderSheet.getLastRow() >= 1) {
+    var hRange = orderSheet.getRange(1, 1, 1, Math.max(orderSheet.getLastColumn(), 18));
+    var curHeaders = hRange.getValues()[0];
+    if (!curHeaders[0] || String(curHeaders[0]).trim() === "") {
+      orderSheet.getRange(1, 1, 1, 18).setValues([[
+        "Order ID", "Date/Time", "Customer Name", "Customer Email", 
+        "Customer Phone", "Shipping Address", "Total Price (৳)", "Payment Method", 
+        "Status", "Order Items Summary", "product number", "Delivery Charge", "Traking id",
+        "Delivery Area", "Order Tracking Details", "Send Money Number", "Tranzation Number", "Payment Provider"
+      ]]);
+    }
+  }
+
+  var lastRow = orderSheet.getLastRow();
+  var numCols = Math.max(orderSheet.getLastColumn(), 18);
+  var rows = orderSheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+  var fixedCount = 0;
+
+  for (var r = 0; r < rows.length; r++) {
+    var row = rows[r];
+    var colD = String(row[3] || "").trim(); // Should be Customer Email
+    var colG = String(row[6] || "").trim(); // Should be Total Price
+    var colH = String(row[7] || "").trim(); // Should be Payment Method
+    var colJ = String(row[9] || "").trim(); // Should be Items Summary
+    var colK = String(row[10] || "").trim(); // Should be Product Number / Code
+
+    var isShifted = false;
+    var productCodeVal = "";
+    var customerEmailVal = "";
+    var orderedItemsVal = "";
+    var totalPriceVal = "";
+    var paymentMethodVal = "";
+    var deliveryAreaVal = "";
+
+    // যদি Col D তে ছবি কোড বা প্রোডাক্ট কোড থাকে
+    if (colD.indexOf("ছবি কোড:") !== -1 || colD.indexOf("P-") !== -1 || colD.indexOf("PRD-") !== -1) {
+      isShifted = true;
+      productCodeVal = colD;
+      customerEmailVal = "";
+    } else if (colD.indexOf("@") !== -1) {
+      customerEmailVal = colD;
+    }
+
+    // যদি Col G তে অর্ডারকৃত পণ্য থাকে (যেমন "x1", "@", "হিজাব", "ম্যাট")
+    if (colG.indexOf("x") !== -1 || colG.indexOf("@") !== -1 || colG.indexOf("হিজাব") !== -1 || colG.indexOf("ম্যাট") !== -1 || colG.length > 25) {
+      isShifted = true;
+      orderedItemsVal = colG;
+    }
+
+    // যদি Col H তে মূল্য থাকে (যেমন "৳710")
+    if (colH.indexOf("৳") !== -1 || /^[0-9]+$/.test(colH.replace(/[^0-9]/g, ""))) {
+      isShifted = true;
+      totalPriceVal = colH;
+    }
+
+    // যদি Col J তে পেমেন্ট মেথড থাকে
+    if (colJ === "Cash on Delivery" || colJ.indexOf("bKash") !== -1 || colJ.indexOf("Nagad") !== -1) {
+      isShifted = true;
+      paymentMethodVal = colJ;
+    }
+
+    // যদি Col K তে ডেলিভারি এরিয়া থাকে
+    if (colK.indexOf("ঢাকা") !== -1 || colK.indexOf("Dhaka") !== -1) {
+      isShifted = true;
+      deliveryAreaVal = colK;
+    }
+
+    if (isShifted) {
+      if (productCodeVal) row[10] = productCodeVal; // Product code -> Col K (product number)
+      row[3] = customerEmailVal; // Customer email -> Col D (Customer Email)
+      if (totalPriceVal) row[6] = totalPriceVal; // Total price -> Col G (Total Price)
+      if (paymentMethodVal) row[7] = paymentMethodVal; // Payment method -> Col H (Payment Method)
+      if (!row[8] || row[8] === "") row[8] = "Pending"; // Status -> Col I
+      if (orderedItemsVal) row[9] = orderedItemsVal; // Items -> Col J (Order Items Summary)
+      if (deliveryAreaVal) row[13] = deliveryAreaVal; // Delivery Area -> Col N
+      fixedCount++;
+    }
+  }
+
+  if (fixedCount > 0) {
+    orderSheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+    return "সফলভাবে " + fixedCount + " টি অর্ডারের ভুল কলাম ডেটা ঠিক করা হয়েছে!";
+  }
+  return "অর্ডার শিটের সব ডেটা ইতিমধ্যেই সঠিক কলামে রয়েছে।";
 }`;
 
   return (
@@ -5002,12 +5264,21 @@ function fixAndCleanCustomersSheet() {
                           </button>
                           <button
                             onClick={handleFixCustomersSheet}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet || isFixingOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 disabled:opacity-50 text-amber-200 font-bold text-xs transition-colors"
                             title="Customers শিটের হেডার (Customer ID, Registration Date, Name, Phone, Email, Address, Password) ঠিক করুন এবং ভুল অর্ডারগুলো সরান"
                           >
                             <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isFixingCustomersSheet ? "animate-spin" : ""}`} />
                             <span>{isFixingCustomersSheet ? "ঠিক হচ্ছে..." : "🔧 কাস্টমার শিট হেডার ফিক্স"}</span>
+                          </button>
+                          <button
+                            onClick={handleFixOrderSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet || isFixingOrderSheet}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 disabled:opacity-50 text-blue-200 font-bold text-xs transition-colors"
+                            title="অর্ডার শিটের ভুল কলামে যাওয়া ডাটা (যেমন জিমেইল, প্রোডাক্ট কোড, এরিয়া, ডেলিভারি চার্জ) স্বয়ংক্রিয়ভাবে সঠিক কলামে স্থানান্তর করুন"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isFixingOrderSheet ? "animate-spin" : ""}`} />
+                            <span>{isFixingOrderSheet ? "ঠিক হচ্ছে..." : "⚡ অর্ডার শিট কলাম ফিক্স"}</span>
                           </button>
                         </div>
                         <div className="mt-3 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between flex-wrap gap-2 text-xs text-emerald-200">

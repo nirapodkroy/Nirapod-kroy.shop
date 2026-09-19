@@ -873,28 +873,31 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
       orderTrackingDetis: order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
       trackingDetails: order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
       sheetRow: [
-        order.id,
-        orderTime,
-        order.customerName || "Customer",
-        order.customerEmail || "",
-        order.customerPhone || "",
-        order.shippingAddress || "",
-        itemsFormatted,
-        `৳${order.totalPrice || 0}`,
-        order.paymentMethod || "Cash on Delivery",
-        order.status || "Pending",
-        productCodesText,
-        trackingNum,
-        order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।", // "Order Tracking Details" (order traking detis) row/col beside tracking number
-        order.senderPhoneNumber || "N/A", // send money number (যে নম্বর থেকে টাকা পাঠানো হয়েছে)
-        order.transactionId || "N/A",      // tranzation number (ট্রানজেকশন আইডি)
-        order.paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : "Cash on Delivery"))) // ki teke dice (bKash / Nagad / Rocket)
+        order.id,                                // Col A (1): Order ID
+        orderTime,                               // Col B (2): Order Date
+        order.customerName || "Customer",        // Col C (3): Customer Name
+        order.customerEmail || "",               // Col D (4): Customer Email (Gmail)
+        order.customerPhone || "",               // Col E (5): Customer Phone
+        order.shippingAddress || "",             // Col F (6): Shipping Address
+        `৳${order.totalPrice || 0}`,             // Col G (7): Total Price (৳)
+        order.paymentMethod || "Cash on Delivery",// Col H (8): Payment Method
+        order.status || "Pending",               // Col I (9): Status
+        itemsFormatted,                          // Col J (10): Order Items Summary
+        productCodesText,                        // Col K (11): product number (Product / Picture Code)
+        order.shippingFee ? `৳${order.shippingFee}` : (order.deliveryArea?.includes("100") || order.deliveryArea?.includes("বাইরে") ? "৳100" : "৳60"), // Col L (12): Delivery Charge
+        trackingNum,                             // Col M (13): Traking id
+        order.deliveryArea || (Number(order.shippingFee) === 100 ? "ঢাকার বাইরে" : "ঢাকার ভেতরে"), // Col N (14): Delivery Area
+        order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।", // Col O (15): Order Tracking Details
+        order.senderPhoneNumber || "N/A",        // Col P (16): Send Money Number
+        order.transactionId || "N/A",             // Col Q (17): Transaction Number (TrxID)
+        order.paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : "Cash on Delivery"))) // Col R (18): Payment Provider
       ]
     };
 
     const trackingDetailsText = order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে";
+    const shippingFeeText = order.shippingFee ? `৳${order.shippingFee}` : (order.deliveryArea?.includes("100") || order.deliveryArea?.includes("বাইরে") ? "৳100" : "৳60");
     const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
-      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&productCode=${encodeURIComponent(productCodesText)}&trackingNumber=${encodeURIComponent(trackingNum)}&trackingDetails=${encodeURIComponent(trackingDetailsText)}&orderTrackingDetails=${encodeURIComponent(trackingDetailsText)}&orderTrackingDetis=${encodeURIComponent(trackingDetailsText)}&paymentBy=${encodeURIComponent(paymentByMethod)}&sendMoneyNumber=${encodeURIComponent(order.senderPhoneNumber || "")}&transactionId=${encodeURIComponent(order.transactionId || "")}&provider=${encodeURIComponent(order.paymentProvider || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
+      `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&customerEmail=${encodeURIComponent(order.customerEmail || "")}&email=${encodeURIComponent(order.customerEmail || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&totalPrice=${encodeURIComponent(`৳${order.totalPrice || 0}`)}&paymentMethod=${encodeURIComponent(order.paymentMethod || "Cash on Delivery")}&productCode=${encodeURIComponent(productCodesText)}&productCodes=${encodeURIComponent(productCodesText)}&trackingNumber=${encodeURIComponent(trackingNum)}&trackingDetails=${encodeURIComponent(trackingDetailsText)}&orderTrackingDetails=${encodeURIComponent(trackingDetailsText)}&orderTrackingDetis=${encodeURIComponent(trackingDetailsText)}&paymentBy=${encodeURIComponent(paymentByMethod)}&sendMoneyNumber=${encodeURIComponent(order.senderPhoneNumber || "")}&transactionId=${encodeURIComponent(order.transactionId || "")}&provider=${encodeURIComponent(order.paymentProvider || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}&shippingFee=${encodeURIComponent(shippingFeeText)}&deliveryCharge=${encodeURIComponent(shippingFeeText)}`;
 
     console.log(`[Google Sheets] Dispatching order ${order.id} to ${urlWithParams}`);
     
@@ -2834,6 +2837,31 @@ app.post("/api/admin/fix-customers-sheet", requireAdmin, async (req, res) => {
     });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || "কাস্টমার শিট মেরামত করা সম্ভব হয়নি।" });
+  }
+});
+
+// 6. Admin: Request Apps Script to fix and re-align Order Sheet columns (POST /api/admin/fix-order-sheet)
+app.post("/api/admin/fix-order-sheet", requireAdmin, async (req, res) => {
+  const targetUrl = req.body.url || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return res.status(400).json({ error: "গুগল শিট ওয়েবহুক পাওয়া যায়নি।" });
+  }
+
+  try {
+    const fetchUrl = targetUrl + (targetUrl.includes("?") ? "&" : "?") + "action=fix_order_sheet";
+    const resp = await fetch(fetchUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "fix_order_sheet" })
+    });
+    const result: any = await resp.json().catch(() => ({}));
+    return res.json({
+      success: true,
+      message: result.message || "অর্ডার শিটের কলাম ডেটা সফলভাবে রিয়্যালাইন ও মেরামত করা হয়েছে!",
+      details: result
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || "অর্ডার শিট মেরামত করা সম্ভব হয়নি।" });
   }
 });
 

@@ -187,29 +187,32 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string)
     transactionId: (order as any).transactionId || "",
     orderStatus: order.status || "Pending",
     sheetRow: [
-      order.id,
-      orderTime,
-      order.customerName || "Customer",
-      order.customerEmail || "",
-      order.customerPhone || "",
-      order.shippingAddress || "",
-      itemsFormatted,
-      `৳${order.totalPrice || 0}`,
-      order.paymentMethod || "Cash on Delivery",
-      order.status || "Pending",
-      order.productCodes || "",
-      order.trackingNumber || "",
-      (order as any).orderTrackingDetails || (order as any).trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
-      (order as any).senderPhoneNumber || "N/A", // send money number
-      (order as any).transactionId || "N/A",      // tranzation number
-      (order as any).paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : "Cash on Delivery"))) // provider (ki teke dice)
+      order.id,                                // Col A (1): Order ID
+      orderTime,                               // Col B (2): Order Date
+      order.customerName || "Customer",        // Col C (3): Customer Name
+      order.customerEmail || "",               // Col D (4): Customer Email (Gmail)
+      order.customerPhone || "",               // Col E (5): Customer Phone
+      order.shippingAddress || "",             // Col F (6): Shipping Address
+      `৳${order.totalPrice || 0}`,             // Col G (7): Total Price (৳)
+      order.paymentMethod || "Cash on Delivery",// Col H (8): Payment Method
+      order.status || "Pending",               // Col I (9): Status
+      itemsFormatted,                          // Col J (10): Order Items Summary
+      order.productCodes || "",                // Col K (11): product number (Product / Picture Code)
+      order.shippingFee ? `৳${order.shippingFee}` : (order.deliveryArea?.includes("100") || order.deliveryArea?.includes("বাইরে") ? "৳100" : "৳60"), // Col L (12): Delivery Charge
+      order.trackingNumber || "",              // Col M (13): Traking id
+      order.deliveryArea || (Number(order.shippingFee) === 100 ? "ঢাকার বাইরে" : "ঢাকার ভেতরে"), // Col N (14): Delivery Area
+      (order as any).orderTrackingDetails || (order as any).trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।", // Col O (15): Order Tracking Details
+      (order as any).senderPhoneNumber || "N/A", // Col P (16): Send Money Number
+      (order as any).transactionId || "N/A",      // Col Q (17): Transaction Number (TrxID)
+      (order as any).paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : "Cash on Delivery"))) // Col R (18): Payment Provider
     ]
   };
 
   const paymentByVal = (order as any).paymentProvider || (order.paymentMethod?.includes("bKash") ? "bKash" : (order.paymentMethod?.includes("Nagad") ? "Nagad" : (order.paymentMethod?.includes("Rocket") ? "Rocket" : (order.paymentMethod || "Cash on Delivery"))));
+  const shippingFeeVal = order.shippingFee ? `৳${order.shippingFee}` : (order.deliveryArea?.includes("100") || order.deliveryArea?.includes("বাইরে") ? "৳100" : "৳60");
 
   const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
-    `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&trackingNumber=${encodeURIComponent(order.trackingNumber || "")}&trackingDetails=${encodeURIComponent((order as any).orderTrackingDetails || (order as any).trackingDetails || "")}&orderTrackingDetails=${encodeURIComponent((order as any).orderTrackingDetails || (order as any).trackingDetails || "")}&paymentBy=${encodeURIComponent(paymentByVal)}&sendMoneyNumber=${encodeURIComponent((order as any).senderPhoneNumber || "")}&transactionId=${encodeURIComponent((order as any).transactionId || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}`;
+    `tab=order+sheet&target=order_sheet&type=order&action=new_order&orderId=${encodeURIComponent(order.id)}&customerName=${encodeURIComponent(order.customerName || "")}&customerEmail=${encodeURIComponent(order.customerEmail || "")}&email=${encodeURIComponent(order.customerEmail || "")}&phone=${encodeURIComponent(order.customerPhone || "")}&total=${encodeURIComponent(String(order.totalPrice || 0))}&totalPrice=${encodeURIComponent(`৳${order.totalPrice || 0}`)}&paymentMethod=${encodeURIComponent(order.paymentMethod || "Cash on Delivery")}&productCode=${encodeURIComponent(order.productCodes || "")}&productCodes=${encodeURIComponent(order.productCodes || "")}&trackingNumber=${encodeURIComponent(order.trackingNumber || "")}&trackingDetails=${encodeURIComponent((order as any).orderTrackingDetails || (order as any).trackingDetails || "")}&orderTrackingDetails=${encodeURIComponent((order as any).orderTrackingDetails || (order as any).trackingDetails || "")}&paymentBy=${encodeURIComponent(paymentByVal)}&sendMoneyNumber=${encodeURIComponent((order as any).senderPhoneNumber || "")}&transactionId=${encodeURIComponent((order as any).transactionId || "")}&provider=${encodeURIComponent((order as any).paymentProvider || "")}&notifyEmail=${encodeURIComponent("adib1234@gmail.com,adib1234w@gmail.com")}&deliveryArea=${encodeURIComponent(order.deliveryArea || "")}&shippingFee=${encodeURIComponent(shippingFeeVal)}&deliveryCharge=${encodeURIComponent(shippingFeeVal)}`;
 
   // 1. Direct instant Gmail alert dispatch via FormSubmit (independent of Google Apps Script)
   try {
