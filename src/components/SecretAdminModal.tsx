@@ -105,6 +105,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [trackingSearchTerm, setTrackingSearchTerm] = useState("");
   const [isTestingTrackingWebhook, setIsTestingTrackingWebhook] = useState(false);
   const [isCleaningOrderSheet, setIsCleaningOrderSheet] = useState(false);
+  const [isFixingCustomersSheet, setIsFixingCustomersSheet] = useState(false);
 
   // Subscribers State
   const [subscribers, setSubscribers] = useState<{ email: string; source: string; subscribedAt: string }[]>([]);
@@ -2001,9 +2002,6 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   // Fetch Tracking Data
   const fetchTrackingData = useCallback(async () => {
     if (!adminToken) return;
-    if (isLiveSheetMode && !isSyncedDataSaved) {
-      return;
-    }
     setIsLoadingTracking(true);
     try {
       const res = await safeAdminFetch("/api/admin/tracking", {
@@ -2025,7 +2023,16 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     } finally {
       setIsLoadingTracking(false);
     }
-  }, [adminToken, isLiveSheetMode, isSyncedDataSaved]);
+  }, [adminToken]);
+
+  // Auto-refresh live visitor tracking every 4 seconds when tracking tab is open
+  useEffect(() => {
+    if (isAdminModalOpen && activeTab === "tracking" && adminToken) {
+      fetchTrackingData();
+      const pollTimer = setInterval(fetchTrackingData, 4000);
+      return () => clearInterval(pollTimer);
+    }
+  }, [isAdminModalOpen, activeTab, adminToken, fetchTrackingData]);
 
   // Test User Tracking Webhook -> sends dummy log to "user traking" tab in Google Sheets
   const handleTestTrackingWebhook = async () => {
@@ -2076,6 +2083,31 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       addToast("ক্লিন অপারেশন সম্পন্ন করা সম্ভব হয়নি।", "error");
     } finally {
       setIsCleaningOrderSheet(false);
+    }
+  };
+
+  // Fix Customers Sheet: fixes row 1 headers and removes misplaced order rows from Customers tab
+  const handleFixCustomersSheet = async () => {
+    setIsFixingCustomersSheet(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/fix-customers-sheet", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ url: webhookUrl })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addToast(data.message || "কাস্টমার শিটের হেডার ঠিক করা হয়েছে এবং ভুল অর্ডার রো সরানো হয়েছে!", "success");
+      } else {
+        addToast(data.error || "অপারেশন সম্পন্ন করা সম্ভব হয়নি। গুগল স্ক্রিপ্ট আপডেট করুন।", "error");
+      }
+    } catch {
+      addToast("কাস্টমার শিট মেরামত করা সম্ভব হয়নি।", "error");
+    } finally {
+      setIsFixingCustomersSheet(false);
     }
   };
 
@@ -2173,6 +2205,13 @@ function doGet(e) {
     if (e && e.parameter && e.parameter.action === "clean_order_sheet") {
       var cleanMsg = cleanOrderSheetTrackingRows();
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: cleanMsg }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // কাস্টমার শিট হেডার ফিক্স ও ক্লিনআপ (?action=fix_customers)
+    if (e && e.parameter && (e.parameter.action === "fix_customers" || e.parameter.action === "clean_customers")) {
+      var fixCustMsg = fixAndCleanCustomersSheet();
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: fixCustMsg }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -2297,6 +2336,13 @@ function doPost(e) {
     if (data.action === "clean_order_sheet" || (e && e.parameter && e.parameter.action === "clean_order_sheet")) {
       var cleanMsg = cleanOrderSheetTrackingRows();
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: cleanMsg }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // কাস্টমার শিট হেডার ঠিক করা ও ক্লিনআপ করার স্পেশাল কমান্ড
+    if (data.action === "fix_customers" || data.action === "clean_customers" || (e && e.parameter && (e.parameter.action === "fix_customers" || e.parameter.action === "clean_customers"))) {
+      var fixCustMsg = fixAndCleanCustomersSheet();
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: fixCustMsg }))
         .setMimeType(ContentService.MimeType.JSON);
     }
     
@@ -2501,22 +2547,24 @@ function doPost(e) {
         trackSheet = ss.insertSheet("user traking");
       }
       
-      // হেডার না থাকলে হেডার যুক্ত করা
-      if (trackSheet.getLastRow() === 0) {
-        trackSheet.appendRow([
-          "তারিখ ও সময় (Time)", 
-          "পেজ (Page)", 
-          "আইপি (IP)", 
-          "লোকেশন (Location)", 
-          "ডিভাইস (Device)", 
-          "অপারেটিং সিস্টেম (OS)", 
-          "ব্রাউজার (Browser)", 
-          "সাইটে থাকার সময় (Time Spent)", 
-          "কোথা থেকে এসেছে (Referrer)", 
-          "স্ক্রিন রেজুলেশন (Screen)", 
-          "সেশন আইডি (Session ID)"
-        ]);
-        trackSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#d0e1fd");
+      // হেডার না থাকলে বা কলাম কম থাকলে হেডার যুক্ত করা
+      if (trackSheet.getLastRow() === 0 || trackSheet.getLastColumn() < 11) {
+        if (trackSheet.getLastRow() === 0) {
+          trackSheet.appendRow([
+            "তারিখ ও সময় (Time)", 
+            "পেজ (Page)", 
+            "আইপি (IP)", 
+            "লোকেশন (Location)", 
+            "ডিভাইস (Device)", 
+            "অপারেটিং সিস্টেম (OS)", 
+            "ব্রাউজার (Browser)", 
+            "সাইটে থাকার সময় (Time Spent)", 
+            "কোথা থেকে এসেছে (Referrer)", 
+            "স্ক্রিন রেজুলেশন (Screen)", 
+            "সেশন আইডি (Session ID)"
+          ]);
+          trackSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#d0e1fd");
+        }
       }
 
       var sessionId = String(data.sessionId || (data.sheetRow && data.sheetRow[10]) || "").trim();
@@ -2524,7 +2572,7 @@ function doPost(e) {
       var updated = false;
 
       // সেশন আইডি দিয়ে আগের রো খুঁজে সময় আপডেট (হৃদস্পন্দন / Heartbeat Update)
-      if (sessionId && trackSheet.getLastRow() > 1) {
+      if (sessionId && trackSheet.getLastRow() > 1 && trackSheet.getLastColumn() >= 11) {
         var lastRow = trackSheet.getLastRow();
         var searchRangeCount = Math.min(lastRow - 1, 150);
         var startRow = Math.max(2, lastRow - searchRangeCount + 1);
@@ -2533,7 +2581,9 @@ function doPost(e) {
         for (var i = sessionValues.length - 1; i >= 0; i--) {
           if (String(sessionValues[i][0]).trim() === sessionId) {
             var targetRowIndex = startRow + i;
-            trackSheet.getRange(targetRowIndex, 8).setValue(timeSpent);
+            if (trackSheet.getLastColumn() >= 8) {
+              trackSheet.getRange(targetRowIndex, 8).setValue(timeSpent);
+            }
             updated = true;
             break;
           }
@@ -2790,6 +2840,79 @@ function cleanOrderSheetTrackingRows() {
   }
   
   return "ক্লিনআপ সম্পন্ন! " + cleanedCount + " টি ট্র্যাকিং রো, " + duplicateOrdersRemoved + " টি ডুপ্লিকেট অর্ডার এবং " + duplicateTrackingRemoved + " টি ডুপ্লিকেট ট্র্যাকিং রো সফলভাবে মোছা হয়েছে!";
+}
+
+// ==========================================
+// ৪. কাস্টমার শিট হেডার ঠিক করা এবং ভুল করে ঢোকা অর্ডার রো সরানো
+// ==========================================
+function fixAndCleanCustomersSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var custSheet = findSheet(ss, ["Customers", "customers", "Customer", "customer", "coustomer sheet", "customer sheet", "coustomer"], "custom", "order") ||
+                  ss.getSheetByName("Customers") ||
+                  ss.getSheetByName("coustomer sheet");
+  var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Orders"], "order", "custom", "coustom") ||
+                   ss.getSheetByName("order sheet");
+                   
+  if (!custSheet) {
+    return "Customers শিট পাওয়া যায়নি";
+  }
+
+  // ১. হেডার রো ঠিক করা (Customer ID, Registration Date, Name, Phone, Email, Address, Password)
+  var correctHeaders = ["Customer ID", "Registration Date", "Name", "Phone", "Email", "Address", "Password"];
+  custSheet.getRange(1, 1, 1, 7).setValues([correctHeaders]);
+  custSheet.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#d1e7dd");
+
+  if (custSheet.getLastRow() <= 1) {
+    return "Customers শিটের হেডার ঠিক করা হয়েছে!";
+  }
+
+  var lastRow = custSheet.getLastRow();
+  var ordersMoved = 0;
+
+  // ২. নিচ থেকে ওপরের দিকে লুপ চালিয়ে অর্ডার রো গুলোকে order sheet এ সরানো
+  for (var r = lastRow; r >= 2; r--) {
+    var rowValues = custSheet.getRange(r, 1, 1, Math.min(custSheet.getLastColumn(), 16)).getValues()[0];
+    var colA = String(rowValues[0] || "").trim();
+    var colB = String(rowValues[1] || "").trim();
+    var colC = String(rowValues[2] || "").trim();
+    var colD = String(rowValues[3] || "").trim();
+    var colE = String(rowValues[4] || "").trim();
+    
+    // শনাক্তকরণ: যদি Col E বা Col A তে NK- বা TEST- থাকে, তবে এটা অর্ডার, কাস্টমার নয়!
+    var isOrderRow = (
+      colA.indexOf("NK-") !== -1 || colA.indexOf("ORD-") !== -1 ||
+      colE.indexOf("NK-") !== -1 || colE.indexOf("TEST-") !== -1 || colE.indexOf("ORD-") !== -1 ||
+      (colB.length >= 10 && !isNaN(colB) && colC.length > 0 && String(colD).indexOf("Dhaka") !== -1)
+    );
+
+    if (isOrderRow) {
+      if (orderSheet) {
+        var ordId = (colE.indexOf("NK-") !== -1 || colE.indexOf("TEST-") !== -1) ? colE : colA;
+        var alreadyInOrders = false;
+        if (orderSheet.getLastRow() > 1 && ordId) {
+          var oIds = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, 1).getValues();
+          for (var j = 0; j < oIds.length; j++) {
+            if (String(oIds[j][0]).trim() === ordId) {
+              alreadyInOrders = true;
+              break;
+            }
+          }
+        }
+        if (!alreadyInOrders) {
+          var ordDate = String(rowValues[6] || rowValues[1] || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
+          var cName = colC;
+          var cPhone = colB;
+          var cAddr = colD;
+          var totPrice = String(rowValues[7] || "৳0");
+          orderSheet.appendRow([ordId, ordDate, cName, "", cPhone, cAddr, "Order Items", totPrice, "Cash on Delivery", "Pending", "", "TRK-" + ordId.replace(/\D/g, ""), "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে", "", "", "Cash on Delivery"]);
+        }
+      }
+      custSheet.deleteRow(r);
+      ordersMoved++;
+    }
+  }
+
+  return "Customers শিট ঠিক করা হয়েছে! হেডার নিখুঁত করা হয়েছে এবং " + ordersMoved + " টি অর্ডার রো সরানো হয়েছে!";
 }`;
 
   return (
@@ -4870,12 +4993,21 @@ function cleanOrderSheetTrackingRows() {
                           </button>
                           <button
                             onClick={handleCleanOrderSheet}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/40 disabled:opacity-50 text-rose-200 font-bold text-xs transition-colors"
                             title="অর্ডার শিট থেকে ভুল করে ঢুকে যাওয়া ট্র্যাকিং রো মুছে 'user traking' এ স্থানান্তর করতে চাপুন"
                           >
                             <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                             <span>{isCleaningOrderSheet ? "ক্লিন হচ্ছে..." : "🧹 অর্ডার শিট ক্লিন করুন"}</span>
+                          </button>
+                          <button
+                            onClick={handleFixCustomersSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 disabled:opacity-50 text-amber-200 font-bold text-xs transition-colors"
+                            title="Customers শিটের হেডার (Customer ID, Registration Date, Name, Phone, Email, Address, Password) ঠিক করুন এবং ভুল অর্ডারগুলো সরান"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isFixingCustomersSheet ? "animate-spin" : ""}`} />
+                            <span>{isFixingCustomersSheet ? "ঠিক হচ্ছে..." : "🔧 কাস্টমার শিট হেডার ফিক্স"}</span>
                           </button>
                         </div>
                         <div className="mt-3 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between flex-wrap gap-2 text-xs text-emerald-200">

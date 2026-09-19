@@ -301,33 +301,27 @@ export function trackPageView(pageTitle: string, pageSlug = "root"): () => void 
   };
   currentTrackingSession = sessionObj;
 
-  // Send EXACTLY ONE initial visit record (wait up to 120ms for geo to avoid duplicate "Unknown" and real IP rows)
-  const sendInitialVisit = async () => {
-    let initialGeo = cachedGeo;
-    if (!initialGeo) {
-      initialGeo = await Promise.race([
-        getClientGeo(),
-        new Promise<GeoData>((r) => setTimeout(() => r({ ip: "Unknown", location: "Bangladesh" }), 120))
-      ]);
-    }
-    if (sessionObj.ended || currentTrackingSession?.sessionId !== sessionId) return;
+  // Dispatch initial visit INSTANTLY (0ms delay) with available geo or fallback
+  const initialGeo = cachedGeo || { ip: "Unknown", location: "Bangladesh" };
+  dispatchTrackingEvent({
+    sessionId,
+    page: pageTitle,
+    pageSlug: cleanSlug,
+    isHeartbeat: false,
+    timeSpent: "সক্রিয় রয়েছে (Active)...",
+    clientIp: initialGeo.ip,
+    location: initialGeo.location,
+    device,
+    os,
+    browser,
+    screen,
+    referrer
+  });
 
-    dispatchTrackingEvent({
-      sessionId,
-      page: pageTitle,
-      pageSlug: cleanSlug,
-      isHeartbeat: false,
-      timeSpent: "সক্রিয় রয়েছে (Active)...",
-      clientIp: initialGeo.ip,
-      location: initialGeo.location,
-      device,
-      os,
-      browser,
-      screen,
-      referrer
-    });
-  };
-  sendInitialVisit();
+  // Resolve client geo asynchronously in the background for future heartbeats/sessions
+  if (!cachedGeo) {
+    getClientGeo().catch(() => {});
+  }
 
   // Heartbeat sequence: update active duration (every 30 seconds if tab is active)
   let elapsedSeconds = 0;

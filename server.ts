@@ -1850,8 +1850,6 @@ app.post("/api/orders", async (req, res) => {
       createdAt: new Date().toISOString()
     };
     storeState.customers.push(existingCust);
-    // Order customers are stored locally only - NOT synced to Google Sheets "Customers" tab.
-    // The "Customers" tab is strictly reserved for user account registrations.
   } else {
     // Update phone/address if previously missing
     if (!existingCust.phone && customerPhone) existingCust.phone = customerPhone.trim();
@@ -1860,6 +1858,11 @@ app.post("/api/orders", async (req, res) => {
   }
 
   saveState();
+
+  // Also sync customer to Google Sheets Customers tab with their email
+  if (existingCust && existingCust.email) {
+    syncCustomerToGoogleSheets(existingCust).catch(() => {});
+  }
 
   // Trigger Google Sheet Webhook in background
   syncOrderToGoogleSheets(newOrder, storeState.webhookUrl).then(synced => {
@@ -2723,7 +2726,7 @@ app.post("/api/track", async (req, res) => {
 
 // 2. Admin: Get live user tracking stats & logs (GET /api/admin/tracking)
 app.get("/api/admin/tracking", requireAdmin, (_req, res) => {
-  const trackingList = storeState.isDataSaved ? (storeState.userTracking || []) : [];
+  const trackingList = storeState.userTracking || [];
   const now = Date.now();
   // Active visitors in the last 2 minutes
   const activeNow = trackingList.filter(t => t.updatedAt && (now - t.updatedAt < 120000)).length;
@@ -2806,6 +2809,31 @@ app.post("/api/admin/clean-order-sheet", requireAdmin, async (req, res) => {
     });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || "ক্লিন অপারেশন সম্পন্ন করা সম্ভব হয়নি।" });
+  }
+});
+
+// 5. Admin: Request Apps Script to fix Customers headers & clean misplaced order rows (POST /api/admin/fix-customers-sheet)
+app.post("/api/admin/fix-customers-sheet", requireAdmin, async (req, res) => {
+  const targetUrl = req.body.url || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return res.status(400).json({ error: "গুগল শিট ওয়েবহুক পাওয়া যায়নি।" });
+  }
+
+  try {
+    const fetchUrl = targetUrl + (targetUrl.includes("?") ? "&" : "?") + "action=fix_customers";
+    const resp = await fetch(fetchUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "fix_customers" })
+    });
+    const result: any = await resp.json().catch(() => ({}));
+    return res.json({
+      success: true,
+      message: result.message || "কাস্টমার শিটের হেডার ঠিক করা হয়েছে এবং ভুল অর্ডার রো সরিয়ে নেওয়া হয়েছে!",
+      details: result
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || "কাস্টমার শিট মেরামত করা সম্ভব হয়নি।" });
   }
 });
 
