@@ -38,7 +38,10 @@ const StoreContent: React.FC = () => {
       const cached = safeGetLocalStorage(PRODUCTS_CACHE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const cleaned = parsed.filter((p: any) => !p.id.startsWith("prod-groc-") && !p.id.startsWith("prod-elec-") && !p.id.startsWith("prod-sprt-") && !p.id.startsWith("prod-baby-") && !p.id.startsWith("prod-book-") && !p.id.startsWith("prod-home-") && !p.id.startsWith("prod-fas-"));
+          if (cleaned.length > 0) return cleaned;
+        }
       }
     } catch {}
     return DEFAULT_PRODUCTS;
@@ -299,34 +302,48 @@ const StoreContent: React.FC = () => {
   // Load products from static products.json, API, or local storage cache
   const fetchProducts = useCallback(async () => {
     try {
-      // 0. Check local storage cache first
+      // 0. Check local storage cache first for instant initial paint
       let localList: Product[] | null = null;
       try {
         const cached = safeGetLocalStorage(PRODUCTS_CACHE_KEY);
         if (cached) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            localList = parsed;
+            const cleaned = parsed.filter((p: any) => !p.id.startsWith("prod-groc-") && !p.id.startsWith("prod-elec-") && !p.id.startsWith("prod-sprt-") && !p.id.startsWith("prod-baby-") && !p.id.startsWith("prod-book-") && !p.id.startsWith("prod-home-") && !p.id.startsWith("prod-fas-"));
+            if (cleaned.length > 0) {
+              localList = cleaned;
+              setProducts(cleaned);
+            }
           }
         }
       } catch {}
 
-      // 1. In static hosting (GitHub Pages), fetch live products.json with cache buster
+      // 1. In static hosting (GitHub Pages) or any static env, fetch live products.json with multiple candidate paths & cache buster
       const isStatic = !window.location.port && !window.location.hostname.includes("run.app");
       if (isStatic) {
-        try {
-          const staticRes = await fetch(`./products.json?t=${Date.now()}`);
-          if (staticRes.ok) {
-            const list = await staticRes.json();
-            if (Array.isArray(list) && list.length > 0) {
-              setProducts(list);
-              safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(list));
-              setIsLoading(false);
-              return;
+        const candidatePaths = [
+          `./public/products.json?t=${Date.now()}`,
+          `./docs/products.json?t=${Date.now()}`,
+          `./products.json?t=${Date.now()}`,
+          `/public/products.json?t=${Date.now()}`,
+          `/docs/products.json?t=${Date.now()}`,
+          `/products.json?t=${Date.now()}`
+        ];
+        for (const candidate of candidatePaths) {
+          try {
+            const staticRes = await fetch(candidate);
+            if (staticRes.ok) {
+              const list = await staticRes.json();
+              if (Array.isArray(list) && list.length > 0) {
+                setProducts(list);
+                safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(list));
+                setIsLoading(false);
+                return;
+              }
             }
+          } catch (e) {
+            // Try next candidate
           }
-        } catch (e) {
-          console.warn("Could not load ./products.json:", e);
         }
       }
 
@@ -341,9 +358,11 @@ const StoreContent: React.FC = () => {
         safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(list));
       } else if (localList && localList.length > 0) {
         setProducts(localList);
+      } else {
+        setProducts(DEFAULT_PRODUCTS);
       }
     } catch (err) {
-      console.warn("Could not reach /api/products, using local catalog:", err);
+      console.warn("Could not reach /api/products, using fallback catalog:", err);
     } finally {
       setIsLoading(false);
     }

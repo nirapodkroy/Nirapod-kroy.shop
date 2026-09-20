@@ -1014,6 +1014,76 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           console.warn("[Client GitHub Push] Warning committing docs/products.json:", docsErr);
         }
 
+        // Also commit root products.json so direct root fetches (/products.json) succeed
+        try {
+          const rootFilePath = "products.json";
+          const getRootUrl = `https://api.github.com/repos/${cleanRepo}/contents/${rootFilePath}?ref=${cleanBranch}`;
+          const getRootRes = await fetch(getRootUrl, {
+            headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
+          });
+          let rootSha = "";
+          if (getRootRes.ok) {
+            const rootData = await getRootRes.json();
+            rootSha = rootData.sha;
+          }
+          await fetch(`https://api.github.com/repos/${cleanRepo}/contents/${rootFilePath}`, {
+            method: "PUT",
+            headers: {
+              Authorization: authHeader,
+              Accept: "application/vnd.github.v3+json",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              message: `chore(catalog): sync ${adminProducts.length} products to products.json (root)`,
+              content: base64Content,
+              sha: rootSha || undefined,
+              branch: cleanBranch,
+              committer: {
+                name: "Nirapod Kroy Admin",
+                email: "admin@nirapodkroy.shop"
+              }
+            })
+          });
+        } catch (rootErr) {
+          console.warn("[Client GitHub Push] Warning committing root products.json:", rootErr);
+        }
+
+        // Also commit src/data/defaultProducts.ts so build time bundles it directly
+        try {
+          const tsFilePath = "src/data/defaultProducts.ts";
+          const getTsUrl = `https://api.github.com/repos/${cleanRepo}/contents/${tsFilePath}?ref=${cleanBranch}`;
+          const getTsRes = await fetch(getTsUrl, {
+            headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
+          });
+          let tsSha = "";
+          if (getTsRes.ok) {
+            const tsData = await getTsRes.json();
+            tsSha = tsData.sha;
+          }
+          const tsContent = `import { Product } from "../types";\n\nexport const DEFAULT_PRODUCTS: Product[] = ${JSON.stringify(adminProducts, null, 2)};\n`;
+          const base64Ts = btoa(unescape(encodeURIComponent(tsContent)));
+          await fetch(`https://api.github.com/repos/${cleanRepo}/contents/${tsFilePath}`, {
+            method: "PUT",
+            headers: {
+              Authorization: authHeader,
+              Accept: "application/vnd.github.v3+json",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              message: `chore(catalog): sync ${adminProducts.length} products to defaultProducts.ts`,
+              content: base64Ts,
+              sha: tsSha || undefined,
+              branch: cleanBranch,
+              committer: {
+                name: "Nirapod Kroy Admin",
+                email: "admin@nirapodkroy.shop"
+              }
+            })
+          });
+        } catch (tsErr) {
+          console.warn("[Client GitHub Push] Warning committing defaultProducts.ts:", tsErr);
+        }
+
         try {
           const publicCatalog = adminProducts.filter(p => p.isActive !== false);
           localStorage.setItem("nirapod_products_cache", JSON.stringify(publicCatalog));

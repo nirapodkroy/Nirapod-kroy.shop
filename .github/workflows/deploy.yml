@@ -32,6 +32,14 @@ jobs:
       - name: Build Vite App for Production
         run: npm run build
 
+      - name: Sync build artifacts to branch
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add assets/ docs/ products.json public/ src/data/defaultProducts.ts index.html 404.html || true
+          git commit -m "chore(deploy): sync build artifacts and catalog [skip ci]" || true
+          git push origin HEAD || true
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 

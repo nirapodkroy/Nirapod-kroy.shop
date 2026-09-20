@@ -122,7 +122,19 @@ function getSafeStorage<T>(key: string, defaultVal: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return defaultVal;
-    return JSON.parse(raw) as T;
+    const parsed = JSON.parse(raw) as T;
+    if (key === PRODUCTS_KEY && Array.isArray(parsed)) {
+      const filtered = (parsed as any[]).filter(p => !p.id.startsWith("prod-groc-") && !p.id.startsWith("prod-elec-") && !p.id.startsWith("prod-sprt-") && !p.id.startsWith("prod-baby-") && !p.id.startsWith("prod-book-") && !p.id.startsWith("prod-home-") && !p.id.startsWith("prod-fas-"));
+      if (filtered.length > 0) {
+        if (filtered.length !== (parsed as any[]).length) {
+          localStorage.setItem(key, JSON.stringify(filtered));
+          localStorage.setItem("nirapod_products_cache", JSON.stringify(filtered));
+        }
+        return filtered as unknown as T;
+      }
+      return defaultVal;
+    }
+    return parsed;
   } catch {
     return defaultVal;
   }
@@ -1659,6 +1671,46 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       });
 
       if (putRes.ok) {
+        // Also sync docs/products.json, products.json, and src/data/defaultProducts.ts
+        try {
+          const syncSecondary = async (subPath: string, subContent: string, msg: string) => {
+            try {
+              const gUrl = `https://api.github.com/repos/${cleanRepo}/contents/${subPath}?ref=${cleanBranch}`;
+              const gRes = await fetch(gUrl, { headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" } });
+              let subSha = "";
+              if (gRes.ok) {
+                const d = await gRes.json();
+                subSha = d.sha;
+              }
+              const b64 = btoa(unescape(encodeURIComponent(subContent)));
+              await fetch(`https://api.github.com/repos/${cleanRepo}/contents/${subPath}`, {
+                method: "PUT",
+                headers: {
+                  Authorization: authHeader,
+                  Accept: "application/vnd.github.v3+json",
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  message: msg,
+                  content: b64,
+                  sha: subSha || undefined,
+                  branch: cleanBranch,
+                  committer: { name: "Nirapod Kroy Admin", email: "admin@nirapodkroy.shop" }
+                })
+              });
+            } catch (err) {
+              console.warn(`[GitHub Push] Failed to sync ${subPath}:`, err);
+            }
+          };
+
+          const tsContent = `import { Product } from "../types";\n\nexport const DEFAULT_PRODUCTS: Product[] = ${jsonStr};\n`;
+          await syncSecondary("docs/products.json", jsonStr, `chore(catalog): sync ${targetProducts.length} products to docs/products.json (live site)`);
+          await syncSecondary("products.json", jsonStr, `chore(catalog): sync ${targetProducts.length} products to products.json (root)`);
+          await syncSecondary("src/data/defaultProducts.ts", tsContent, `chore(catalog): sync ${targetProducts.length} products to defaultProducts.ts`);
+        } catch (subErr) {
+          console.warn("[GitHub Push] Sub file sync warning:", subErr);
+        }
+
         const putData = await putRes.json();
         const commitUrl = putData.commit?.html_url || `https://github.com/${cleanRepo}/commits/${cleanBranch}`;
         return createJsonResponse({

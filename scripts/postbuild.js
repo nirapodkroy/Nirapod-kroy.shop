@@ -127,14 +127,21 @@ try {
   }
 
   if (productsJsonStr) {
+    fs.writeFileSync(path.join(root, 'products.json'), productsJsonStr);
     if (fs.existsSync(path.join(root, 'public'))) {
       fs.writeFileSync(path.join(root, 'public', 'products.json'), productsJsonStr);
     }
     if (fs.existsSync(dist)) {
       fs.writeFileSync(path.join(dist, 'products.json'), productsJsonStr);
+      const distPublic = path.join(dist, 'public');
+      if (!fs.existsSync(distPublic)) fs.mkdirSync(distPublic, { recursive: true });
+      fs.writeFileSync(path.join(distPublic, 'products.json'), productsJsonStr);
     }
     if (fs.existsSync(docs)) {
       fs.writeFileSync(path.join(docs, 'products.json'), productsJsonStr);
+      const docsPublic = path.join(docs, 'public');
+      if (!fs.existsSync(docsPublic)) fs.mkdirSync(docsPublic, { recursive: true });
+      fs.writeFileSync(path.join(docsPublic, 'products.json'), productsJsonStr);
     }
     if (fs.existsSync(assets)) {
       fs.writeFileSync(path.join(assets, 'products.json'), productsJsonStr);
