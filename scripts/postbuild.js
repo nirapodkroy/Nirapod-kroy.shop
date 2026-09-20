@@ -167,6 +167,28 @@ try {
     }
   });
 
+  // 9.5. Sync payment logos (bKash, Nagad, Rocket) to root, dist, docs, assets, and assets/payment
+  const paymentLogoFiles = ['bkash.png', 'bkash.svg', 'nagad.png', 'nagad.svg', 'rocket.svg'];
+  const paymentDirs = [
+    root,
+    dist,
+    docs,
+    assets,
+    path.join(assets, 'payment'),
+    path.join(docs, 'assets', 'payment'),
+    path.join(dist, 'assets', 'payment')
+  ];
+
+  paymentDirs.forEach(dir => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    paymentLogoFiles.forEach(logoFile => {
+      const srcFile = path.join(root, 'public', logoFile);
+      if (fs.existsSync(srcFile)) {
+        fs.copyFileSync(srcFile, path.join(dir, logoFile));
+      }
+    });
+  });
+
   // 10. Generate physical static HTML directories for ALL Category Pages (Current & Future Dynamic Categories)
   // This guarantees that direct visits like https://nirapodkroy.shop/baby-and-kids or any future category return HTTP 200 on GitHub Pages
   if (indexHtmlContent) {

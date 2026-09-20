@@ -3,6 +3,7 @@ import { ShieldCheck, Heart, CreditCard, Send, CheckCircle2, PhoneCall, Loader2 
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { handleLocalApi, syncNewsletterToGoogleSheets } from "../lib/mockApi";
+import { BkashLogo, NagadLogo, RocketLogo } from "./PaymentLogos";
 
 interface FooterProps {
   onCategorySelect: (cat: string) => void;
@@ -345,16 +346,16 @@ export const Footer: React.FC<FooterProps> = ({
 
           <div className="flex items-center gap-2 flex-wrap justify-center">
             <span className="text-[11px] text-zinc-400 mr-1">{language === "bn" ? "পেমেন্ট মাধ্যম:" : "Accepted Payments:"}</span>
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
-              <img src="/bkash.png" alt="bKash" className="h-4 w-auto object-contain" />
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <BkashLogo className="h-4.5 w-auto max-h-5 object-contain" alt="bKash" />
               <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200">bKash</span>
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
-              <img src="/nagad.png" alt="Nagad" className="h-4 w-auto object-contain" />
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <NagadLogo className="h-4.5 w-auto max-h-5 object-contain" alt="Nagad" />
               <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200">Nagad</span>
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
-              <img src="/rocket.svg" alt="Rocket" className="h-4 w-auto object-contain" />
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
+              <RocketLogo className="h-4.5 w-auto max-h-5 object-contain" alt="Rocket" />
               <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200">Rocket</span>
             </span>
             <span className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] font-bold border border-zinc-200/50 dark:border-zinc-700/50">

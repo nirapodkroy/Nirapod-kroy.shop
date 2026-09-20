@@ -6,6 +6,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { handleLocalApi } from "../lib/mockApi";
 import { getProductImagesWithCodes } from "../utils/productCodeHelper";
 import { MobileBankingGateway, MobileBankingProvider } from "./MobileBankingGateway";
+import { BkashLogo, NagadLogo, RocketLogo } from "./PaymentLogos";
 import {
   X,
   ShieldCheck,
@@ -858,10 +859,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                                 {method.label}
                               </span>
                               {method.id === "bKash / Mobile Wallet" && (
-                                <div className="flex items-center gap-1 bg-white dark:bg-zinc-700/80 px-1.5 py-0.5 rounded border border-zinc-200/80 dark:border-zinc-600 shrink-0">
-                                  <img src="/bkash.png" alt="bKash" className="h-3.5 w-auto object-contain" />
-                                  <img src="/nagad.png" alt="Nagad" className="h-3.5 w-auto object-contain" />
-                                  <img src="/rocket.svg" alt="Rocket" className="h-3.5 w-auto object-contain" />
+                                <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-700/90 px-2 py-1 rounded-lg border border-zinc-200/90 dark:border-zinc-600 shrink-0 shadow-2xs">
+                                  <BkashLogo className="h-4 sm:h-4.5 w-auto object-contain" alt="bKash" />
+                                  <NagadLogo className="h-4 sm:h-4.5 w-auto object-contain" alt="Nagad" />
+                                  <RocketLogo className="h-4 sm:h-4.5 w-auto object-contain" alt="Rocket" />
                                 </div>
                               )}
                             </div>

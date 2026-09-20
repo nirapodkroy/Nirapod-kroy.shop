@@ -75,7 +75,7 @@
         var p = window.location.port;
         // In local development or Cloud Run preview container, Vite handles /src/main.tsx dynamically
         var isDev = h === 'localhost' || h === '127.0.0.1' || h.indexOf('.run.app') !== -1 || h.indexOf('webcontainer') !== -1 || p === '3000' || p === '5173';
-        var buildVer = 'mua0jj91';
+        var buildVer = 'mua1enu4';
 
         if (!isDev) {
           // Live static deployment (GitHub Pages, nirapodkroy.shop, custom domains):
@@ -83,13 +83,13 @@
           var css = document.createElement('link');
           css.rel = 'stylesheet';
           css.crossOrigin = 'anonymous';
-          css.href = '/assets/index.css?v=mua1fh7u?v=' + buildVer;
+          css.href = '/assets/index.css?v=mua1p5hh?v=' + buildVer;
           document.head.appendChild(css);
 
           var js = document.createElement('script');
           js.type = 'module';
           js.crossOrigin = 'anonymous';
-          js.src = '/assets/index.js?v=mua1fh7u?v=' + buildVer;
+          js.src = '/assets/index.js?v=mua1p5hh?v=' + buildVer;
           document.head.appendChild(js);
         } else {
           // Dev fallback in case module script fails
@@ -104,12 +104,12 @@
             loaded = true;
             var link = document.createElement('link');
             link.rel = 'stylesheet';
-            link.href = '/assets/index.css?v=mua1fh7u?v=' + buildVer;
+            link.href = '/assets/index.css?v=mua1p5hh?v=' + buildVer;
             document.head.appendChild(link);
 
             var script = document.createElement('script');
             script.type = 'module';
-            script.src = '/assets/index.js?v=mua1fh7u?v=' + buildVer;
+            script.src = '/assets/index.js?v=mua1p5hh?v=' + buildVer;
             document.head.appendChild(script);
           }
 
@@ -121,8 +121,8 @@
         }
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index.js?v=mua1fh7u"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index.css?v=mua1fh7u">
+    <script type="module" crossorigin src="/assets/index.js?v=mua1p5hh"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index.css?v=mua1p5hh">
   </head>
   <body class="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-200 antialiased selection:bg-emerald-500 selection:text-white">
     <div id="root"></div>

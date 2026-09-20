@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Copy, Check, ShieldCheck } from "lucide-react";
+import { PaymentLogo, BkashLogo, NagadLogo, RocketLogo } from "./PaymentLogos";
 
 export type MobileBankingProvider = "bKash" | "Nagad" | "Rocket";
 
@@ -109,11 +110,9 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
               </span>
             )}
             <div className="h-10 w-full flex items-center justify-center p-1 bg-white rounded-lg">
-              <img
-                src="/bkash.png"
+              <BkashLogo
                 alt="bKash Official Logo"
-                className="h-8 max-h-8 w-auto max-w-[90px] object-contain"
-                loading="eager"
+                className="h-8 max-h-8 w-auto max-w-[95px] object-contain"
               />
             </div>
             <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mt-1">বিকাশ</span>
@@ -135,11 +134,9 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
               </span>
             )}
             <div className="h-10 w-full flex items-center justify-center p-1 bg-white rounded-lg">
-              <img
-                src="/nagad.png"
+              <NagadLogo
                 alt="Nagad Official Logo"
-                className="h-8 max-h-8 w-auto max-w-[90px] object-contain"
-                loading="eager"
+                className="h-8 max-h-8 w-auto max-w-[95px] object-contain"
               />
             </div>
             <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mt-1">নগদ</span>
@@ -161,11 +158,9 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
               </span>
             )}
             <div className="h-10 w-full flex items-center justify-center p-1 bg-white rounded-lg">
-              <img
-                src="/rocket.svg"
+              <RocketLogo
                 alt="Rocket Official Logo"
-                className="h-8 max-h-8 w-auto max-w-[90px] object-contain"
-                loading="eager"
+                className="h-8 max-h-8 w-auto max-w-[95px] object-contain"
               />
             </div>
             <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mt-1">রকেট</span>
@@ -177,7 +172,7 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 shadow-sm flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="h-12 w-14 rounded-xl bg-white border border-zinc-200 dark:border-zinc-700 flex items-center justify-center shrink-0 p-1 shadow-xs">
-            <img src={current.logoSrc} alt={current.name} className="h-8 max-h-8 w-auto object-contain" />
+            <PaymentLogo provider={selectedProvider} className="h-8 max-h-8 w-auto object-contain" alt={current.name} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
@@ -209,7 +204,7 @@ export const MobileBankingGateway: React.FC<MobileBankingGatewayProps> = ({
         {/* Title */}
         <div className="text-center space-y-1.5">
           <div className="inline-flex items-center gap-2 bg-white/95 text-zinc-900 px-3 py-1 rounded-full shadow-xs">
-            <img src={current.logoSrc} alt={current.name} className="h-5 w-auto object-contain" />
+            <PaymentLogo provider={selectedProvider} className="h-5.5 w-auto object-contain" alt={current.name} />
             <span className="text-xs font-black">{current.label} অফিসিয়াল পেমেন্ট</span>
           </div>
           <h3 className="text-base sm:text-lg font-extrabold tracking-wide text-white">
