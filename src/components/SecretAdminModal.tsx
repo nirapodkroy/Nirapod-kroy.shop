@@ -2207,7 +2207,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        addToast(data.message || "কাস্টমার শিটের হেডার ঠিক করা হয়েছে এবং ভুল অর্ডার রো সরানো হয়েছে!", "success");
+        addToast(data.message || "কাস্টমার শিটের ইমেইল সফলভাবে ঠিক করা হয়েছে!", "success");
       } else {
         addToast(data.error || "অপারেশন সম্পন্ন করা সম্ভব হয়নি। গুগল স্ক্রিপ্ট আপডেট করুন।", "error");
       }
@@ -2451,21 +2451,36 @@ function doGet(e) {
       });
     }
 
-    // 4. Customers tab ("Customers" বা "coustomer sheet" বা "গ্রাহক" - অর্ডার শিট সম্পূর্ণ বাদ)
+    // 4. Customers tab ("Customers" বা "coustomer sheet" বা "গ্রাহক" - ডাইনামিক হেডার ম্যাপিং)
     var custSheet = findSheet(ss, ["Customers", "customers", "Customer", "customer", "coustomer sheet", "customer sheet", "coustomer", "গ্রাহক_নিবন্ধন", "গ্রাহক"], "custom", "order") ||
                     findSheet(ss, ["coustomer sheet", "coustomer"], "coustom", "order");
     if (custSheet && custSheet.getLastRow() > 1) {
       var maxCustRows = Math.min(custSheet.getLastRow() - 1, 500);
-      var cRows = custSheet.getRange(2, 1, maxCustRows, Math.min(custSheet.getLastColumn(), 7)).getValues();
+      var custLastCol = Math.max(custSheet.getLastColumn(), 7);
+      var custHeaders = custSheet.getRange(1, 1, 1, custLastCol).getValues()[0];
+      
+      var cMap = { id: 0, registeredAt: 1, name: 2, phone: 3, email: 4, address: 5, password: 6 };
+      for (var ch = 0; ch < custHeaders.length; ch++) {
+        var chRaw = String(custHeaders[ch] || "").toLowerCase().replace(/[^a-z0-9\u0980-\u09FF]/g, "");
+        if (chRaw.indexOf("email") !== -1 || chRaw.indexOf("gmail") !== -1 || chRaw.indexOf("ইমেইল") !== -1 || chRaw.indexOf("মেইল") !== -1) cMap.email = ch;
+        else if (chRaw.indexOf("phone") !== -1 || chRaw.indexOf("mobile") !== -1 || chRaw.indexOf("ফোন") !== -1) cMap.phone = ch;
+        else if (chRaw === "name" || chRaw.indexOf("customername") !== -1 || chRaw.indexOf("নাম") !== -1) cMap.name = ch;
+        else if (chRaw.indexOf("address") !== -1 || chRaw.indexOf("ঠিকানা") !== -1) cMap.address = ch;
+        else if (chRaw === "id" || chRaw.indexOf("customerid") !== -1 || chRaw.indexOf("আইডি") !== -1) cMap.id = ch;
+        else if (chRaw.indexOf("date") !== -1 || chRaw.indexOf("time") !== -1 || chRaw.indexOf("তারিখ") !== -1 || chRaw.indexOf("সময়") !== -1 || chRaw.indexOf("reg") !== -1) cMap.registeredAt = ch;
+        else if (chRaw.indexOf("pass") !== -1 || chRaw.indexOf("পাসওয়ার্ড") !== -1) cMap.password = ch;
+      }
+
+      var cRows = custSheet.getRange(2, 1, maxCustRows, custLastCol).getValues();
       result.customers = cRows.map(function(r) {
         return {
-          id: String(r[0] || ""),
-          registeredAt: String(r[1] || ""),
-          name: String(r[2] || ""),
-          phone: String(r[3] || ""),
-          email: String(r[4] || ""),
-          address: String(r[5] || ""),
-          password: String(r[6] || "")
+          id: String(r[cMap.id] || ""),
+          registeredAt: String(r[cMap.registeredAt] || ""),
+          name: String(r[cMap.name] || ""),
+          phone: String(r[cMap.phone] || ""),
+          email: String(r[cMap.email] || ""),
+          address: String(r[cMap.address] || ""),
+          password: String(r[cMap.password] || "")
         };
       });
     }
@@ -2550,14 +2565,19 @@ function doPost(e) {
     // ৩. গ্রাহক রেজিস্ট্রেশন চেক (শুধুমাত্র নতুন অ্যাকাউন্ট সাইন-আপ, অর্ডার কখনোই নয়!)
     var isCustomer = !isTracking && !isSubscriber && Boolean(
       data.action === "customer_registration" || 
+      data.action === "customer" ||
       data.type === "customer" ||
+      String(data.sheetTab || data.targetSheet || "").toLowerCase().indexOf("custom") !== -1 ||
+      String(data.sheetTab || data.targetSheet || "").toLowerCase().indexOf("coustom") !== -1 ||
       (e && e.parameter && (
         e.parameter.type === "customer" || 
         e.parameter.action === "customer_registration" ||
-        (e.parameter.tab && (e.parameter.tab.toLowerCase().indexOf("custom") !== -1 || e.parameter.tab.toLowerCase().indexOf("coustom") !== -1))
+        e.parameter.action === "customer" ||
+        (e.parameter.tab && (e.parameter.tab.toLowerCase().indexOf("custom") !== -1 || e.parameter.tab.toLowerCase().indexOf("coustom") !== -1)) ||
+        (e.parameter.target && (e.parameter.target.toLowerCase().indexOf("custom") !== -1 || e.parameter.target.toLowerCase().indexOf("coustom") !== -1))
       )) ||
-      (data.sheetRow && data.sheetRow.length === 7 && String(data.sheetRow[0]).toLowerCase().indexOf("cust-") !== -1) ||
-      Boolean(data.customerId && (data.password || data.registeredAt))
+      (data.sheetRow && data.sheetRow.length === 7 && String(data.sheetRow[0]).toLowerCase().indexOf("cust") !== -1) ||
+      Boolean(data.customerId && (data.password || data.registeredAt || data.customerEmail || data.email))
     );
 
     // ৪. অর্ডার চেক (সরাসরি এবং নিশ্চিতভাবে order sheet এ যাবে, কাস্টমার শিটে কখনোই নয়)
@@ -2695,7 +2715,7 @@ function doPost(e) {
                   MailApp.sendEmail(
                     targetMail,
                     mailSubject,
-                    "নতুন অর্ডার #" + targetOrderId + "\nগ্রাহক: " + (data.customerName || ordRow[2]) + "\nফোন: " + (data.customerPhone || ordRow[4]) + "\nঠিকানা: " + (data.shippingAddress || ordRow[5]) + "\nআইটেম: " + (data.orderedItems || ordRow[6]) + "\nমোট: " + (data.totalPrice || ordRow[7])
+                    "নতুন অর্ডার #" + targetOrderId + "\\nগ্রাহক: " + (data.customerName || ordRow[2]) + "\\nফোন: " + (data.customerPhone || ordRow[4]) + "\\nঠিকানা: " + (data.shippingAddress || ordRow[5]) + "\\nআইটেম: " + (data.orderedItems || ordRow[6]) + "\\nমোট: " + (data.totalPrice || ordRow[7])
                   );
                 } catch(textErr) {}
               }
@@ -2854,26 +2874,87 @@ function doPost(e) {
         ]);
         customerSheet.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#d1e7dd");
       }
-      var custRow = data.sheetRow;
-      if (!custRow || custRow.length < 7) {
-        custRow = [
-          data.customerId || ("cust-" + new Date().getTime()),
-          data.registeredAt || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
-          data.name || "Customer",
-          data.phone || "N/A",
-          data.email || "",
-          data.address || "N/A",
-          data.password || ""
-        ];
-      }
 
-      // কাস্টমার ডুপ্লিকেট চেক (ইমেইল দিয়ে)
-      var targetEmail = String(custRow[4] || data.email || "").trim().toLowerCase();
+      // কাস্টমার ইমেইল ও অন্যান্য ফিল্ড নিখুঁতভাবে সংগ্রহ
+      var customerEmail = String(data.email || data.customerEmail || data.userEmail || data.gmail || (data.sheetRow ? data.sheetRow[4] : "") || (e && e.parameter && (e.parameter.email || e.parameter.customerEmail || e.parameter.userEmail || e.parameter.gmail)) || "").trim();
+      var customerPhone = String(data.phone || data.customerPhone || (data.sheetRow ? data.sheetRow[3] : "") || (e && e.parameter && (e.parameter.phone || e.parameter.customerPhone)) || "").trim();
+      var customerName = String(data.name || data.customerName || (data.sheetRow ? data.sheetRow[2] : "") || (e && e.parameter && (e.parameter.name || e.parameter.customerName)) || "Customer").trim();
+      var customerId = String(data.customerId || data.id || (data.sheetRow ? data.sheetRow[0] : "") || (e && e.parameter && (e.parameter.customerId || e.parameter.id)) || ("cust-" + new Date().getTime())).trim();
+      var regDate = String(data.registeredAt || data.orderDate || (data.sheetRow ? data.sheetRow[1] : "") || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" })).trim();
+      var customerAddress = String(data.address || data.shippingAddress || (data.sheetRow ? data.sheetRow[5] : "") || (e && e.parameter && e.parameter.address) || "N/A").trim();
+      var customerPassword = String(data.password || (data.sheetRow ? data.sheetRow[6] : "") || (e && e.parameter && e.parameter.password) || "").trim();
+
+      var fallbackCustArray = [
+        customerId,
+        regDate,
+        customerName,
+        customerPhone || "N/A",
+        customerEmail,
+        customerAddress,
+        customerPassword
+      ];
+
+      // ডাইনামিক হেডার অনুযায়ী রো তৈরি (যাতে কাস্টমারের দেওয়া কলাম ক্রমে যেমন Phone, name, address, Customer ID, Registration Date, email, Password হলেও ১০০% সঠিক কলামে বসে)
+      var custRow = buildCustomerRowByHeaders(customerSheet, {
+        customerId: customerId,
+        id: customerId,
+        registeredAt: regDate,
+        date: regDate,
+        name: customerName,
+        customerName: customerName,
+        phone: customerPhone,
+        customerPhone: customerPhone,
+        email: customerEmail,
+        customerEmail: customerEmail,
+        userEmail: customerEmail,
+        gmail: customerEmail,
+        address: customerAddress,
+        shippingAddress: customerAddress,
+        password: customerPassword,
+        sheetRow: fallbackCustArray
+      }, fallbackCustArray);
+
+      // কাস্টমার ডুপ্লিকেট চেক (শিটের ডাইনামিক ইমেইল ও ফোন কলাম খুঁজে বের করে)
+      var targetEmail = customerEmail.toLowerCase();
+      var targetPhone = customerPhone;
+      var emailColIdx = -1;
+      var phoneColIdx = -1;
+      var custLastCol = customerSheet.getLastColumn();
+      if (customerSheet.getLastRow() >= 1 && custLastCol >= 1) {
+        var hArr = customerSheet.getRange(1, 1, 1, custLastCol).getValues()[0];
+        for (var hi = 0; hi < hArr.length; hi++) {
+          var hClean = String(hArr[hi] || "").toLowerCase().replace(/[^a-z0-9\u0980-\u09FF]/g, "");
+          if (emailColIdx === -1 && (hClean.indexOf("email") !== -1 || hClean.indexOf("gmail") !== -1 || hClean.indexOf("ইমেইল") !== -1 || hClean.indexOf("মেইল") !== -1)) {
+            emailColIdx = hi + 1;
+          }
+          if (phoneColIdx === -1 && (hClean.indexOf("phone") !== -1 || hClean.indexOf("mobile") !== -1 || hClean.indexOf("ফোন") !== -1)) {
+            phoneColIdx = hi + 1;
+          }
+        }
+      }
+      if (emailColIdx === -1) emailColIdx = 5;
+
       var custUpdated = false;
-      if (customerSheet.getLastRow() > 1 && targetEmail) {
-        var existingCusts = customerSheet.getRange(2, 5, customerSheet.getLastRow() - 1, 1).getValues();
-        for (var c = 0; c < existingCusts.length; c++) {
-          if (String(existingCusts[c][0]).trim().toLowerCase() === targetEmail) {
+      if (customerSheet.getLastRow() > 1) {
+        var existingEmails = (emailColIdx > 0 && emailColIdx <= custLastCol) 
+          ? customerSheet.getRange(2, emailColIdx, customerSheet.getLastRow() - 1, 1).getValues() 
+          : [];
+        var existingPhones = (phoneColIdx > 0 && phoneColIdx <= custLastCol)
+          ? customerSheet.getRange(2, phoneColIdx, customerSheet.getLastRow() - 1, 1).getValues()
+          : [];
+
+        for (var c = 0; c < existingEmails.length; c++) {
+          var rowEmail = String(existingEmails[c] ? existingEmails[c][0] : "").trim().toLowerCase();
+          var rowPhone = String(existingPhones[c] ? existingPhones[c][0] : "").trim();
+          
+          var isMatch = false;
+          if (targetEmail && rowEmail && rowEmail === targetEmail) {
+            isMatch = true;
+          } else if (targetPhone && rowPhone && targetPhone.length >= 10 && rowPhone === targetPhone) {
+            isMatch = true;
+          }
+          
+          if (isMatch) {
             customerSheet.getRange(c + 2, 1, 1, custRow.length).setValues([custRow]);
             custUpdated = true;
             break;
@@ -2888,7 +2969,8 @@ function doPost(e) {
         status: "success", 
         type: "customer",
         target: customerSheet.getName(),
-        updatedExisting: custUpdated
+        updatedExisting: custUpdated,
+        customerEmail: customerEmail
       })).setMimeType(ContentService.MimeType.JSON);
     } 
 
@@ -3019,7 +3101,7 @@ function cleanOrderSheetTrackingRows() {
 }
 
 // ==========================================
-// ৪. কাস্টমার শিট হেডার ঠিক করা এবং ভুল করে ঢোকা অর্ডার রো সরানো
+// ৪. কাস্টমার শিট ইমেইল মেরামত ও হেডার অক্ষুণ্ণ রাখার ফাংশন
 // ==========================================
 function fixAndCleanCustomersSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -3033,62 +3115,111 @@ function fixAndCleanCustomersSheet() {
     return "Customers শিট পাওয়া যায়নি";
   }
 
-  // ১. হেডার রো ঠিক করা (Customer ID, Registration Date, Name, Phone, Email, Address, Password)
-  var correctHeaders = ["Customer ID", "Registration Date", "Name", "Phone", "Email", "Address", "Password"];
-  custSheet.getRange(1, 1, 1, 7).setValues([correctHeaders]);
-  custSheet.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#d1e7dd");
-
-  if (custSheet.getLastRow() <= 1) {
-    return "Customers শিটের হেডার ঠিক করা হয়েছে!";
+  // ১. হেডার চেক - যদি খালি থাকে তবেই কেবল ডিফল্ট হেডার বসান, ব্যবহারকারীর বিদ্যমান হেডার অক্ষুণ্ণ থাকবে!
+  if (custSheet.getLastRow() === 0) {
+    var correctHeaders = ["Phone", "name", "address", "Customer ID", "Registration Date", "email", "Password"];
+    custSheet.appendRow(correctHeaders);
+    custSheet.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#d1e7dd");
+    return "Customers শিটের হেডার তৈরি করা হয়েছে!";
   }
 
-  var lastRow = custSheet.getLastRow();
-  var ordersMoved = 0;
+  var lastCol = custSheet.getLastColumn();
+  var headers = custSheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  
+  // হেডার কলাম ইনডেক্স শনাক্তকরণ (0-based)
+  var emailCol = -1;
+  var phoneCol = -1;
+  var nameCol = -1;
+  var idCol = -1;
+  for (var hi = 0; hi < headers.length; hi++) {
+    var h = String(headers[hi] || "").toLowerCase().replace(/[^a-z0-9\u0980-\u09FF]/g, "");
+    if (emailCol === -1 && (h.indexOf("email") !== -1 || h.indexOf("gmail") !== -1 || h.indexOf("ইমেইল") !== -1 || h.indexOf("মেইল") !== -1)) emailCol = hi;
+    else if (phoneCol === -1 && (h.indexOf("phone") !== -1 || h.indexOf("mobile") !== -1 || h.indexOf("ফোন") !== -1)) phoneCol = hi;
+    else if (nameCol === -1 && (h === "name" || h.indexOf("customername") !== -1 || h.indexOf("নাম") !== -1)) nameCol = hi;
+    else if (idCol === -1 && (h === "id" || h.indexOf("customerid") !== -1 || h.indexOf("আইডি") !== -1)) idCol = hi;
+  }
+  if (emailCol === -1) emailCol = 5; // fallback Column F (0-indexed 5)
+  if (phoneCol === -1) phoneCol = 0; // fallback Column A (0-indexed 0)
+  if (idCol === -1) idCol = 3; // fallback Column D (0-indexed 3)
 
-  // ২. নিচ থেকে ওপরের দিকে লুপ চালিয়ে অর্ডার রো গুলোকে order sheet এ সরানো
-  for (var r = lastRow; r >= 2; r--) {
-    var rowValues = custSheet.getRange(r, 1, 1, Math.min(custSheet.getLastColumn(), 16)).getValues()[0];
-    var colA = String(rowValues[0] || "").trim();
-    var colB = String(rowValues[1] || "").trim();
-    var colC = String(rowValues[2] || "").trim();
-    var colD = String(rowValues[3] || "").trim();
-    var colE = String(rowValues[4] || "").trim();
-    
-    // শনাক্তকরণ: যদি Col E বা Col A তে NK- বা TEST- থাকে, তবে এটা অর্ডার, কাস্টমার নয়!
-    var isOrderRow = (
-      colA.indexOf("NK-") !== -1 || colA.indexOf("ORD-") !== -1 ||
-      colE.indexOf("NK-") !== -1 || colE.indexOf("TEST-") !== -1 || colE.indexOf("ORD-") !== -1 ||
-      (colB.length >= 10 && !isNaN(colB) && colC.length > 0 && String(colD).indexOf("Dhaka") !== -1)
-    );
+  if (custSheet.getLastRow() <= 1) {
+    return "Customers শিটে কোনো ডেটা রো নেই।";
+  }
 
-    if (isOrderRow) {
-      if (orderSheet) {
-        var ordId = (colE.indexOf("NK-") !== -1 || colE.indexOf("TEST-") !== -1) ? colE : colA;
-        var alreadyInOrders = false;
-        if (orderSheet.getLastRow() > 1 && ordId) {
-          var oIds = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, 1).getValues();
-          for (var j = 0; j < oIds.length; j++) {
-            if (String(oIds[j][0]).trim() === ordId) {
-              alreadyInOrders = true;
-              break;
-            }
+  // ২. orderSheet থেকে ফোন ও আইডি অনুযায়ী আসল ইমেইল ম্যাপ তৈরি করা
+  var phoneToEmail = {};
+  var idToEmail = {};
+  var nameToEmail = {};
+  if (orderSheet && orderSheet.getLastRow() > 1) {
+    var ordLastCol = Math.max(orderSheet.getLastColumn(), 18);
+    var ordHeaders = orderSheet.getRange(1, 1, 1, ordLastCol).getValues()[0];
+    var ordEmailCol = -1;
+    var ordPhoneCol = -1;
+    var ordIdCol = -1;
+    var ordNameCol = -1;
+    for (var ohi = 0; ohi < ordHeaders.length; ohi++) {
+      var oh = String(ordHeaders[ohi] || "").toLowerCase().replace(/[^a-z0-9\u0980-\u09FF]/g, "");
+      if (ordEmailCol === -1 && (oh.indexOf("email") !== -1 || oh.indexOf("gmail") !== -1 || oh.indexOf("ইমেইল") !== -1 || oh.indexOf("মেইল") !== -1)) ordEmailCol = ohi;
+      else if (ordPhoneCol === -1 && (oh.indexOf("phone") !== -1 || oh.indexOf("mobile") !== -1 || oh.indexOf("ফোন") !== -1)) ordPhoneCol = ohi;
+      else if (ordIdCol === -1 && (oh === "id" || oh.indexOf("orderid") !== -1 || oh.indexOf("আইডি") !== -1)) ordIdCol = ohi;
+      else if (ordNameCol === -1 && (oh === "name" || oh.indexOf("customername") !== -1 || oh.indexOf("নাম") !== -1)) ordNameCol = ohi;
+    }
+    if (ordEmailCol === -1) ordEmailCol = 3; // Column D in order sheet
+    if (ordPhoneCol === -1) ordPhoneCol = 4; // Column E
+    if (ordIdCol === -1) ordIdCol = 0; // Column A
+    if (ordNameCol === -1) ordNameCol = 2; // Column C
+
+    var ordRows = orderSheet.getRange(2, 1, orderSheet.getLastRow() - 1, ordLastCol).getValues();
+    for (var oi = 0; oi < ordRows.length; oi++) {
+      var r = ordRows[oi];
+      var oEmail = String(r[ordEmailCol] || "").trim().toLowerCase();
+      if (oEmail.indexOf("@") === -1) {
+        for (var c = 0; c < r.length; c++) {
+          var val = String(r[c] || "").trim().toLowerCase();
+          if (val.indexOf("@") !== -1 && val.indexOf(" ") === -1 && val.length > 5) {
+            oEmail = val;
+            break;
           }
         }
-        if (!alreadyInOrders) {
-          var ordDate = String(rowValues[6] || rowValues[1] || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
-          var cName = colC;
-          var cPhone = colB;
-          var cAddr = colD;
-          var totPrice = String(rowValues[7] || "৳0");
-          orderSheet.appendRow([ordId, ordDate, cName, "", cPhone, cAddr, "Order Items", totPrice, "Cash on Delivery", "Pending", "", "TRK-" + ordId.replace(/\D/g, ""), "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে", "", "", "Cash on Delivery"]);
-        }
       }
-      custSheet.deleteRow(r);
-      ordersMoved++;
+      if (oEmail && oEmail.indexOf("@") !== -1) {
+        var oPhone = String(r[ordPhoneCol] || "").trim();
+        var oId = String(r[ordIdCol] || "").trim();
+        var oName = String(r[ordNameCol] || "").trim().toLowerCase();
+        if (oPhone) phoneToEmail[oPhone] = oEmail;
+        if (oId) idToEmail[oId] = oEmail;
+        if (oName) nameToEmail[oName] = oEmail;
+      }
     }
   }
 
-  return "Customers শিট ঠিক করা হয়েছে! হেডার নিখুঁত করা হয়েছে এবং " + ordersMoved + " টি অর্ডার রো সরানো হয়েছে!";
+  // ৩. কাস্টমার শিটের রো গুলো স্ক্যান করে যেখানে ইমেইল ফাঁকা বা "1" বা ভুল, সেখানে আসল ইমেইল সেট করা
+  var custRowsCount = custSheet.getLastRow() - 1;
+  var custData = custSheet.getRange(2, 1, custRowsCount, lastCol).getValues();
+  var fixedEmailsCount = 0;
+
+  for (var cr = 0; cr < custData.length; cr++) {
+    var cRow = custData[cr];
+    var currentEmail = String(cRow[emailCol] || "").trim();
+    var cPhone = String(cRow[phoneCol] || "").trim();
+    var cId = String(cRow[idCol] || "").trim();
+    var cName = (nameCol !== -1 ? String(cRow[nameCol] || "") : "").trim().toLowerCase();
+
+    // যদি বর্তমান ইমেইল ফাঁকা থাকে বা "1" বা @ না থাকে:
+    if (currentEmail.indexOf("@") === -1) {
+      var foundEmail = (cPhone && phoneToEmail[cPhone]) || 
+                       (cId && idToEmail[cId]) || 
+                       (cName && nameToEmail[cName]) || "";
+
+      if (foundEmail) {
+        cRow[emailCol] = foundEmail;
+        custSheet.getRange(cr + 2, emailCol + 1).setValue(foundEmail);
+        fixedEmailsCount++;
+      }
+    }
+  }
+
+  return "Customers শিটে " + fixedEmailsCount + " জন গ্রাহকের ইমেইল সফলভাবে উদ্ধার ও ঠিক করা হয়েছে! কোনো হেডার বা অন্যান্য কলামের পরিবর্তন করা হয়নি।";
 }
 
 // ==========================================
@@ -3180,6 +3311,59 @@ function buildOrderRowByHeaders(sheet, data, fallbackArray) {
     // Payment Provider / Payment By (পেমেন্ট প্রোভাইডার)
     else if (h.indexOf("provider") !== -1 || h.indexOf("paymentby") !== -1 || h.indexOf("প্রোভাইডার") !== -1) {
       row.push(data.paymentProvider || data.paymentBy || (data.sheetRow ? data.sheetRow[17] : "") || "Cash on Delivery");
+    }
+    else {
+      row.push(colIdx < fallbackArray.length ? fallbackArray[colIdx] : "");
+    }
+  }
+  return row;
+}
+
+// ==========================================
+// ৪.১ কাস্টমার শিট ডাইনামিক হেডার-ম্যাপিং ফাংশন (কাস্টমারের শিটের যেকোনো কলাম ক্রম হলেও নিখুঁতভাবে ইমেইল সহ সব ফিল্ড সঠিক কলামে বসবে)
+// ==========================================
+function buildCustomerRowByHeaders(sheet, data, fallbackArray) {
+  if (!sheet || sheet.getLastRow() < 1) return fallbackArray;
+  var lastCol = Math.max(sheet.getLastColumn(), fallbackArray.length);
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (!headers || headers.length === 0 || !headers[0]) return fallbackArray;
+  
+  var row = [];
+  for (var colIdx = 0; colIdx < headers.length; colIdx++) {
+    var rawHeader = String(headers[colIdx] || "").trim();
+    if (!rawHeader) {
+      row.push(colIdx < fallbackArray.length ? fallbackArray[colIdx] : "");
+      continue;
+    }
+    var h = rawHeader.toLowerCase().replace(/[^a-z0-9\u0980-\u09FF]/g, "");
+    
+    // Customer Email / Gmail (জিমেইল / ইমেইল) -> ১০০% নিশ্চিত ইমেইল কলাম
+    if (h.indexOf("email") !== -1 || h.indexOf("gmail") !== -1 || h.indexOf("ইমেইল") !== -1 || h.indexOf("মেইল") !== -1) {
+      row.push(data.email || data.customerEmail || data.userEmail || data.gmail || (data.sheetRow ? data.sheetRow[4] : "") || "");
+    }
+    // Phone / Mobile (ফোন / মোবাইল)
+    else if (h.indexOf("phone") !== -1 || h.indexOf("mobile") !== -1 || h.indexOf("ফোন") !== -1 || h.indexOf("মোবাইল") !== -1) {
+      row.push(data.phone || data.customerPhone || (data.sheetRow ? data.sheetRow[3] : "") || "");
+    }
+    // Customer Name (গ্রাহকের নাম)
+    else if (h === "name" || h.indexOf("customername") !== -1 || (h.indexOf("নাম") !== -1 && h.indexOf("প্রোডাক্ট") === -1 && h.indexOf("পণ্য") === -1)) {
+      row.push(data.name || data.customerName || (data.sheetRow ? data.sheetRow[2] : "") || "Customer");
+    }
+    // Address (ঠিকানা)
+    else if (h.indexOf("address") !== -1 || h.indexOf("ঠিকানা") !== -1) {
+      row.push(data.address || data.shippingAddress || (data.sheetRow ? data.sheetRow[5] : "") || "N/A");
+    }
+    // Customer ID (গ্রাহক আইডি)
+    else if (h === "id" || h.indexOf("customerid") !== -1 || h.indexOf("custid") !== -1 || (h.indexOf("আইডি") !== -1 && h.indexOf("অর্ডার") === -1)) {
+      row.push(data.customerId || data.id || (data.sheetRow ? data.sheetRow[0] : "") || ("cust-" + new Date().getTime()));
+    }
+    // Registration Date / Date (রেজিস্ট্রেশন তারিখ / সময়)
+    else if (h.indexOf("date") !== -1 || h.indexOf("time") !== -1 || h.indexOf("তারিখ") !== -1 || h.indexOf("সময়") !== -1 || h.indexOf("reg") !== -1) {
+      row.push(data.registeredAt || data.date || (data.sheetRow ? data.sheetRow[1] : "") || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }));
+    }
+    // Password (পাসওয়ার্ড)
+    else if (h.indexOf("pass") !== -1 || h.indexOf("পাসওয়ার্ড") !== -1) {
+      row.push(data.password || (data.sheetRow ? data.sheetRow[6] : "") || "");
     }
     else {
       row.push(colIdx < fallbackArray.length ? fallbackArray[colIdx] : "");
@@ -5372,10 +5556,10 @@ function cleanAndFixOrderSheetRows() {
                             onClick={handleFixCustomersSheet}
                             disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet || isFixingOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 disabled:opacity-50 text-amber-200 font-bold text-xs transition-colors"
-                            title="Customers শিটের হেডার (Customer ID, Registration Date, Name, Phone, Email, Address, Password) ঠিক করুন এবং ভুল অর্ডারগুলো সরান"
+                            title="Customers শিটের ইমেইল কলামে গ্রাহকদের আসল ইমেইল অ্যাড্রেস যুক্ত ও ঠিক করুন (হেডার বা অন্য কোনো কলাম পরিবর্তন না করে)"
                           >
                             <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isFixingCustomersSheet ? "animate-spin" : ""}`} />
-                            <span>{isFixingCustomersSheet ? "ঠিক হচ্ছে..." : "🔧 কাস্টমার শিট হেডার ফিক্স"}</span>
+                            <span>{isFixingCustomersSheet ? "ইমেইল ঠিক হচ্ছে..." : "🔧 কাস্টমার শিট ইমেইল ফিক্স"}</span>
                           </button>
                           <button
                             onClick={handleFixOrderSheet}

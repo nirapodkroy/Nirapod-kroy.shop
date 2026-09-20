@@ -318,9 +318,15 @@ export async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPa
     targetSheet: "Customers",
     customerId: customer.id,
     name: customer.name || "Customer",
+    customerName: customer.name || "Customer",
     phone: customer.phone || "N/A",
+    customerPhone: customer.phone || "N/A",
     email: customer.email,
+    customerEmail: customer.email,
+    userEmail: customer.email,
+    gmail: customer.email,
     address: customer.address || "N/A",
+    shippingAddress: customer.address || "N/A",
     password: rawPassword || customer.passwordHash || "",
     registeredAt: regDate,
     sheetRow: [
@@ -335,7 +341,7 @@ export async function syncCustomerToGoogleSheets(customer: StoredCustomer, rawPa
   };
 
   const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
-    `tab=Customers&target=Customers&type=customer&action=customer_registration&customerId=${encodeURIComponent(customer.id)}&name=${encodeURIComponent(customer.name || "")}&phone=${encodeURIComponent(customer.phone || "")}&email=${encodeURIComponent(customer.email)}`;
+    `tab=Customers&target=Customers&type=customer&action=customer_registration&customerId=${encodeURIComponent(customer.id)}&name=${encodeURIComponent(customer.name || "")}&customerName=${encodeURIComponent(customer.name || "")}&phone=${encodeURIComponent(customer.phone || "")}&customerPhone=${encodeURIComponent(customer.phone || "")}&email=${encodeURIComponent(customer.email)}&customerEmail=${encodeURIComponent(customer.email)}&userEmail=${encodeURIComponent(customer.email)}&gmail=${encodeURIComponent(customer.email)}&address=${encodeURIComponent(customer.address || "")}&registeredAt=${encodeURIComponent(regDate)}`;
 
   try {
     const jsonBody = JSON.stringify(payload);

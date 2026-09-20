@@ -561,9 +561,15 @@ async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: stri
       targetSheet: "Customers",
       customerId: customer.id,
       name: customer.name || "Customer",
+      customerName: customer.name || "Customer",
       phone: customer.phone || "N/A",
+      customerPhone: customer.phone || "N/A",
       email: customer.email,
+      customerEmail: customer.email,
+      userEmail: customer.email,
+      gmail: customer.email,
       address: customer.address || "N/A",
+      shippingAddress: customer.address || "N/A",
       password: rawPassword || customer.passwordHash || "",
       registeredAt: regDate,
       sheetRow: [
@@ -578,7 +584,7 @@ async function syncCustomerToGoogleSheets(customer: Customer, rawPassword?: stri
     };
 
     const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
-      `tab=Customers&target=Customers&type=customer&action=customer_registration&customerId=${encodeURIComponent(customer.id)}&name=${encodeURIComponent(customer.name || "")}&phone=${encodeURIComponent(customer.phone || "")}&email=${encodeURIComponent(customer.email)}`;
+      `tab=Customers&target=Customers&type=customer&action=customer_registration&customerId=${encodeURIComponent(customer.id)}&name=${encodeURIComponent(customer.name || "")}&customerName=${encodeURIComponent(customer.name || "")}&phone=${encodeURIComponent(customer.phone || "")}&customerPhone=${encodeURIComponent(customer.phone || "")}&email=${encodeURIComponent(customer.email)}&customerEmail=${encodeURIComponent(customer.email)}&userEmail=${encodeURIComponent(customer.email)}&gmail=${encodeURIComponent(customer.email)}&address=${encodeURIComponent(customer.address || "")}&registeredAt=${encodeURIComponent(regDate)}`;
 
     console.log(`[Google Sheets] Dispatching customer ${customer.name} to ${urlWithParams}`);
 
@@ -1455,7 +1461,10 @@ app.post("/api/orders", async (req, res) => {
 
   // Auto-record or update customer in storeState.customers
   const normalizedEmail = customerEmail.trim().toLowerCase();
-  let existingCust = storeState.customers.find(c => c.email.toLowerCase() === normalizedEmail);
+  let existingCust = storeState.customers.find(c => c.email && c.email.toLowerCase() === normalizedEmail);
+  if (!existingCust && customerPhone) {
+    existingCust = storeState.customers.find(c => c.phone && c.phone.trim() === customerPhone.trim());
+  }
   if (!existingCust) {
     existingCust = {
       id: "cust-" + Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
@@ -1468,7 +1477,8 @@ app.post("/api/orders", async (req, res) => {
     };
     storeState.customers.push(existingCust);
   } else {
-    // Update phone/address if previously missing
+    // Update email/phone/address if changed or missing
+    if (normalizedEmail) existingCust.email = normalizedEmail;
     if (!existingCust.phone && customerPhone) existingCust.phone = customerPhone.trim();
     if (!existingCust.address && shippingAddress) existingCust.address = shippingAddress.trim();
     if (!existingCust.name && customerName) existingCust.name = customerName.trim();
