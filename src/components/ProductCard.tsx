@@ -3,6 +3,7 @@ import { Product } from "../types";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { Star, ShoppingCart, Zap, Eye, Check, ExternalLink, Images, Heart } from "lucide-react";
+import { handleProductImageError } from "../utils/imageHelper";
 
 interface ProductCardProps {
   product: Product;
@@ -52,12 +53,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           alt={product.title}
           loading="lazy"
           referrerPolicy="no-referrer"
-          onError={(e) => {
-            const target = e.currentTarget;
-            if (product.images && product.images.length > 0 && target.src !== product.images[0]) {
-              target.src = product.images[0];
-            }
-          }}
+          onError={(e) => handleProductImageError(e, product.imageUrl || (product.images && product.images[0]))}
           className={`h-full w-full object-cover object-center transition-all duration-500 ease-out ${
             secondaryImage
               ? "group-hover:opacity-0 group-hover:scale-105"
@@ -72,10 +68,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             alt={`${product.title} - alternate view`}
             loading="lazy"
             referrerPolicy="no-referrer"
-            onError={(e) => {
-              // Hide broken alternate image silently
-              e.currentTarget.style.display = "none";
-            }}
+            onError={(e) => handleProductImageError(e, secondaryImage)}
             className="absolute inset-0 h-full w-full object-cover object-center opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-105 transition-all duration-500 ease-out"
           />
         )}

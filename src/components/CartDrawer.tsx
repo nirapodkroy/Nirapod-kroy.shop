@@ -3,6 +3,7 @@ import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { X, Trash2, Plus, Minus, ArrowRight, ShoppingBag, ShieldCheck, Tag } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { handleProductImageError } from "../utils/imageHelper";
 
 const FREE_SHIPPING_THRESHOLD = 1500; // in BDT
 
@@ -153,6 +154,8 @@ export const CartDrawer: React.FC = () => {
                     <img
                       src={selectedImageUrl || product.imageUrl}
                       alt={product.title}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => handleProductImageError(e, selectedImageUrl || product.imageUrl)}
                       className="w-20 h-20 rounded-xl object-cover object-center bg-zinc-200 dark:bg-zinc-700 shrink-0"
                     />
                     <div className="flex-1 min-w-0 flex flex-col justify-between">

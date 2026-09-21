@@ -3,6 +3,7 @@ import { Product } from "../types";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getProductImagesWithCodes } from "../utils/productCodeHelper";
+import { handleProductImageError } from "../utils/imageHelper";
 import { SizeSelector } from "./SizeSelector";
 import { SizeChartModal } from "./SizeChartModal";
 import {
@@ -137,6 +138,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   alt={`${product.title} - photo ${currentImageIndex + 1}`}
                   className="w-full h-full object-cover object-center"
                   referrerPolicy="no-referrer"
+                  onError={(e) => handleProductImageError(e, galleryImages[currentImageIndex] || product.imageUrl)}
                 />
 
                 {/* Badges */}
@@ -221,6 +223,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         alt=""
                         className="w-full h-full object-cover object-center"
                         referrerPolicy="no-referrer"
+                        onError={(e) => handleProductImageError(e, img)}
                       />
                       <span className="absolute bottom-0 inset-x-0 bg-black/80 text-[9px] text-emerald-300 font-mono text-center truncate px-0.5">
                         {imageItems[idx]?.code || `#${idx + 1}`}
@@ -307,6 +310,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                               src={item.url}
                               alt=""
                               className="w-5 h-5 rounded-md object-cover border border-zinc-200 dark:border-zinc-700"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => handleProductImageError(e, item.url)}
                             />
                             <span className="font-mono">{item.code}</span>
                             {idx === 0 && (

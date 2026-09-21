@@ -3,6 +3,7 @@ import { X, Heart, ShoppingBag, Trash2, ArrowRight } from "lucide-react";
 import { Product } from "../types";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
+import { handleProductImageError } from "../utils/imageHelper";
 
 interface WishlistDrawerProps {
   isOpen: boolean;
@@ -74,6 +75,8 @@ export const WishlistDrawer: React.FC<WishlistDrawerProps> = ({
                   <img
                     src={product.imageUrl}
                     alt={product.title}
+                    referrerPolicy="no-referrer"
+                    onError={(e) => handleProductImageError(e, product.imageUrl)}
                     className="w-20 h-20 rounded-xl object-cover bg-white dark:bg-zinc-900 shrink-0 cursor-pointer"
                     onClick={() => {
                       onNavigateToCategory(product.category);

@@ -6,6 +6,7 @@ import { useToast } from "../context/ToastContext";
 import { useLanguage } from "../context/LanguageContext";
 import { handleLocalApi } from "../lib/mockApi";
 import { getProductImagesWithCodes } from "../utils/productCodeHelper";
+import { handleProductImageError } from "../utils/imageHelper";
 import { MobileBankingGateway, MobileBankingProvider } from "./MobileBankingGateway";
 import { BkashLogo, NagadLogo, RocketLogo } from "./PaymentLogos";
 import { SizeChartModal } from "./SizeChartModal";
@@ -494,6 +495,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             <img
                               src={currentImgUrl}
                               alt={item.product.title}
+                              referrerPolicy="no-referrer"
+                              onError={(e) => handleProductImageError(e, currentImgUrl)}
                               className="w-full h-full object-cover"
                             />
                             {currentSelectedCode && (
@@ -663,6 +666,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                                     <img
                                       src={imgItem.url}
                                       alt={imgItem.code}
+                                      referrerPolicy="no-referrer"
+                                      onError={(e) => handleProductImageError(e, imgItem.url)}
                                       className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
                                     />
                                     <span className="font-mono text-[11px] font-bold">{imgItem.code}</span>
