@@ -52,6 +52,9 @@ export const BASE_CATEGORIES: string[] = [
   "Sports",
   "Electronics",
   "Fashion",
+  "Sharee",
+  "Panjabi",
+  "Women Hijab",
   "Health & Beauty",
   "Home & Kitchen",
   "Books",
@@ -76,6 +79,9 @@ export const CATEGORY_SLUG_MAP: Record<string, string> = {
   "Sports": "sports",
   "Electronics": "electronics",
   "Fashion": "fashion",
+  "Sharee": "sharee",
+  "Panjabi": "panjabi",
+  "Women Hijab": "women-hijab",
   "Health & Beauty": "health-and-beauty",
   "Home & Kitchen": "home-and-kitchen",
   "Books": "books",
@@ -200,6 +206,12 @@ export function formatCategoryDisplayLabel(cat: string, lang: string = "bn"): st
     return lang === "bn" ? "মুদি ও খাদ্য (Groceries & Food)" : "Groceries & Food";
   if (c === "electronics") return lang === "bn" ? "ইলেকট্রনিক্স (Electronics)" : "Electronics";
   if (c === "fashion") return lang === "bn" ? "পোশাক ও ফ্যাশন (Fashion)" : "Fashion";
+  if (c === "sharee" || c === "saree" || c === "shari" || c === "sari" || c === "শাড়ি" || c === "শাড়ী")
+    return lang === "bn" ? "শাড়ি (Sharee)" : "Sharee";
+  if (c === "panjabi" || c === "punjabi" || c === "পাঞ্জাবি" || c === "পাঞ্জাবী")
+    return lang === "bn" ? "পাঞ্জাবি (Panjabi)" : "Panjabi";
+  if (c === "women hijab" || c === "women-hijab" || c === "hijab" || c === "হিজাব")
+    return lang === "bn" ? "হিজাব ও বোরকা (Hijab)" : "Women Hijab";
   if (c === "health & beauty" || c === "beauty")
     return lang === "bn" ? "রূপচর্চা ও স্বাস্থ্য (Beauty)" : "Health & Beauty";
   if (c === "home & kitchen" || c === "home")
@@ -378,6 +390,31 @@ export const SLUG_ALIASES: Record<string, string> = {
   "poshak": "Fashion",
   "পোশাক": "Fashion",
   "পোশাক-ও-ফ্যাশন": "Fashion",
+
+  // Sharee
+  "sharee": "Sharee",
+  "shari": "Sharee",
+  "saree": "Sharee",
+  "sari": "Sharee",
+  "chanderi": "Sharee",
+  "chanderi-silk": "Sharee",
+  "silk-sharee": "Sharee",
+  "digital-print-sharee": "Sharee",
+  "শাড়ি": "Sharee",
+  "শাড়ী": "Sharee",
+  "সিল্ক-শাড়ি": "Sharee",
+
+  // Panjabi
+  "panjabi": "Panjabi",
+  "punjabi": "Panjabi",
+  "পাঞ্জাবি": "Panjabi",
+  "পাঞ্জাবী": "Panjabi",
+
+  // Women Hijab
+  "women-hijab": "Women Hijab",
+  "womenhijab": "Women Hijab",
+  "hijab": "Women Hijab",
+  "হিজাব": "Women Hijab",
 
   // Health & Beauty
   "health-and-beauty": "Health & Beauty",

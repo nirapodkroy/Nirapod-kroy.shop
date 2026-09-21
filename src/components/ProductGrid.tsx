@@ -110,9 +110,55 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
           );
         });
       } else {
+        const isShareeFilter = catLower === "sharee" || catLower === "saree" || catLower === "shari" || catLower === "sari" || catLower === "শাড়ি" || catLower === "শাড়ী";
+        const isPanjabiFilter = catLower === "panjabi" || catLower === "punjabi" || catLower === "পাঞ্জাবি" || catLower === "পাঞ্জাবী";
+        const isFashionParent = catLower === "fashion" || catLower === "পোশাক" || catLower === "পোশাক-ও-ফ্যাশন";
+
         list = list.filter((p) => {
           const pCat = p.category.toLowerCase().trim();
           const pParent = (p.parentCategory || "").toLowerCase().trim();
+          const pTitle = (p.title || "").toLowerCase();
+
+          if (isShareeFilter) {
+            return (
+              pCat === "sharee" ||
+              pCat === "saree" ||
+              pCat === "shari" ||
+              pCat === "শাড়ি" ||
+              pCat === "শাড়ী" ||
+              pParent === "sharee" ||
+              pTitle.includes("sharee") ||
+              pTitle.includes("saree") ||
+              pTitle.includes("শাড়ি") ||
+              pTitle.includes("শাড়ী")
+            );
+          }
+
+          if (isPanjabiFilter) {
+            return (
+              pCat === "panjabi" ||
+              pCat === "punjabi" ||
+              pCat === "পাঞ্জাবি" ||
+              pParent === "panjabi" ||
+              pTitle.includes("panjabi") ||
+              pTitle.includes("punjabi") ||
+              pTitle.includes("পাঞ্জাবি")
+            );
+          }
+
+          if (isFashionParent) {
+            return (
+              pParent === "fashion" ||
+              pCat === "fashion" ||
+              pCat === "sharee" ||
+              pCat === "panjabi" ||
+              pCat === "women hijab" ||
+              pTitle.includes("sharee") ||
+              pTitle.includes("শাড়ি") ||
+              pTitle.includes("panjabi")
+            );
+          }
+
           return pCat === catLower || pParent === catLower;
         });
       }

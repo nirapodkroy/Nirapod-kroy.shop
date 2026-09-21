@@ -22,10 +22,10 @@ try {
       .replace(/src="\.\/assets\//g, 'src="/assets/')
       .replace(/href="\.\/assets\//g, 'href="/assets/');
 
-    // Cache-bust assets with build version query param so mobile browsers immediately fetch new bundle
+    // Cache-bust assets in HTML script and link tags with build version query param
     indexHtmlContent = indexHtmlContent
-      .replace(/\/assets\/index\.js(\?v=[a-z0-9]+)?/g, `/assets/index.js?v=${buildVersion}`)
-      .replace(/\/assets\/index\.css(\?v=[a-z0-9]+)?/g, `/assets/index.css?v=${buildVersion}`);
+      .replace(/src="\/assets\/index\.js(\?[^"']*)?"/g, `src="/assets/index.js?v=${buildVersion}"`)
+      .replace(/href="\/assets\/index\.css(\?[^"']*)?"/g, `href="/assets/index.css?v=${buildVersion}"`);
 
     fs.writeFileSync(distIndexFile, indexHtmlContent);
 
@@ -247,6 +247,11 @@ try {
       'sports': { bn: 'খেলাধুলা', en: 'Sports' },
       'electronics': { bn: 'ইলেকট্রনিক্স', en: 'Electronics' },
       'fashion': { bn: 'ফ্যাশন ও পোশাক', en: 'Fashion' },
+      'sharee': { bn: 'শাড়ি', en: 'Sharee' },
+      'saree': { bn: 'শাড়ি', en: 'Sharee' },
+      'shari': { bn: 'শাড়ি', en: 'Sharee' },
+      'panjabi': { bn: 'পাঞ্জাবি', en: 'Panjabi' },
+      'women-hijab': { bn: 'হিজাব ও বোরকা', en: 'Women Hijab' },
       'health-and-beauty': { bn: 'সৌন্দর্য ও স্বাস্থ্য', en: 'Health & Beauty' },
       'home-and-kitchen': { bn: 'গৃহস্থালি ও রান্নাঘর', en: 'Home & Kitchen' },
       'books': { bn: 'বই ও সাহিত্য', en: 'Books' },

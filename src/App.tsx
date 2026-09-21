@@ -32,6 +32,13 @@ import { trackPageView } from "./utils/tracker";
 const PRODUCTS_CACHE_KEY = "nirapod_products_cache";
 const WISHLIST_CACHE_KEY = "nirapod_wishlist_ids";
 
+function mergeWithDefaultProducts(loadedList: Product[]): Product[] {
+  if (!Array.isArray(loadedList) || loadedList.length === 0) return DEFAULT_PRODUCTS;
+  const existingIds = new Set(loadedList.map((p) => p.id));
+  const missingFromDefaults = DEFAULT_PRODUCTS.filter((dp) => !existingIds.has(dp.id));
+  return missingFromDefaults.length > 0 ? [...loadedList, ...missingFromDefaults] : loadedList;
+}
+
 const StoreContent: React.FC = () => {
   const [products, setProducts] = useState<Product[]>(() => {
     try {
@@ -40,7 +47,7 @@ const StoreContent: React.FC = () => {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const cleaned = parsed.filter((p: any) => !p.id.startsWith("prod-groc-") && !p.id.startsWith("prod-elec-") && !p.id.startsWith("prod-sprt-") && !p.id.startsWith("prod-baby-") && !p.id.startsWith("prod-book-") && !p.id.startsWith("prod-home-") && !p.id.startsWith("prod-fas-"));
-          if (cleaned.length > 0) return cleaned;
+          if (cleaned.length > 0) return mergeWithDefaultProducts(cleaned);
         }
       }
     } catch {}
@@ -311,8 +318,9 @@ const StoreContent: React.FC = () => {
           if (Array.isArray(parsed) && parsed.length > 0) {
             const cleaned = parsed.filter((p: any) => !p.id.startsWith("prod-groc-") && !p.id.startsWith("prod-elec-") && !p.id.startsWith("prod-sprt-") && !p.id.startsWith("prod-baby-") && !p.id.startsWith("prod-book-") && !p.id.startsWith("prod-home-") && !p.id.startsWith("prod-fas-"));
             if (cleaned.length > 0) {
-              localList = cleaned;
-              setProducts(cleaned);
+              const merged = mergeWithDefaultProducts(cleaned);
+              localList = merged;
+              setProducts(merged);
             }
           }
         }
@@ -322,21 +330,21 @@ const StoreContent: React.FC = () => {
       const isStatic = !window.location.port && !window.location.hostname.includes("run.app");
       if (isStatic) {
         const candidatePaths = [
-          `./public/products.json?t=${Date.now()}`,
-          `./docs/products.json?t=${Date.now()}`,
-          `./products.json?t=${Date.now()}`,
-          `/public/products.json?t=${Date.now()}`,
+          `/products.json?t=${Date.now()}`,
           `/docs/products.json?t=${Date.now()}`,
-          `/products.json?t=${Date.now()}`
+          `/public/products.json?t=${Date.now()}`,
+          `./products.json?t=${Date.now()}`
         ];
         for (const candidate of candidatePaths) {
           try {
             const staticRes = await fetch(candidate);
-            if (staticRes.ok) {
+            const contentType = staticRes.headers.get("content-type") || "";
+            if (staticRes.ok && !contentType.includes("text/html")) {
               const list = await staticRes.json();
               if (Array.isArray(list) && list.length > 0) {
-                setProducts(list);
-                safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(list));
+                const merged = mergeWithDefaultProducts(list);
+                setProducts(merged);
+                safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(merged));
                 setIsLoading(false);
                 return;
               }
@@ -348,18 +356,28 @@ const StoreContent: React.FC = () => {
       }
 
       // 2. Full-stack / development environment
-      const res = await fetch("/api/products");
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data.products) && data.products.length > 0
-          ? data.products
-          : (localList || DEFAULT_PRODUCTS);
-        setProducts(list);
-        safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(list));
-      } else if (localList && localList.length > 0) {
-        setProducts(localList);
-      } else {
-        setProducts(DEFAULT_PRODUCTS);
+      try {
+        const res = await fetch("/api/products");
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && !contentType.includes("text/html")) {
+          const data = await res.json();
+          const list = Array.isArray(data.products) && data.products.length > 0
+            ? data.products
+            : (localList || DEFAULT_PRODUCTS);
+          const merged = mergeWithDefaultProducts(list);
+          setProducts(merged);
+          safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(merged));
+        } else if (localList && localList.length > 0) {
+          setProducts(localList);
+        } else {
+          setProducts(DEFAULT_PRODUCTS);
+        }
+      } catch {
+        if (localList && localList.length > 0) {
+          setProducts(localList);
+        } else {
+          setProducts(DEFAULT_PRODUCTS);
+        }
       }
     } catch (err) {
       console.warn("Could not reach /api/products, using fallback catalog:", err);
@@ -370,6 +388,13 @@ const StoreContent: React.FC = () => {
 
   useEffect(() => {
     fetchProducts();
+    const handleCatalogUpdate = () => {
+      fetchProducts();
+    };
+    window.addEventListener("nirapod-catalog-updated", handleCatalogUpdate);
+    return () => {
+      window.removeEventListener("nirapod-catalog-updated", handleCatalogUpdate);
+    };
   }, [fetchProducts]);
 
   // Toggle item in Wishlist
