@@ -156,22 +156,25 @@
         var p = window.location.port;
         // In local development or Cloud Run preview container, Vite handles /src/main.tsx dynamically
         var isDev = h === 'localhost' || h === '127.0.0.1' || h.indexOf('.run.app') !== -1 || h.indexOf('webcontainer') !== -1 || p === '3000' || p === '5173';
-        var buildVer = 'muayp67x';
+        var buildVer = 'mub0bllu';
+        var assetPrefix = '/assets/index';
 
         if (!isDev) {
-          // Live static deployment (GitHub Pages, nirapodkroy.shop, custom domains):
-          // Immediately load production assets with cache-busting version query
-          var css = document.createElement('link');
-          css.rel = 'stylesheet';
-          css.crossOrigin = 'anonymous';
-          css.href = '/assets/index.css?v=muazlfy0?v=' + buildVer;
-          document.head.appendChild(css);
+          // Check if index.js is already referenced statically in the HTML
+          var existingScript = document.querySelector('script[src*="/assets/index"]');
+          if (!existingScript) {
+            var css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.crossOrigin = 'anonymous';
+            css.href = assetPrefix + '.css?v=' + buildVer;
+            document.head.appendChild(css);
 
-          var js = document.createElement('script');
-          js.type = 'module';
-          js.crossOrigin = 'anonymous';
-          js.src = '/assets/index.js?v=muazlfy0?v=' + buildVer;
-          document.head.appendChild(js);
+            var js = document.createElement('script');
+            js.type = 'module';
+            js.crossOrigin = 'anonymous';
+            js.src = assetPrefix + '.js?v=' + buildVer;
+            document.head.appendChild(js);
+          }
         } else {
           // Dev fallback in case module script fails
           var loaded = false;
@@ -185,12 +188,12 @@
             loaded = true;
             var link = document.createElement('link');
             link.rel = 'stylesheet';
-            link.href = '/assets/index.css?v=muazlfy0?v=' + buildVer;
+            link.href = assetPrefix + '.css?v=' + buildVer;
             document.head.appendChild(link);
 
             var script = document.createElement('script');
             script.type = 'module';
-            script.src = '/assets/index.js?v=muazlfy0?v=' + buildVer;
+            script.src = assetPrefix + '.js?v=' + buildVer;
             document.head.appendChild(script);
           }
 
@@ -202,8 +205,8 @@
         }
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index.js?v=muazlfy0"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index.css?v=muazlfy0">
+    <script type="module" crossorigin src="/assets/index.js?v=mub0f54d"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index.css?v=mub0f54d">
   </head>
   <body class="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-200 antialiased selection:bg-emerald-500 selection:text-white">
     <div id="root">

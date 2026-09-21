@@ -75,7 +75,7 @@
     <link rel="manifest" href="/site.webmanifest" />
 
     <!-- Primary SEO Metadata -->
-    <title>Sharee (Sharee) - নিরাপদ ক্রয় | Nirapod Kroy</title>
+    <title>শাড়ি (Sharee) - নিরাপদ ক্রয় | Nirapod Kroy</title>
     <meta name="description" content="Nirapod Kroy (নিরাপদ ক্রয়) - বাংলাদেশের বিশ্বস্ত অনলাইন শপিং প্ল্যাটফর্ম। খাঁটি সুন্দরবনের মধু, প্রিমিয়াম খেজুর, ঘানি ভাঙা সরিষার তেল, গাওয়া ঘি, মসলা ও নিত্যপ্রয়োজনীয় পণ্য কিনুন ক্যাশ অন ডেলিভারিতে।" />
     <meta name="keywords" content="Nirapod Kroy, নিরাপদ ক্রয়, nirapodkroy, nirapodkroy.shop, অনলাইন শপিং বাংলাদেশ, খাঁটি মধু, প্রিমিয়াম খেজুর, সরিষার তেল, ঘি, মসলা, গ্রোসারি, ফ্যাশন" />
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
@@ -85,7 +85,7 @@
     <!-- OpenGraph & Social Sharing Cards -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Nirapod Kroy" />
-    <meta property="og:title" content="Sharee | নিরাপদ ক্রয়" />
+    <meta property="og:title" content="শাড়ি | নিরাপদ ক্রয়" />
     <meta property="og:description" content="Nirapod Kroy (নিরাপদ ক্রয়) - সব ধরনের খাঁটি মধু, প্রিমিয়াম খেজুর, তেল-ঘি, অর্গানিক মশলা ও নিত্যপ্রয়োজনীয় পণ্য নিরাপদে ঘরে বসেই কিনুন ক্যাশ অন ডেলিভারিতে।" />
     <meta property="og:image" content="https://nirapodkroy.shop/logo.png" />
     <meta property="og:image:secure_url" content="https://nirapodkroy.shop/logo.png" />
@@ -156,22 +156,25 @@
         var p = window.location.port;
         // In local development or Cloud Run preview container, Vite handles /src/main.tsx dynamically
         var isDev = h === 'localhost' || h === '127.0.0.1' || h.indexOf('.run.app') !== -1 || h.indexOf('webcontainer') !== -1 || p === '3000' || p === '5173';
-        var buildVer = 'muayp67x';
+        var buildVer = 'mub0bllu';
+        var assetPrefix = '/assets/index';
 
         if (!isDev) {
-          // Live static deployment (GitHub Pages, nirapodkroy.shop, custom domains):
-          // Immediately load production assets with cache-busting version query
-          var css = document.createElement('link');
-          css.rel = 'stylesheet';
-          css.crossOrigin = 'anonymous';
-          css.href = '/assets/index.css?v=muazlfy0?v=' + buildVer;
-          document.head.appendChild(css);
+          // Check if index.js is already referenced statically in the HTML
+          var existingScript = document.querySelector('script[src*="/assets/index"]');
+          if (!existingScript) {
+            var css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.crossOrigin = 'anonymous';
+            css.href = assetPrefix + '.css?v=' + buildVer;
+            document.head.appendChild(css);
 
-          var js = document.createElement('script');
-          js.type = 'module';
-          js.crossOrigin = 'anonymous';
-          js.src = '/assets/index.js?v=muazlfy0?v=' + buildVer;
-          document.head.appendChild(js);
+            var js = document.createElement('script');
+            js.type = 'module';
+            js.crossOrigin = 'anonymous';
+            js.src = assetPrefix + '.js?v=' + buildVer;
+            document.head.appendChild(js);
+          }
         } else {
           // Dev fallback in case module script fails
           var loaded = false;
@@ -185,12 +188,12 @@
             loaded = true;
             var link = document.createElement('link');
             link.rel = 'stylesheet';
-            link.href = '/assets/index.css?v=muazlfy0?v=' + buildVer;
+            link.href = assetPrefix + '.css?v=' + buildVer;
             document.head.appendChild(link);
 
             var script = document.createElement('script');
             script.type = 'module';
-            script.src = '/assets/index.js?v=muazlfy0?v=' + buildVer;
+            script.src = assetPrefix + '.js?v=' + buildVer;
             document.head.appendChild(script);
           }
 
@@ -202,8 +205,8 @@
         }
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index.js?v=muazlfy0"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index.css?v=muazlfy0">
+    <script type="module" crossorigin src="/assets/index.js?v=mub0f54d"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index.css?v=mub0f54d">
   </head>
   <body class="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-200 antialiased selection:bg-emerald-500 selection:text-white">
     <div id="root">
