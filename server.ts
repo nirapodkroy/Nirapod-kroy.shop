@@ -33,6 +33,19 @@ export const DEFAULT_GOOGLE_SHEET_WEBHOOK = "https://script.google.com/macros/s/
 let googleSheetWebhookUrl = (process.env.GOOGLE_SHEET_WEBHOOK_URL || DEFAULT_GOOGLE_SHEET_WEBHOOK).trim();
 
 // Types
+interface SizeChartRow {
+  name: string;
+  values: { [size: string]: string };
+}
+
+interface SizeChart {
+  unit?: string;
+  columns?: string[];
+  rows?: SizeChartRow[];
+  note?: string;
+  title?: string;
+}
+
 interface Product {
   id: string;
   title: string;
@@ -56,6 +69,9 @@ interface Product {
   affiliateSource?: string;
   affiliateButtonText?: string;
   productCode?: string;
+  hasSizes?: boolean;
+  sizes?: string[];
+  sizeChart?: SizeChart;
 }
 
 interface OrderItem {
@@ -66,6 +82,7 @@ interface OrderItem {
   imageUrl: string;
   productCode?: string;
   selectedImageCode?: string;
+  selectedSize?: string;
 }
 
 interface Order {
@@ -367,13 +384,15 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
       const parts: string[] = [];
       if (i.productCode) parts.push(i.productCode);
       if (i.selectedImageCode) parts.push(`ছবি কোড: ${i.selectedImageCode}`);
+      if (i.selectedSize) parts.push(`সাইজ: ${i.selectedSize}`);
       return parts.length > 0 ? parts.join(" / ") : (i.title || "Product");
     }).join(", ");
 
     const itemsFormatted = itemsList.length > 0
       ? itemsList.map(i => {
           const codeInfo = i.selectedImageCode ? ` [কোড: ${i.selectedImageCode}]` : (i.productCode ? ` [কোড: ${i.productCode}]` : "");
-          return `${i.title || "Item"}${codeInfo} (x${i.quantity || 1} @ ৳${i.price || 0})`;
+          const sizeInfo = i.selectedSize ? ` [সাইজ: ${i.selectedSize}]` : "";
+          return `${i.title || "Item"}${codeInfo}${sizeInfo} (x${i.quantity || 1} @ ৳${i.price || 0})`;
         }).join(", ")
       : "Ordered Items";
     
@@ -1001,7 +1020,8 @@ app.post("/api/products", requireAdmin, (req, res) => {
   const {
     title, description, price, regularPrice, category, parentCategory, stock, imageUrl, images, badge, featured,
     isActive, isAffiliate, affiliateUrl, affiliateSource, affiliateButtonText,
-    isOfferZone, offerDiscountNote
+    isOfferZone, offerDiscountNote,
+    hasSizes, sizes, sizeChart, rating, ratingCount
   } = req.body;
   
   if (!title || price === undefined || !category) {
@@ -1018,6 +1038,13 @@ app.post("/api/products", requireAdmin, (req, res) => {
     ? (rawImages[0] === primaryImg ? rawImages : [primaryImg, ...rawImages.filter(i => i !== primaryImg)])
     : [primaryImg];
 
+  const parsedRating = rating !== undefined && !isNaN(Number(rating))
+    ? Math.min(5, Math.max(1, Number(rating)))
+    : 5.0;
+  const parsedRatingCount = ratingCount !== undefined && !isNaN(Number(ratingCount))
+    ? Math.max(0, Number(ratingCount))
+    : 1;
+
   const newProduct: Product = {
     id: "prod-" + Date.now().toString(36),
     title: title.trim(),
@@ -1029,8 +1056,8 @@ app.post("/api/products", requireAdmin, (req, res) => {
     stock: stock !== undefined ? Number(stock) : 20,
     imageUrl: primaryImg,
     images: finalImages,
-    rating: 5.0,
-    ratingCount: 1,
+    rating: parsedRating,
+    ratingCount: parsedRatingCount,
     badge: badge ? badge.trim() : undefined,
     featured: Boolean(featured),
     isActive: isActive !== undefined ? Boolean(isActive) : true,
@@ -1039,7 +1066,10 @@ app.post("/api/products", requireAdmin, (req, res) => {
     affiliateSource: affiliateSource ? String(affiliateSource).trim() : undefined,
     affiliateButtonText: affiliateButtonText ? String(affiliateButtonText).trim() : undefined,
     isOfferZone: Boolean(isOfferZone),
-    offerDiscountNote: offerDiscountNote ? String(offerDiscountNote).trim() : undefined
+    offerDiscountNote: offerDiscountNote ? String(offerDiscountNote).trim() : undefined,
+    hasSizes: Boolean(hasSizes),
+    sizes: Array.isArray(sizes) ? sizes.map(s => String(s).trim()).filter(Boolean) : undefined,
+    sizeChart: sizeChart && typeof sizeChart === "object" ? sizeChart : undefined
   };
 
   storeState.products.unshift(newProduct);
@@ -1075,9 +1105,10 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
 
   const existing = storeState.products[idx];
   const {
-    title, description, price, regularPrice, category, parentCategory, stock, imageUrl, images, badge, featured, rating,
+    title, description, price, regularPrice, category, parentCategory, stock, imageUrl, images, badge, featured, rating, ratingCount,
     isActive, isAffiliate, affiliateUrl, affiliateSource, affiliateButtonText,
-    isOfferZone, offerDiscountNote
+    isOfferZone, offerDiscountNote,
+    hasSizes, sizes, sizeChart
   } = req.body;
 
   let finalImages = Array.isArray(existing.images) && existing.images.length > 0
@@ -1115,14 +1146,18 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
     images: finalImages,
     badge: badge !== undefined ? (badge ? badge.trim() : undefined) : existing.badge,
     featured: featured !== undefined ? Boolean(featured) : existing.featured,
-    rating: rating !== undefined ? Number(rating) : existing.rating,
+    rating: rating !== undefined && !isNaN(Number(rating)) ? Math.min(5, Math.max(1, Number(rating))) : existing.rating,
+    ratingCount: ratingCount !== undefined && !isNaN(Number(ratingCount)) ? Math.max(0, Number(ratingCount)) : (existing.ratingCount || 1),
     isActive: isActive !== undefined ? Boolean(isActive) : (existing.isActive !== undefined ? existing.isActive : true),
     isAffiliate: isAffiliate !== undefined ? Boolean(isAffiliate) : (affiliateUrl !== undefined ? Boolean(affiliateUrl) : existing.isAffiliate),
     affiliateUrl: affiliateUrl !== undefined ? (affiliateUrl ? String(affiliateUrl).trim() : undefined) : existing.affiliateUrl,
     affiliateSource: affiliateSource !== undefined ? (affiliateSource ? String(affiliateSource).trim() : undefined) : existing.affiliateSource,
     affiliateButtonText: affiliateButtonText !== undefined ? (affiliateButtonText ? String(affiliateButtonText).trim() : undefined) : existing.affiliateButtonText,
     isOfferZone: isOfferZone !== undefined ? Boolean(isOfferZone) : existing.isOfferZone,
-    offerDiscountNote: offerDiscountNote !== undefined ? (offerDiscountNote ? String(offerDiscountNote).trim() : undefined) : existing.offerDiscountNote
+    offerDiscountNote: offerDiscountNote !== undefined ? (offerDiscountNote ? String(offerDiscountNote).trim() : undefined) : existing.offerDiscountNote,
+    hasSizes: hasSizes !== undefined ? Boolean(hasSizes) : existing.hasSizes,
+    sizes: sizes !== undefined ? (Array.isArray(sizes) ? sizes.map(s => String(s).trim()).filter(Boolean) : undefined) : existing.sizes,
+    sizeChart: sizeChart !== undefined ? (sizeChart && typeof sizeChart === "object" ? sizeChart : undefined) : existing.sizeChart
   };
 
   storeState.products[idx] = updated;
@@ -1405,6 +1440,7 @@ app.post("/api/orders", async (req, res) => {
       quantity: qty,
       imageUrl,
       selectedImageCode: item.selectedImageCode,
+      selectedSize: item.selectedSize,
       productCode: item.productCode || prod?.productCode
     });
   }
@@ -1429,6 +1465,7 @@ app.post("/api/orders", async (req, res) => {
     const parts = [];
     if (i.productCode) parts.push(i.productCode);
     if (i.selectedImageCode) parts.push(`ছবি কোড: ${i.selectedImageCode}`);
+    if (i.selectedSize) parts.push(`সাইজ: ${i.selectedSize}`);
     return parts.length > 0 ? parts.join(" / ") : i.title;
   }).join(", ");
 

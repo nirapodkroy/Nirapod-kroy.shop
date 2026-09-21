@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { Product } from "../types";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -7,6 +8,7 @@ import { handleLocalApi } from "../lib/mockApi";
 import { getProductImagesWithCodes } from "../utils/productCodeHelper";
 import { MobileBankingGateway, MobileBankingProvider } from "./MobileBankingGateway";
 import { BkashLogo, NagadLogo, RocketLogo } from "./PaymentLogos";
+import { SizeChartModal } from "./SizeChartModal";
 import {
   X,
   ShieldCheck,
@@ -22,7 +24,8 @@ import {
   Plus,
   Minus,
   ShoppingBag,
-  MapPin
+  MapPin,
+  Ruler
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -48,14 +51,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     directCheckoutItem,
     setDirectCheckoutItem,
     updateDirectItemCode,
+    updateDirectItemSize,
     updateDirectItemQuantity,
     updateItemCode,
+    updateItemSize,
     updateQuantity,
     clearCart
   } = useCart();
   const { currentUser } = useAuth();
   const { addToast } = useToast();
   const { language, t, formatPrice } = useLanguage();
+
+  const [activeChartProduct, setActiveChartProduct] = useState<{ product: Product; selectedSize?: string } | null>(null);
 
   const [customerName, setCustomerName] = useState(currentUser?.name || "");
   const [customerEmail, setCustomerEmail] = useState(currentUser?.email || "");
@@ -177,6 +184,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         quantity: item.quantity,
         imageUrl: item.selectedImageUrl || item.product.imageUrl,
         selectedImageCode: item.selectedImageCode,
+        selectedSize: item.selectedSize,
         productCode: item.productCode || item.product.productCode
       }));
 
@@ -184,6 +192,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         const parts: string[] = [];
         if (i.productCode) parts.push(i.productCode);
         if (i.selectedImageCode) parts.push(`ছবি কোড: ${i.selectedImageCode}`);
+        if (i.selectedSize) parts.push(`সাইজ: ${i.selectedSize}`);
         return parts.length > 0 ? parts.join(" / ") : i.title;
       }).join(", ");
 
@@ -554,6 +563,64 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             </div>
                           </div>
                         </div>
+
+                        {/* Interactive Size Selection if product has sizes */}
+                        {item.product.sizes && item.product.sizes.length > 0 && (
+                          <div className="mt-3 pt-2.5 border-t border-zinc-200/50 dark:border-zinc-700/50">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-2">
+                              <span className="flex items-center gap-1.5">
+                                <span className="text-amber-500 font-bold">📏</span>
+                                <span>{language === "bn" ? "সাইজ নির্বাচন করুন:" : "Select Size:"}</span>
+                                {item.selectedSize && (
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-bold ml-1">
+                                    ({item.selectedSize})
+                                  </span>
+                                )}
+                              </span>
+                              {item.product.sizeChart && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setActiveChartProduct({
+                                      product: item.product,
+                                      selectedSize: item.selectedSize || item.product.sizes?.[0]
+                                    })
+                                  }
+                                  className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-500/20"
+                                >
+                                  <Ruler className="w-3 h-3" />
+                                  <span>{language === "bn" ? "সাইজ চার্ট দেখুন" : "View Size Chart"}</span>
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5">
+                              {item.product.sizes.map((sz) => {
+                                const isSelected = (item.selectedSize || item.product.sizes?.[0]) === sz;
+                                return (
+                                  <button
+                                    key={sz}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isDirectBuy) {
+                                        updateDirectItemSize(sz);
+                                      } else {
+                                        updateItemSize(item.product.id, sz, item.selectedSize);
+                                      }
+                                    }}
+                                    className={`px-3 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                                      isSelected
+                                        ? "border-emerald-600 bg-emerald-600 text-white shadow-xs"
+                                        : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-emerald-400"
+                                    }`}
+                                  >
+                                    {sz}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Interactive Picture Code Selection for this product */}
                         {productImagesWithCodes.length > 0 && (
@@ -1015,6 +1082,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </form>
           )}
         </motion.div>
+
+        {/* Size Chart Modal */}
+        {activeChartProduct && (
+          <SizeChartModal
+            isOpen={true}
+            onClose={() => setActiveChartProduct(null)}
+            productTitle={activeChartProduct.product.title}
+            sizeChart={activeChartProduct.product.sizeChart}
+            selectedSize={activeChartProduct.selectedSize}
+            onSelectSize={(newSize) => {
+              if (isDirectBuy) {
+                updateDirectItemSize(newSize);
+              } else {
+                updateItemSize(activeChartProduct.product.id, newSize, activeChartProduct.selectedSize);
+              }
+              setActiveChartProduct((prev) => (prev ? { ...prev, selectedSize: newSize } : null));
+            }}
+          />
+        )}
       </div>
     </AnimatePresence>
   );

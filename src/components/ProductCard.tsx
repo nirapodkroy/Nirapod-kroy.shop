@@ -167,6 +167,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {product.description}
         </p>
 
+        {/* Available Sizes Preview */}
+        {product.sizes && product.sizes.length > 0 && (
+          <div className="mt-1.5 sm:mt-2 flex items-center gap-1 flex-wrap">
+            <span className="text-[10px] sm:text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
+              সাইজ:
+            </span>
+            {product.sizes.slice(0, 5).map((s) => (
+              <span
+                key={s}
+                className="px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10px] font-bold border border-zinc-200/80 dark:border-zinc-700/80"
+              >
+                {s}
+              </span>
+            ))}
+            {product.sizes.length > 5 && (
+              <span className="text-[10px] text-zinc-400">+{product.sizes.length - 5}</span>
+            )}
+          </div>
+        )}
+
         {/* Pricing */}
         <div className="mt-2 sm:mt-4 flex items-baseline gap-1.5 sm:gap-2 flex-wrap">
           <span className="font-extrabold text-base sm:text-lg md:text-xl text-zinc-900 dark:text-zinc-50 font-display">

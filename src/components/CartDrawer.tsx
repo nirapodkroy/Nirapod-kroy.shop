@@ -145,9 +145,9 @@ export const CartDrawer: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                items.map(({ product, quantity, selectedImageCode, selectedImageUrl }) => (
+                items.map(({ product, quantity, selectedImageCode, selectedImageUrl, selectedSize }) => (
                   <div
-                    key={product.id}
+                    key={`${product.id}-${selectedImageCode || "default"}-${selectedSize || "default"}`}
                     className="flex gap-3.5 p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-800/80"
                   >
                     <img
@@ -162,7 +162,7 @@ export const CartDrawer: React.FC = () => {
                             {product.title}
                           </h4>
                           <button
-                            onClick={() => removeItem(product.id)}
+                            onClick={() => removeItem(product.id, selectedSize)}
                             className="text-zinc-400 hover:text-rose-500 p-1 shrink-0 transition-colors cursor-pointer"
                             aria-label={`Remove ${product.title}`}
                           >
@@ -173,8 +173,13 @@ export const CartDrawer: React.FC = () => {
                           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 capitalize">
                             {getCategoryName(product.category)}
                           </p>
+                          {selectedSize && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-[10px] font-bold">
+                              সাইজ: {selectedSize}
+                            </span>
+                          )}
                           {selectedImageCode && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-mono text-[10px] font-bold">
                               📷 কোড: {selectedImageCode}
                             </span>
                           )}
@@ -189,7 +194,7 @@ export const CartDrawer: React.FC = () => {
                         {/* Quantity Controls */}
                         <div className="flex items-center border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden bg-white dark:bg-zinc-900">
                           <button
-                            onClick={() => updateQuantity(product.id, -1)}
+                            onClick={() => updateQuantity(product.id, -1, selectedSize)}
                             className="p-1 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 cursor-pointer"
                             aria-label="Decrease quantity"
                           >
@@ -199,7 +204,7 @@ export const CartDrawer: React.FC = () => {
                             {quantity}
                           </span>
                           <button
-                            onClick={() => updateQuantity(product.id, 1)}
+                            onClick={() => updateQuantity(product.id, 1, selectedSize)}
                             className="p-1 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 cursor-pointer"
                             aria-label="Increase quantity"
                           >

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { Product, Order, AdminStats, AdminCustomer, UserTrackingEntry } from "../types";
+import { Product, Order, AdminStats, AdminCustomer, UserTrackingEntry, SizeChart, SizeChartRow } from "../types";
+import { SIZE_CHART_PRESETS } from "../utils/sizeChartPresets";
 import { handleLocalApi } from "../lib/mockApi";
 import {
   X,
@@ -52,7 +53,9 @@ import {
   Clock,
   Monitor,
   MapPin,
-  Compass
+  Compass,
+  Ruler,
+  Star
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -239,6 +242,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [formDescription, setFormDescription] = useState("");
   const [formPrice, setFormPrice] = useState("");
   const [formRegularPrice, setFormRegularPrice] = useState("");
+  const [formRating, setFormRating] = useState("5.0");
+  const [formRatingCount, setFormRatingCount] = useState("1");
   // Category configuration states:
   // "main" -> Product is added under a Main Category
   // "sub" -> Product is added as a Sub-category under a parent category
@@ -270,6 +275,14 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [formAffiliateSource, setFormAffiliateSource] = useState("");
   const [formAffiliateButtonText, setFormAffiliateButtonText] = useState("");
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+
+  // Product Sizing & Size Chart states
+  const [formHasSizes, setFormHasSizes] = useState(false);
+  const [formSizesInput, setFormSizesInput] = useState("S, M, L, XL, XXL");
+  const [formEnableSizeChart, setFormEnableSizeChart] = useState(false);
+  const [formSizeChartTitle, setFormSizeChartTitle] = useState("শার্ট / পাঞ্জাবি সাইজ চার্ট (Shirt/Panjabi Size Chart)");
+  const [formSizeChartUnit, setFormSizeChartUnit] = useState<"inch" | "cm">("inch");
+  const [formSizeChartRows, setFormSizeChartRows] = useState<SizeChartRow[]>(() => SIZE_CHART_PRESETS[0].rows);
 
   // Multi-method image upload states (Device, Link, Camera)
   const [imageInputMode, setImageInputMode] = useState<"device" | "link" | "camera">("device");
@@ -1200,6 +1213,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setFormDescription("");
     setFormPrice("");
     setFormRegularPrice("");
+    setFormRating("5.0");
+    setFormRatingCount("1");
     setCategoryClassification("main");
     setFormCategory("Groceries & Food");
     setFormParentCategory("");
@@ -1222,6 +1237,12 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setFormAffiliateUrl("");
     setFormAffiliateSource("");
     setFormAffiliateButtonText("");
+    setFormHasSizes(false);
+    setFormSizesInput("S, M, L, XL, XXL");
+    setFormEnableSizeChart(false);
+    setFormSizeChartTitle("শার্ট / পাঞ্জাবি সাইজ চার্ট (Shirt/Panjabi Size Chart)");
+    setFormSizeChartUnit("inch");
+    setFormSizeChartRows(SIZE_CHART_PRESETS[0].rows);
     setIsProductFormOpen(true);
   };
 
@@ -1233,6 +1254,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setFormDescription(prod.description);
     setFormPrice(String(prod.price));
     setFormRegularPrice(prod.regularPrice ? String(prod.regularPrice) : "");
+    setFormRating(prod.rating !== undefined ? String(prod.rating) : "5.0");
+    setFormRatingCount(prod.ratingCount !== undefined ? String(prod.ratingCount) : "1");
 
     // Determine category hierarchy: Sub-category vs Main Category
     const parentCat = prod.parentCategory || getParentCategory(prod.category, products);
@@ -1280,6 +1303,21 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setFormAffiliateUrl(prod.affiliateUrl || "");
     setFormAffiliateSource(prod.affiliateSource || "");
     setFormAffiliateButtonText(prod.affiliateButtonText || "");
+
+    // Sizing & Size Chart
+    const hasSizes = Boolean(prod.hasSizes || (prod.sizes && prod.sizes.length > 0));
+    setFormHasSizes(hasSizes);
+    setFormSizesInput(prod.sizes ? prod.sizes.join(", ") : "S, M, L, XL, XXL");
+    const hasChart = Boolean(prod.sizeChart && prod.sizeChart.rows && prod.sizeChart.rows.length > 0);
+    setFormEnableSizeChart(hasChart);
+    setFormSizeChartTitle(prod.sizeChart?.title || "শার্ট / পাঞ্জাবি সাইজ চার্ট (Shirt/Panjabi Size Chart)");
+    setFormSizeChartUnit(prod.sizeChart?.unit || "inch");
+    setFormSizeChartRows(
+      prod.sizeChart?.rows && prod.sizeChart.rows.length > 0
+        ? prod.sizeChart.rows
+        : SIZE_CHART_PRESETS[0].rows
+    );
+
     setIsProductFormOpen(true);
   };
 
@@ -1351,11 +1389,44 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         resolvedParentCategory = undefined;
       }
 
+      const parsedSizes = formHasSizes
+        ? formSizesInput
+            .split(/[,;\n]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
+
+      const resolvedColumns = parsedSizes && parsedSizes.length > 0
+        ? parsedSizes
+        : (formSizeChartRows.length > 0 && formSizeChartRows[0].values
+            ? Object.keys(formSizeChartRows[0].values)
+            : ["S", "M", "L", "XL", "XXL"]);
+
+      const resolvedSizeChart: SizeChart | undefined =
+        formHasSizes && formEnableSizeChart && formSizeChartRows.length > 0
+          ? {
+              title: formSizeChartTitle.trim() || "Size Chart",
+              unit: formSizeChartUnit === "inch" ? "ইঞ্চি (Inches)" : "সেন্টিমিটার (CM)",
+              columns: resolvedColumns,
+              rows: formSizeChartRows,
+              note: "* সকল মাপ প্রস্তুতকারক নির্দেশিকা অনুযায়ী প্রদান করা হয়েছে।"
+            }
+          : undefined;
+
+      const parsedRating = formRating && !isNaN(Number(formRating))
+        ? Math.min(5, Math.max(1, Number(formRating)))
+        : 5.0;
+      const parsedRatingCount = formRatingCount && !isNaN(Number(formRatingCount))
+        ? Math.max(0, Number(formRatingCount))
+        : 1;
+
       const payload: Partial<Product> = {
         title: formTitle.trim(),
         description: formDescription.trim(),
         price: Number(formPrice),
         regularPrice: formRegularPrice ? Number(formRegularPrice) : undefined,
+        rating: parsedRating,
+        ratingCount: parsedRatingCount,
         category: resolvedCategory,
         parentCategory: resolvedParentCategory,
         stock: formIsAffiliate ? 999 : Number(formStock) || 0,
@@ -1370,6 +1441,9 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         affiliateUrl: formIsAffiliate ? formAffiliateUrl.trim() : undefined,
         affiliateSource: formIsAffiliate ? (formAffiliateSource.trim() || "Online Partner") : undefined,
         affiliateButtonText: formIsAffiliate ? (formAffiliateButtonText.trim() || undefined) : undefined,
+        hasSizes: formHasSizes,
+        sizes: parsedSizes,
+        sizeChart: resolvedSizeChart,
       };
 
       const endpoint = editingProduct ? `/api/products/${editingProduct.id}` : "/api/products";
@@ -4280,6 +4354,10 @@ function cleanAndFixOrderSheetRows() {
                                         </div>
                                         <div className="flex items-center gap-2 mt-0.5">
                                           <p className="text-[10px] text-zinc-400 font-mono">{prod.id}</p>
+                                          <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-400 font-semibold bg-amber-400/10 px-1.5 py-0.5 rounded">
+                                            <Star className="w-2.5 h-2.5 fill-current" />
+                                            {(prod.rating ?? 5).toFixed(1)} ({prod.ratingCount ?? 1})
+                                          </span>
                                           {prod.affiliateUrl && (
                                             <a
                                               href={prod.affiliateUrl}
@@ -4487,6 +4565,10 @@ function cleanAndFixOrderSheetRows() {
                                       <span className="text-[10px] text-zinc-400 bg-zinc-700/50 px-1.5 py-0.5 rounded">{prod.category}</span>
                                     )}
                                     <span className="text-[10px] text-zinc-400 font-mono">স্টক: {prod.stock}</span>
+                                    <span className="text-[10px] text-amber-400 font-semibold inline-flex items-center gap-0.5 bg-amber-400/10 px-1.5 py-0.5 rounded">
+                                      <Star className="w-2.5 h-2.5 fill-current" />
+                                      {(prod.rating ?? 5).toFixed(1)} ({prod.ratingCount ?? 1})
+                                    </span>
                                   </div>
 
                                   {/* Mobile Active / Inactive Switch & Offer Zone & Action Buttons */}
@@ -6459,6 +6541,48 @@ function cleanAndFixOrderSheetRows() {
                     </div>
                   </div>
 
+                  {/* Product Rating & Reviews */}
+                  <div className="p-3.5 bg-zinc-800/80 rounded-2xl border border-zinc-700 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-semibold text-zinc-200 flex items-center gap-1.5 text-xs">
+                        <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                        <span>প্রোডাক্ট রেটিং ও রিভিউ (Rating & Reviews)</span>
+                      </label>
+                      <span className="text-[10px] text-zinc-400">কাস্টমার আস্থা বাড়াতে</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                      <div>
+                        <label className="block text-zinc-400 mb-1 text-[11px]">রেটিং স্কোর (১.০ থেকে ৫.০)</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="1.0"
+                            max="5.0"
+                            value={formRating}
+                            onChange={(e) => setFormRating(e.target.value)}
+                            placeholder="5.0"
+                            className="w-full pl-8 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-xs focus:ring-1 focus:ring-amber-400"
+                          />
+                          <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 absolute left-2.5 top-2.5 pointer-events-none" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-zinc-400 mb-1 text-[11px]">রিভিউ সংখ্যা (Review Count)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formRatingCount}
+                          onChange={(e) => setFormRatingCount(e.target.value)}
+                          placeholder="1"
+                          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-white text-xs focus:ring-1 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Product Image Section: Device Multi-Upload, Web Link, or Live Camera */}
                   <div className="space-y-3 p-3.5 bg-zinc-800/80 rounded-2xl border border-zinc-700">
                     <div className="flex items-center justify-between">
@@ -7003,6 +7127,335 @@ function cleanAndFixOrderSheetRows() {
                               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
                             />
                           </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Product Sizing & Detailed Size Chart Section */}
+                  <div className="p-4 rounded-2xl bg-zinc-800/90 border border-zinc-700/80 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-400">
+                          <Ruler className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-xs text-white flex items-center gap-2">
+                            <span>পণ্যটির সাইজ অপশন (Product Sizing)</span>
+                            {formHasSizes && (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
+                                সক্রিয় (Enabled)
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-zinc-400">
+                            শার্ট, পাঞ্জাবি, প্যান্ট, জুতো ইত্যাদি পণ্যের জন্য সাইজ ও মেজারমেন্ট চার্ট নির্ধারণ করুন
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormHasSizes(!formHasSizes)}
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                          formHasSizes ? "bg-emerald-500" : "bg-zinc-700"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            formHasSizes ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {formHasSizes && (
+                      <div className="space-y-4 pt-3 border-t border-zinc-700/80">
+                        {/* Sizes list input */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-[11px] font-bold text-zinc-200">
+                              উপলব্ধ সাইজসমূহ (Available Sizes) - কমা দিয়ে লিখুন *
+                            </label>
+                            <span className="text-[10px] text-zinc-400">
+                              যেমন: S, M, L, XL, XXL
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            required={formHasSizes}
+                            value={formSizesInput}
+                            onChange={(e) => setFormSizesInput(e.target.value)}
+                            placeholder="S, M, L, XL, XXL অথবা 38, 40, 42, 44"
+                            className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
+                          />
+
+                          {/* Quick preset size pills */}
+                          <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] text-zinc-400 font-semibold">কুইক প্রিসেট:</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormSizesInput("S, M, L, XL, XXL");
+                                setFormSizeChartRows(SIZE_CHART_PRESETS[0].rows);
+                                setFormSizeChartTitle(SIZE_CHART_PRESETS[0].title);
+                              }}
+                              className="px-2 py-0.5 rounded-lg bg-zinc-700/60 hover:bg-zinc-700 text-[10px] text-zinc-200 cursor-pointer transition-colors"
+                            >
+                              শার্ট/পাঞ্জাবি (S - XXL)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormSizesInput("38, 40, 42, 44, 46");
+                              }}
+                              className="px-2 py-0.5 rounded-lg bg-zinc-700/60 hover:bg-zinc-700 text-[10px] text-zinc-200 cursor-pointer transition-colors"
+                            >
+                              পাঞ্জাবি (38 - 46)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormSizesInput("28, 30, 32, 34, 36, 38");
+                                setFormSizeChartRows(SIZE_CHART_PRESETS[2].rows);
+                                setFormSizeChartTitle(SIZE_CHART_PRESETS[2].title);
+                              }}
+                              className="px-2 py-0.5 rounded-lg bg-zinc-700/60 hover:bg-zinc-700 text-[10px] text-zinc-200 cursor-pointer transition-colors"
+                            >
+                              প্যান্ট (28 - 38)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormSizesInput("39, 40, 41, 42, 43, 44");
+                                setFormSizeChartRows(SIZE_CHART_PRESETS[3].rows);
+                                setFormSizeChartTitle(SIZE_CHART_PRESETS[3].title);
+                              }}
+                              className="px-2 py-0.5 rounded-lg bg-zinc-700/60 hover:bg-zinc-700 text-[10px] text-zinc-200 cursor-pointer transition-colors"
+                            >
+                              জুতো (39 - 44)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFormSizesInput("Free Size")}
+                              className="px-2 py-0.5 rounded-lg bg-zinc-700/60 hover:bg-zinc-700 text-[10px] text-zinc-200 cursor-pointer transition-colors"
+                            >
+                              ফ্রি সাইজ
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Enable Size Chart Switch */}
+                        <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-700/80 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-bold text-xs text-white flex items-center gap-1.5">
+                                <span>📏 বিস্তারিত সাইজ চার্ট (Measurement Table)</span>
+                              </p>
+                              <p className="text-[11px] text-zinc-400">
+                                কাস্টমাররা কেনার সময় গলার মাপ, বুকের মাপ, কাঁধ, লম্বা ইত্যাদি দেখতে পারবে
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setFormEnableSizeChart(!formEnableSizeChart)}
+                              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                                formEnableSizeChart ? "bg-amber-500" : "bg-zinc-700"
+                              }`}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                  formEnableSizeChart ? "translate-x-6" : "translate-x-1"
+                                }`}
+                              />
+                            </button>
+                          </div>
+
+                          {formEnableSizeChart && (
+                            <div className="space-y-3 pt-3 border-t border-zinc-800">
+                              {/* Presets buttons */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-zinc-300 uppercase tracking-wider mb-1.5">
+                                  সাইজ চার্ট টেমপ্লেট লোড করুন:
+                                </label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {SIZE_CHART_PRESETS.map((preset) => (
+                                    <button
+                                      key={preset.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setFormSizeChartTitle(preset.title);
+                                        setFormSizeChartUnit(preset.unit && preset.unit.includes("cm") ? "cm" : "inch");
+                                        setFormSizesInput(preset.sizes.join(", "));
+                                        setFormSizeChartRows(JSON.parse(JSON.stringify(preset.rows)));
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-colors cursor-pointer"
+                                    >
+                                      {preset.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                <div className="sm:col-span-2">
+                                  <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                                    চার্টের শিরোনাম (Title)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={formSizeChartTitle}
+                                    onChange={(e) => setFormSizeChartTitle(e.target.value)}
+                                    placeholder="শার্ট / পাঞ্জাবি সাইজ চার্ট"
+                                    className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                                    পরিমাপের একক (Unit)
+                                  </label>
+                                  <div className="flex rounded-xl overflow-hidden border border-zinc-700 bg-zinc-950">
+                                    <button
+                                      type="button"
+                                      onClick={() => setFormSizeChartUnit("inch")}
+                                      className={`flex-1 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
+                                        formSizeChartUnit === "inch"
+                                          ? "bg-amber-500 text-zinc-950"
+                                          : "text-zinc-400 hover:text-white"
+                                      }`}
+                                    >
+                                      ইঞ্চি (inch)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setFormSizeChartUnit("cm")}
+                                      className={`flex-1 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
+                                        formSizeChartUnit === "cm"
+                                          ? "bg-amber-500 text-zinc-950"
+                                          : "text-zinc-400 hover:text-white"
+                                      }`}
+                                    >
+                                      সেমি (cm)
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Interactive Table Editor */}
+                              {(() => {
+                                const activeTableColumns = formSizesInput
+                                  .split(/[,;\n]+/)
+                                  .map((s) => s.trim())
+                                  .filter(Boolean);
+                                const displayCols = activeTableColumns.length > 0 ? activeTableColumns : ["S", "M", "L", "XL", "XXL"];
+
+                                return (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <label className="text-[11px] font-bold text-zinc-300">
+                                        মেজারমেন্ট টেবিল এডিটর (প্রতিটি মাপের মান সরাসরি এডিট করুন):
+                                      </label>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const emptyValues: Record<string, string> = {};
+                                          displayCols.forEach((col) => {
+                                            emptyValues[col] = "";
+                                          });
+                                          setFormSizeChartRows([
+                                            ...formSizeChartRows,
+                                            {
+                                              name: `নতুন মাপ ${formSizeChartRows.length + 1}`,
+                                              values: emptyValues
+                                            }
+                                          ]);
+                                        }}
+                                        className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 cursor-pointer flex items-center gap-1 transition-colors"
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                        <span>+ নতুন মাপের রো যোগ করুন</span>
+                                      </button>
+                                    </div>
+
+                                    <div className="overflow-x-auto border border-zinc-800 rounded-xl bg-zinc-950 scrollbar-thin">
+                                      <table className="w-full text-xs text-left">
+                                       <thead className="bg-zinc-900 text-zinc-300 border-b border-zinc-800 font-bold">
+                                         <tr>
+                                           <th className="p-2 min-w-[140px]">পরিমাপের নাম (Measurement)</th>
+                                           {displayCols.map((col) => (
+                                             <th key={col} className="p-2 min-w-[65px] text-center text-amber-400 font-mono font-bold">
+                                               {col}
+                                             </th>
+                                           ))}
+                                           <th className="p-2 w-10 text-center text-zinc-500">মুছুন</th>
+                                         </tr>
+                                       </thead>
+                                       <tbody className="divide-y divide-zinc-800">
+                                         {formSizeChartRows.map((row, rIdx) => (
+                                           <tr key={rIdx} className="hover:bg-zinc-900/50 transition-colors">
+                                             {/* Measurement Name Input */}
+                                             <td className="p-1.5">
+                                               <input
+                                                 type="text"
+                                                 value={row.name}
+                                                 placeholder="যেমন: গলা / বুক / কাঁধ / লম্বা"
+                                                 onChange={(e) => {
+                                                   const next = [...formSizeChartRows];
+                                                   next[rIdx] = { ...next[rIdx], name: e.target.value };
+                                                   setFormSizeChartRows(next);
+                                                 }}
+                                                 className="w-full px-2 py-1 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs font-semibold text-white focus:outline-none focus:border-amber-500"
+                                               />
+                                             </td>
+                                             {/* Column Values for Each Size */}
+                                             {displayCols.map((col) => (
+                                               <td key={col} className="p-1.5 text-center">
+                                                 <input
+                                                   type="text"
+                                                   value={row.values?.[col] ?? ""}
+                                                   placeholder='যেমন: ৩৮"'
+                                                   onChange={(e) => {
+                                                     const next = [...formSizeChartRows];
+                                                     next[rIdx] = {
+                                                       ...next[rIdx],
+                                                       values: {
+                                                         ...(next[rIdx].values || {}),
+                                                         [col]: e.target.value
+                                                       }
+                                                     };
+                                                     setFormSizeChartRows(next);
+                                                   }}
+                                                   className="w-full min-w-[50px] px-1.5 py-1 bg-zinc-900 border border-zinc-700/80 rounded-lg text-center text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+                                                 />
+                                               </td>
+                                             ))}
+                                             {/* Delete Row Button */}
+                                             <td className="p-1.5 text-center">
+                                               <button
+                                                 type="button"
+                                                 disabled={formSizeChartRows.length <= 1}
+                                                 onClick={() => {
+                                                   if (formSizeChartRows.length > 1) {
+                                                     setFormSizeChartRows(formSizeChartRows.filter((_, i) => i !== rIdx));
+                                                   }
+                                                 }}
+                                                 className="text-zinc-500 hover:text-rose-400 disabled:opacity-25 disabled:hover:text-zinc-500 p-1 cursor-pointer transition-colors"
+                                                 title="রো মুছুন"
+                                               >
+                                                 <Trash2 className="w-3.5 h-3.5" />
+                                               </button>
+                                             </td>
+                                           </tr>
+                                         ))}
+                                       </tbody>
+                                     </table>
+                                   </div>
+                                 </div>
+                                );
+                              })()}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

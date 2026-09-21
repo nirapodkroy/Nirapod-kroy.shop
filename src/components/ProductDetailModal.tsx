@@ -3,6 +3,8 @@ import { Product } from "../types";
 import { useCart } from "../context/CartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getProductImagesWithCodes } from "../utils/productCodeHelper";
+import { SizeSelector } from "./SizeSelector";
+import { SizeChartModal } from "./SizeChartModal";
 import {
   X,
   Star,
@@ -41,15 +43,20 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [quantity, setQuantity] = useState(1);
   const [copiedLink, setCopiedLink] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [selectedSize, setSelectedSize] = useState<string>(() => {
+    return product?.sizes && product.sizes.length > 0 ? product.sizes[0] : "";
+  });
+  const [isSizeChartOpen, setIsSizeChartOpen] = useState(false);
 
   // Extract all gallery images with their assigned/auto-generated codes
   const imageItems = getProductImagesWithCodes(product);
   const galleryImages = imageItems.map((item) => item.url);
   const activeImageItem = imageItems[currentImageIndex] || imageItems[0];
 
-  // Reset image index when product changes
+  // Reset image index and selected size when product changes
   useEffect(() => {
     setCurrentImageIndex(0);
+    setSelectedSize(product?.sizes && product.sizes.length > 0 ? product.sizes[0] : "");
   }, [product?.id]);
 
   // Keyboard navigation between pictures
@@ -314,6 +321,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 )}
 
+                {/* Size Selector with Size Chart View */}
+                {product.sizes && product.sizes.length > 0 && (
+                  <div className="mt-4 p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-700/80">
+                    <SizeSelector
+                      sizes={product.sizes}
+                      sizeChart={product.sizeChart}
+                      selectedSize={selectedSize}
+                      onSelectSize={(sz) => setSelectedSize(sz)}
+                      onOpenSizeChart={() => setIsSizeChartOpen(true)}
+                    />
+                  </div>
+                )}
+
                 {/* Affiliate Partner Notice Banner */}
                 {product.isAffiliate && (
                   <div className="mt-4 p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 flex items-start gap-3">
@@ -453,7 +473,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <div className="grid grid-cols-2 gap-3 mt-2">
                       <button
                         onClick={() => {
-                          addItem(product, quantity, activeImageItem?.code, activeImageItem?.url);
+                          addItem(product, quantity, activeImageItem?.code, activeImageItem?.url, selectedSize);
                         }}
                         className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 font-semibold text-xs sm:text-sm transition-all cursor-pointer"
                       >
@@ -472,7 +492,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
                       <button
                         onClick={() => {
-                          buyNow(product, activeImageItem?.code, activeImageItem?.url, quantity);
+                          buyNow(product, activeImageItem?.code, activeImageItem?.url, quantity, selectedSize);
                           onClose();
                         }}
                         className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#846F15] hover:bg-[#967F19] active:bg-[#6E5C0E] text-white font-bold text-xs sm:text-sm shadow-md shadow-[#846F15]/30 transition-all hover:shadow-lg active:scale-[0.98] cursor-pointer"
@@ -487,6 +507,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </div>
           </div>
         </motion.div>
+
+        {/* Size Chart Modal */}
+        <SizeChartModal
+          isOpen={isSizeChartOpen}
+          onClose={() => setIsSizeChartOpen(false)}
+          productTitle={product.title}
+          sizeChart={product.sizeChart}
+          selectedSize={selectedSize}
+          onSelectSize={(sz) => setSelectedSize(sz)}
+        />
       </div>
     </AnimatePresence>
   );

@@ -1,3 +1,16 @@
+export interface SizeChartRow {
+  name: string;
+  values: { [size: string]: string };
+}
+
+export interface SizeChart {
+  title?: string;
+  unit?: string;
+  columns: string[];
+  rows: SizeChartRow[];
+  note?: string;
+}
+
 export interface Product {
   id: string;
   title: string;
@@ -11,6 +24,9 @@ export interface Product {
   images?: string[];
   imageCodes?: string[];
   productCode?: string;
+  hasSizes?: boolean;
+  sizes?: string[];
+  sizeChart?: SizeChart;
   rating: number;
   ratingCount: number;
   badge?: string;
@@ -29,6 +45,8 @@ export interface CartItem {
   quantity: number;
   selectedImageCode?: string;
   selectedImageUrl?: string;
+  selectedSize?: string;
+  productCode?: string;
 }
 
 export interface CustomerUser {
@@ -53,6 +71,7 @@ export interface OrderItem {
   imageUrl: string;
   selectedImageCode?: string;
   productCode?: string;
+  selectedSize?: string;
 }
 
 export interface Order {

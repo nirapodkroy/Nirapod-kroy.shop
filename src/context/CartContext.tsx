@@ -9,11 +9,13 @@ interface CartContextType {
   directCheckoutItem: CartItem | null;
   setDirectCheckoutItem: (item: CartItem | null) => void;
   updateDirectItemCode: (code: string, imageUrl?: string) => void;
+  updateDirectItemSize: (size: string) => void;
   updateDirectItemQuantity: (delta: number) => void;
-  addItem: (product: Product, quantity?: number, selectedImageCode?: string, selectedImageUrl?: string) => void;
+  addItem: (product: Product, quantity?: number, selectedImageCode?: string, selectedImageUrl?: string, selectedSize?: string) => void;
   updateItemCode: (productId: string, code: string, imageUrl?: string) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, delta: number) => void;
+  updateItemSize: (productId: string, size: string, oldSize?: string) => void;
+  removeItem: (productId: string, selectedSize?: string) => void;
+  updateQuantity: (productId: string, delta: number, selectedSize?: string) => void;
   clearCart: () => void;
   subtotal: number;
   itemCount: number;
@@ -21,7 +23,7 @@ interface CartContextType {
   setIsCartOpen: (open: boolean) => void;
   isCheckoutOpen: boolean;
   setIsCheckoutOpen: (open: boolean) => void;
-  buyNow: (product: Product, selectedImageCode?: string, selectedImageUrl?: string, quantity?: number) => void;
+  buyNow: (product: Product, selectedImageCode?: string, selectedImageUrl?: string, quantity?: number, selectedSize?: string) => void;
   openCartCheckout: () => void;
 }
 
@@ -49,12 +51,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     product: Product,
     quantity: number = 1,
     selectedImageCode?: string,
-    selectedImageUrl?: string
+    selectedImageUrl?: string,
+    selectedSize?: string
   ) => {
+    const finalSize = selectedSize || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
     setItems(prev => {
-      // Find matching item by product.id and matching selectedImageCode (if applicable)
+      // Find matching item by product.id, selectedImageCode, and selectedSize
       const existingIdx = prev.findIndex(
-        item => item.product.id === product.id && (!selectedImageCode || item.selectedImageCode === selectedImageCode)
+        item =>
+          item.product.id === product.id &&
+          (!selectedImageCode || item.selectedImageCode === selectedImageCode) &&
+          (item.selectedSize === finalSize)
       );
       if (existingIdx > -1) {
         const updated = [...prev];
@@ -64,6 +71,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           quantity: newQty,
           selectedImageCode: selectedImageCode || updated[existingIdx].selectedImageCode,
           selectedImageUrl: selectedImageUrl || updated[existingIdx].selectedImageUrl,
+          selectedSize: finalSize || updated[existingIdx].selectedSize,
           productCode: product.productCode
         };
         return updated;
@@ -75,12 +83,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             quantity,
             selectedImageCode,
             selectedImageUrl: selectedImageUrl || product.imageUrl,
+            selectedSize: finalSize,
             productCode: product.productCode
           }
         ];
       }
     });
-    addToast(`Added "${product.title}" ${selectedImageCode ? `[${selectedImageCode}]` : ""} to cart!`, "success");
+    const sizeNote = finalSize ? ` (সাইজ: ${finalSize})` : "";
+    addToast(`Added "${product.title}" ${selectedImageCode ? `[${selectedImageCode}]` : ""}${sizeNote} to cart!`, "success");
   };
 
   const updateItemCode = (productId: string, code: string, imageUrl?: string) => {
@@ -98,19 +108,33 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const removeItem = (productId: string) => {
-    const item = items.find(i => i.product.id === productId);
-    setItems(prev => prev.filter(i => i.product.id !== productId));
+  const updateItemSize = (productId: string, size: string, oldSize?: string) => {
+    setItems(prev => {
+      return prev.map(item => {
+        if (item.product.id === productId && (!oldSize || item.selectedSize === oldSize)) {
+          return {
+            ...item,
+            selectedSize: size
+          };
+        }
+        return item;
+      });
+    });
+  };
+
+  const removeItem = (productId: string, selectedSize?: string) => {
+    const item = items.find(i => i.product.id === productId && (!selectedSize || i.selectedSize === selectedSize));
+    setItems(prev => prev.filter(i => !(i.product.id === productId && (!selectedSize || i.selectedSize === selectedSize))));
     if (item) {
       addToast(`Removed "${item.product.title}" from cart`, "info");
     }
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
+  const updateQuantity = (productId: string, delta: number, selectedSize?: string) => {
     setItems(prev => {
       return prev
         .map(item => {
-          if (item.product.id === productId) {
+          if (item.product.id === productId && (!selectedSize || item.selectedSize === selectedSize)) {
             const nextQty = item.quantity + delta;
             return nextQty > 0 ? { ...item, quantity: nextQty } : null;
           }
@@ -128,17 +152,20 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     product: Product,
     selectedImageCode?: string,
     selectedImageUrl?: string,
-    quantity: number = 1
+    quantity: number = 1,
+    selectedSize?: string
   ) => {
     const imageItems = getProductImagesWithCodes(product);
     const chosenCode = selectedImageCode || imageItems[0]?.code || product.productCode || "P-01";
     const chosenUrl = selectedImageUrl || imageItems[0]?.url || product.imageUrl;
+    const finalSize = selectedSize || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
 
     setDirectCheckoutItem({
       product,
       quantity: Math.max(1, quantity),
       selectedImageCode: chosenCode,
       selectedImageUrl: chosenUrl,
+      selectedSize: finalSize,
       productCode: product.productCode
     });
     setIsCartOpen(false);
@@ -152,6 +179,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...prev,
         selectedImageCode: code,
         selectedImageUrl: imageUrl || prev.selectedImageUrl || prev.product.imageUrl
+      };
+    });
+  };
+
+  const updateDirectItemSize = (size: string) => {
+    setDirectCheckoutItem(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        selectedSize: size
       };
     });
   };
@@ -183,9 +220,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         directCheckoutItem,
         setDirectCheckoutItem,
         updateDirectItemCode,
+        updateDirectItemSize,
         updateDirectItemQuantity,
         addItem,
         updateItemCode,
+        updateItemSize,
         removeItem,
         updateQuantity,
         clearCart,
