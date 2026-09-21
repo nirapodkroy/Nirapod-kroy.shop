@@ -399,28 +399,42 @@ const StoreContent: React.FC = () => {
     return products.filter((p) => wishlistIds.includes(p.id));
   }, [products, wishlistIds]);
 
-  const handleExploreClick = () => {
-    setSelectedCategory("All");
-    updateCategoryUrl("All");
-    setTimeout(() => {
-      const catalogEl = document.getElementById("catalog-section");
-      if (catalogEl) {
-        catalogEl.scrollIntoView({ behavior: "smooth" });
-      }
-    }, 50);
-  };
-
-  const handleDealsClick = () => {
-    setSelectedCategory("All");
+  const handleSelectCategoryFromHero = useCallback((cat: string) => {
     setSearchQuery("");
-    updateCategoryUrl("All");
-    setTimeout(() => {
-      const catalogEl = document.getElementById("catalog-section");
-      if (catalogEl) {
-        catalogEl.scrollIntoView({ behavior: "smooth" });
-      }
-    }, 50);
-  };
+    if (!cat || cat === "All") {
+      setSelectedCategory("All");
+      updateCategoryUrl("All");
+      setTimeout(() => {
+        const catalogEl = document.getElementById("catalog-section");
+        if (catalogEl) {
+          catalogEl.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 50);
+    } else {
+      handleSelectCategory(cat);
+    }
+  }, [handleSelectCategory]);
+
+  const handleExploreClick = useCallback((category?: string) => {
+    setSearchQuery("");
+    if (category && category !== "All") {
+      handleSelectCategory(category);
+    } else {
+      setSelectedCategory("All");
+      updateCategoryUrl("All");
+      setTimeout(() => {
+        const catalogEl = document.getElementById("catalog-section");
+        if (catalogEl) {
+          catalogEl.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 50);
+    }
+  }, [handleSelectCategory]);
+
+  const handleDealsClick = useCallback((dealsCategory?: string) => {
+    setSearchQuery("");
+    handleSelectCategory(dealsCategory || "Offer Zone");
+  }, [handleSelectCategory]);
 
   // When user clicks ANY product on the home page:
   // Open quick view details modal directly with all images and order options
@@ -449,6 +463,7 @@ const StoreContent: React.FC = () => {
         {selectedCategory === "All" && (
           /* Full Hero Carousel shown on Home Page */
           <HeroSection
+            onSelectCategory={handleSelectCategoryFromHero}
             onExploreClick={handleExploreClick}
             onDealsClick={handleDealsClick}
             onOpenReturnPolicy={openReturnPolicy}

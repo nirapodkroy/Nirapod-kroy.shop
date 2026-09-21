@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../context/LanguageContext";
 
 interface HeroSectionProps {
-  onExploreClick: () => void;
-  onDealsClick: () => void;
+  onSelectCategory?: (category: string) => void;
+  onExploreClick?: (category?: string) => void;
+  onDealsClick?: (dealsCategory?: string) => void;
   onOpenReturnPolicy?: () => void;
   onOpenPrivacyPolicy?: () => void;
   onOpenDeliveryPolicy?: () => void;
@@ -14,6 +15,7 @@ interface HeroSectionProps {
 const SLIDES = [
   {
     id: 1,
+    category: "Electronics",
     badge: { bn: "অফিশিয়াল ওয়ারেন্টি", en: "Official Warranty" },
     badgeColor: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
     title: { bn: "স্মার্ট ইলেকট্রনিক্স ও টেক গ্যাজেটস", en: "Smart Tech & Electronics" },
@@ -24,11 +26,14 @@ const SLIDES = [
     },
     discountBadge: { bn: "ব্র্যান্ড ওয়ারেন্টি সহ", en: "Brand Warranty Included" },
     cta: { bn: "ইলেকট্রনিক্স এক্সপ্লোর করুন", en: "Explore Electronics" },
+    dealsCta: { bn: "হট ডিলস দেখুন", en: "View Hot Deals" },
+    dealsCategory: "Offer Zone",
     image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=85",
     accent: "from-indigo-500/25 to-sky-500/10"
   },
   {
     id: 2,
+    category: "All",
     badge: { bn: "নিরাপদ কেনাকাটা", en: "Safe & Trusted" },
     badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
     title: { bn: "সব ধরনের পণ্যের বিশ্বস্ত বাজার", en: "Your Ultimate Everything Store" },
@@ -39,11 +44,14 @@ const SLIDES = [
     },
     discountBadge: { bn: "ক্যাশ অন ডেলিভারি সুবিধা", en: "Cash on Delivery Available" },
     cta: { bn: "সব পণ্য দেখুন (Shop All)", en: "Explore All Products" },
+    dealsCta: { bn: "হট ডিলস দেখুন", en: "View Hot Deals" },
+    dealsCategory: "Offer Zone",
     image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=85",
     accent: "from-emerald-500/25 to-teal-500/10"
   },
   {
     id: 3,
+    category: "Groceries & Food",
     badge: { bn: "১০০% খাঁটি ও অর্গানিক", en: "100% Pure & Organic" },
     badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
     title: { bn: "স্বাস্থ্যসম্মত খাঁটি খাদ্য ও মুদি পণ্য", en: "Healthy Groceries & Pure Food" },
@@ -54,11 +62,14 @@ const SLIDES = [
     },
     discountBadge: { bn: "ন্যায্য মূল্য ও টাটকা", en: "Fresh & Fair Price" },
     cta: { bn: "মুদি পণ্য দেখুন", en: "Browse Groceries" },
+    dealsCta: { bn: "হট ডিলস দেখুন", en: "View Hot Deals" },
+    dealsCategory: "Offer Zone",
     image: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=85",
     accent: "from-amber-500/25 to-orange-500/10"
   },
   {
     id: 4,
+    category: "Fashion",
     badge: { bn: "প্রিমিয়াম কোয়ালিটি", en: "Premium Quality" },
     badgeColor: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
     title: { bn: "স্টাইলিশ ফ্যাশন, পোশাক ও লাইফস্টাইল", en: "Stylish Fashion & Lifestyle" },
@@ -69,12 +80,15 @@ const SLIDES = [
     },
     discountBadge: { bn: "নতুন কালেকশন ২০২৬", en: "New Collection 2026" },
     cta: { bn: "ফ্যাশন কালেকশন", en: "Shop Fashion" },
+    dealsCta: { bn: "হট ডিলস দেখুন", en: "View Hot Deals" },
+    dealsCategory: "Offer Zone",
     image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=85",
     accent: "from-rose-500/25 to-pink-500/10"
   }
 ];
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
+  onSelectCategory,
   onExploreClick,
   onDealsClick,
   onOpenReturnPolicy,
@@ -92,6 +106,30 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   }, []);
 
   const slide = SLIDES[currentSlide];
+
+  const handleCtaClick = (category: string) => {
+    if (category && category !== "All") {
+      if (onSelectCategory) {
+        onSelectCategory(category);
+      } else if (onExploreClick) {
+        onExploreClick(category);
+      }
+    } else {
+      if (onExploreClick) {
+        onExploreClick("All");
+      } else if (onSelectCategory) {
+        onSelectCategory("All");
+      }
+    }
+  };
+
+  const handleDealsClick = (dealsCategory: string = "Offer Zone") => {
+    if (onSelectCategory) {
+      onSelectCategory(dealsCategory);
+    } else if (onDealsClick) {
+      onDealsClick(dealsCategory);
+    }
+  };
 
   return (
     <section className="relative overflow-hidden pt-4 pb-8 sm:pt-6 sm:pb-12">
@@ -121,14 +159,22 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           {/* Slide Content */}
           <div className="relative z-10 max-w-2xl px-6 sm:px-12 py-12 flex flex-col justify-center">
             <div className="flex flex-wrap items-center gap-2.5 mb-4">
-              <span
-                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border backdrop-blur-md ${slide.badgeColor}`}
+              <button
+                type="button"
+                onClick={() => handleCtaClick(slide.category)}
+                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border backdrop-blur-md transition-all hover:scale-105 cursor-pointer ${slide.badgeColor}`}
+                title={language === "bn" ? `${slide.title.bn} দেখুন` : `View ${slide.title.en}`}
               >
                 {slide.badge[language]}
-              </span>
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDealsClick(slide.dealsCategory || "Offer Zone")}
+                className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30 hover:bg-amber-400/30 transition-all hover:scale-105 cursor-pointer"
+                title={language === "bn" ? "হট ডিলস দেখুন" : "View Hot Deals"}
+              >
                 {slide.discountBadge[language]}
-              </span>
+              </button>
             </div>
 
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight font-display text-white leading-tight">
@@ -146,17 +192,19 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             {/* CTA Buttons */}
             <div className="mt-8 flex flex-wrap items-center gap-3.5">
               <button
-                onClick={onExploreClick}
+                type="button"
+                onClick={() => handleCtaClick(slide.category)}
                 className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-sm tracking-wide shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
               >
                 {slide.cta[language]}
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
-                onClick={onDealsClick}
-                className="inline-flex items-center px-5 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-sm backdrop-blur-md border border-white/20 transition-colors cursor-pointer"
+                type="button"
+                onClick={() => handleDealsClick(slide.dealsCategory || "Offer Zone")}
+                className="inline-flex items-center px-5 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-sm backdrop-blur-md border border-white/20 transition-colors cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
               >
-                {language === "bn" ? "হট ডিলস দেখুন" : "View Hot Deals"}
+                {slide.dealsCta ? slide.dealsCta[language] : (language === "bn" ? "হট ডিলস দেখুন" : "View Hot Deals")}
               </button>
             </div>
           </div>
