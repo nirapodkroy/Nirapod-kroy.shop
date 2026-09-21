@@ -444,11 +444,13 @@ async function syncOrderToGoogleSheets(order, webhookUrl, forceSync = false) {
       const parts = [];
       if (i.productCode) parts.push(i.productCode);
       if (i.selectedImageCode) parts.push(`\u099B\u09AC\u09BF \u0995\u09CB\u09A1: ${i.selectedImageCode}`);
+      if (i.selectedSize) parts.push(`\u09B8\u09BE\u0987\u099C: ${i.selectedSize}`);
       return parts.length > 0 ? parts.join(" / ") : i.title || "Product";
     }).join(", ");
     const itemsFormatted = itemsList.length > 0 ? itemsList.map((i) => {
       const codeInfo = i.selectedImageCode ? ` [\u0995\u09CB\u09A1: ${i.selectedImageCode}]` : i.productCode ? ` [\u0995\u09CB\u09A1: ${i.productCode}]` : "";
-      return `${i.title || "Item"}${codeInfo} (x${i.quantity || 1} @ \u09F3${i.price || 0})`;
+      const sizeInfo = i.selectedSize ? ` [\u09B8\u09BE\u0987\u099C: ${i.selectedSize}]` : "";
+      return `${i.title || "Item"}${codeInfo}${sizeInfo} (x${i.quantity || 1} @ \u09F3${i.price || 0})`;
     }).join(", ") : "Ordered Items";
     const orderTime = order.createdAt ? new Date(order.createdAt).toLocaleString("en-US", { timeZone: "Asia/Dhaka" }) : (/* @__PURE__ */ new Date()).toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
     const paymentByMethod = order.paymentProvider ? order.paymentProvider : order.paymentMethod?.includes("bKash") ? "bKash" : order.paymentMethod?.includes("Nagad") ? "Nagad" : order.paymentMethod?.includes("Rocket") ? "Rocket" : order.paymentMethod || "Cash on Delivery";
@@ -1011,7 +1013,12 @@ app.post("/api/products", requireAdmin, (req, res) => {
     affiliateSource,
     affiliateButtonText,
     isOfferZone,
-    offerDiscountNote
+    offerDiscountNote,
+    hasSizes,
+    sizes,
+    sizeChart,
+    rating,
+    ratingCount
   } = req.body;
   if (!title || price === void 0 || !category) {
     return res.status(400).json({ error: "Title, price, and category are required." });
@@ -1019,6 +1026,8 @@ app.post("/api/products", requireAdmin, (req, res) => {
   const rawImages = Array.isArray(images) ? images.map((i) => String(i).trim()).filter(Boolean) : [];
   const primaryImg = imageUrl && imageUrl.trim() ? imageUrl.trim() : rawImages[0] || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80";
   const finalImages = rawImages.length > 0 ? rawImages[0] === primaryImg ? rawImages : [primaryImg, ...rawImages.filter((i) => i !== primaryImg)] : [primaryImg];
+  const parsedRating = rating !== void 0 && !isNaN(Number(rating)) ? Math.min(5, Math.max(1, Number(rating))) : 5;
+  const parsedRatingCount = ratingCount !== void 0 && !isNaN(Number(ratingCount)) ? Math.max(0, Number(ratingCount)) : 1;
   const newProduct = {
     id: "prod-" + Date.now().toString(36),
     title: title.trim(),
@@ -1030,8 +1039,8 @@ app.post("/api/products", requireAdmin, (req, res) => {
     stock: stock !== void 0 ? Number(stock) : 20,
     imageUrl: primaryImg,
     images: finalImages,
-    rating: 5,
-    ratingCount: 1,
+    rating: parsedRating,
+    ratingCount: parsedRatingCount,
     badge: badge ? badge.trim() : void 0,
     featured: Boolean(featured),
     isActive: isActive !== void 0 ? Boolean(isActive) : true,
@@ -1040,7 +1049,10 @@ app.post("/api/products", requireAdmin, (req, res) => {
     affiliateSource: affiliateSource ? String(affiliateSource).trim() : void 0,
     affiliateButtonText: affiliateButtonText ? String(affiliateButtonText).trim() : void 0,
     isOfferZone: Boolean(isOfferZone),
-    offerDiscountNote: offerDiscountNote ? String(offerDiscountNote).trim() : void 0
+    offerDiscountNote: offerDiscountNote ? String(offerDiscountNote).trim() : void 0,
+    hasSizes: Boolean(hasSizes),
+    sizes: Array.isArray(sizes) ? sizes.map((s) => String(s).trim()).filter(Boolean) : void 0,
+    sizeChart: sizeChart && typeof sizeChart === "object" ? sizeChart : void 0
   };
   storeState.products.unshift(newProduct);
   saveState();
@@ -1079,13 +1091,17 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
     badge,
     featured,
     rating,
+    ratingCount,
     isActive,
     isAffiliate,
     affiliateUrl,
     affiliateSource,
     affiliateButtonText,
     isOfferZone,
-    offerDiscountNote
+    offerDiscountNote,
+    hasSizes,
+    sizes,
+    sizeChart
   } = req.body;
   let finalImages = Array.isArray(existing.images) && existing.images.length > 0 ? [...existing.images] : [existing.imageUrl];
   if (images !== void 0 && Array.isArray(images)) {
@@ -1113,14 +1129,18 @@ app.put("/api/products/:id", requireAdmin, (req, res) => {
     images: finalImages,
     badge: badge !== void 0 ? badge ? badge.trim() : void 0 : existing.badge,
     featured: featured !== void 0 ? Boolean(featured) : existing.featured,
-    rating: rating !== void 0 ? Number(rating) : existing.rating,
+    rating: rating !== void 0 && !isNaN(Number(rating)) ? Math.min(5, Math.max(1, Number(rating))) : existing.rating,
+    ratingCount: ratingCount !== void 0 && !isNaN(Number(ratingCount)) ? Math.max(0, Number(ratingCount)) : existing.ratingCount || 1,
     isActive: isActive !== void 0 ? Boolean(isActive) : existing.isActive !== void 0 ? existing.isActive : true,
     isAffiliate: isAffiliate !== void 0 ? Boolean(isAffiliate) : affiliateUrl !== void 0 ? Boolean(affiliateUrl) : existing.isAffiliate,
     affiliateUrl: affiliateUrl !== void 0 ? affiliateUrl ? String(affiliateUrl).trim() : void 0 : existing.affiliateUrl,
     affiliateSource: affiliateSource !== void 0 ? affiliateSource ? String(affiliateSource).trim() : void 0 : existing.affiliateSource,
     affiliateButtonText: affiliateButtonText !== void 0 ? affiliateButtonText ? String(affiliateButtonText).trim() : void 0 : existing.affiliateButtonText,
     isOfferZone: isOfferZone !== void 0 ? Boolean(isOfferZone) : existing.isOfferZone,
-    offerDiscountNote: offerDiscountNote !== void 0 ? offerDiscountNote ? String(offerDiscountNote).trim() : void 0 : existing.offerDiscountNote
+    offerDiscountNote: offerDiscountNote !== void 0 ? offerDiscountNote ? String(offerDiscountNote).trim() : void 0 : existing.offerDiscountNote,
+    hasSizes: hasSizes !== void 0 ? Boolean(hasSizes) : existing.hasSizes,
+    sizes: sizes !== void 0 ? Array.isArray(sizes) ? sizes.map((s) => String(s).trim()).filter(Boolean) : void 0 : existing.sizes,
+    sizeChart: sizeChart !== void 0 ? sizeChart && typeof sizeChart === "object" ? sizeChart : void 0 : existing.sizeChart
   };
   storeState.products[idx] = updated;
   saveState();
@@ -1356,6 +1376,7 @@ app.post("/api/orders", async (req, res) => {
       quantity: qty,
       imageUrl,
       selectedImageCode: item.selectedImageCode,
+      selectedSize: item.selectedSize,
       productCode: item.productCode || prod?.productCode
     });
   }
@@ -1375,6 +1396,7 @@ app.post("/api/orders", async (req, res) => {
     const parts = [];
     if (i.productCode) parts.push(i.productCode);
     if (i.selectedImageCode) parts.push(`\u099B\u09AC\u09BF \u0995\u09CB\u09A1: ${i.selectedImageCode}`);
+    if (i.selectedSize) parts.push(`\u09B8\u09BE\u0987\u099C: ${i.selectedSize}`);
     return parts.length > 0 ? parts.join(" / ") : i.title;
   }).join(", ");
   const trackingNum = req.body.trackingNumber || "TRK-" + orderId.replace(/\D/g, "");
