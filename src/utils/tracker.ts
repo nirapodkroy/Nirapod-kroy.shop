@@ -318,6 +318,17 @@ export function trackPageView(pageTitle: string, pageSlug = "root"): () => void 
     referrer
   });
 
+  // Also send page_view event to Google Analytics (GA4)
+  if (typeof window !== "undefined" && typeof (window as any).gtag === "function") {
+    try {
+      (window as any).gtag("event", "page_view", {
+        page_title: pageTitle,
+        page_location: window.location.href,
+        page_path: window.location.pathname + window.location.search
+      });
+    } catch {}
+  }
+
   // Resolve client geo asynchronously in the background for future heartbeats/sessions
   if (!cachedGeo) {
     getClientGeo().catch(() => {});
@@ -428,3 +439,15 @@ function endTrackingSession(session: (typeof currentTrackingSession & { ended?: 
     referrer: detectReferrer()
   });
 }
+
+/**
+ * Dispatch custom analytics event to Google Analytics (GA4)
+ */
+export function trackGAEvent(eventName: string, params?: Record<string, any>) {
+  if (typeof window !== "undefined" && typeof (window as any).gtag === "function") {
+    try {
+      (window as any).gtag("event", eventName, params);
+    } catch {}
+  }
+}
+

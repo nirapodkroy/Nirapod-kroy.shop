@@ -23,6 +23,27 @@ app.use((req, res, next) => {
   next();
 });
 
+// Security Protection Middleware: Block access to sensitive files, credentials, and vaults
+app.use((req, res, next) => {
+  const url = req.path.toLowerCase();
+  if (
+    url.includes("admin-credentials") ||
+    url.includes(".env") ||
+    url.includes(".git") ||
+    url.includes(".secure-vault") ||
+    url.includes(".app_store_data") ||
+    url.endsWith(".zip") ||
+    url.endsWith(".tar") ||
+    url.endsWith(".gz") ||
+    url.endsWith(".map") ||
+    url.endsWith("server.cjs") ||
+    (url.endsWith(".json") && !url.endsWith("products.json") && !url.endsWith("manifest.json") && !url.endsWith("site.webmanifest") && !url.startsWith("/api/"))
+  ) {
+    return res.status(403).json({ error: "Access Forbidden: Protected Resource" });
+  }
+  next();
+});
+
 // Ensure persistent data directory/file
 const DATA_FILE = path.join(process.cwd(), ".app_store_data.json");
 

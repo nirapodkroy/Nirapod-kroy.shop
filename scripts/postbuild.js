@@ -89,17 +89,43 @@ try {
     fs.writeFileSync(path.join(docs, 'CNAME'), cnameContent);
   }
 
-  // 7. Sync favicon.svg
-  const faviconPath = path.join(root, 'public', 'favicon.svg');
-  if (fs.existsSync(faviconPath)) {
-    fs.copyFileSync(faviconPath, path.join(root, 'favicon.svg'));
-    if (fs.existsSync(dist)) {
-      fs.copyFileSync(faviconPath, path.join(dist, 'favicon.svg'));
-    }
-    if (fs.existsSync(docs)) {
-      fs.copyFileSync(faviconPath, path.join(docs, 'favicon.svg'));
-    }
-  }
+  // 7. Sync all Google-compliant favicon files, brand icons, and manifests everywhere
+  const faviconFiles = [
+    'favicon.svg',
+    'favicon.ico',
+    'favicon.png',
+    'favicon-16x16.png',
+    'favicon-32x32.png',
+    'favicon-48x48.png',
+    'favicon-96x96.png',
+    'favicon-144x144.png',
+    'favicon-192x192.png',
+    'favicon-512x512.png',
+    'apple-touch-icon.png',
+    'logo.png',
+    'site.webmanifest',
+    'manifest.json'
+  ];
+
+  const iconTargetDirs = [
+    root,
+    path.join(root, 'public'),
+    dist,
+    docs,
+    assets,
+    path.join(docs, 'assets'),
+    path.join(dist, 'assets')
+  ];
+
+  iconTargetDirs.forEach(dir => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    faviconFiles.forEach(f => {
+      const src = path.join(root, 'public', f);
+      if (fs.existsSync(src)) {
+        try { fs.copyFileSync(src, path.join(dir, f)); } catch {}
+      }
+    });
+  });
 
   // 8. Ensure products.json is synced across public, dist, docs, and assets
   // public/products.json is the PRIMARY source of truth for GitHub Pages & deploys
@@ -302,7 +328,86 @@ try {
     console.log(`[Postbuild] Successfully created ${categoriesToGenerate.length} static category pages in dist, docs, and root!`);
   }
 
-  console.log('[Postbuild] Successfully synced dist, docs, assets, 404.html, CNAME, favicon, products.json, and sitemap.xml!');
+  // 11. Generate dedicated static pages for Policy & Trust Pages (Privacy Policy, Refund Policy, Delivery Policy)
+  if (indexHtmlContent) {
+    const policyPages = [
+      {
+        slug: 'privacy',
+        title: 'গোপনীয়তা নীতি (Privacy Policy) - নিরাপদ ক্রয় | Nirapod Kroy',
+        desc: 'Nirapod Kroy এর অফিসিয়াল গোপনীয়তা নীতি। আপনার ব্যক্তিগত তথ্য, অর্ডার ও পেমেন্ট সম্পূর্ণ সুরক্ষিত।'
+      },
+      {
+        slug: 'privacy-policy',
+        title: 'গোপনীয়তা নীতি (Privacy Policy) - নিরাপদ ক্রয় | Nirapod Kroy',
+        desc: 'Nirapod Kroy এর অফিসিয়াল গোপনীয়তা নীতি। আপনার ব্যক্তিগত তথ্য, অর্ডার ও পেমেন্ট সম্পূর্ণ সুরক্ষিত।'
+      },
+      {
+        slug: 'return-refund',
+        title: 'রিটার্ন ও রিফান্ড পলিসি (Return & Refund Policy) - নিরাপদ ক্রয় | Nirapod Kroy',
+        desc: 'Nirapod Kroy-এ পণ্য রিটার্ন ও রিফান্ড নীতি। পণ্য যাচাই করে মূল্য পরিশোধ করুন।'
+      },
+      {
+        slug: 'delivery-policy',
+        title: 'ডেলিভারি পলিসি (Delivery Policy) - নিরাপদ ক্রয় | Nirapod Kroy',
+        desc: 'Nirapod Kroy দ্রুত ও বিশ্বস্ত হোম ডেলিভারি সার্ভিস। সমগ্র বাংলাদেশে ক্যাশ অন ডেলিভারি।'
+      }
+    ];
+
+    const targets = [dist, docs, root];
+    policyPages.forEach(p => {
+      const pageHtml = indexHtmlContent
+        .replace(/<title>.*?<\/title>/, `<title>${p.title}</title>`)
+        .replace(/<meta property="og:title" content=".*?" \/>/, `<meta property="og:title" content="${p.title}" />`)
+        .replace(/<meta name="description" content=".*?" \/>/, `<meta name="description" content="${p.desc}" />`)
+        .replace(/<meta property="og:description" content=".*?" \/>/, `<meta property="og:description" content="${p.desc}" />`);
+
+      targets.forEach(targetDir => {
+        if (fs.existsSync(targetDir)) {
+          const dir = path.join(targetDir, p.slug);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(path.join(dir, 'index.html'), pageHtml);
+        }
+      });
+    });
+    console.log('[Postbuild] Successfully created static policy pages (privacy, privacy-policy, return-refund, delivery-policy)!');
+  }
+
+  // 12. Security Clean-up: Strictly remove any sensitive files, server bundles, and zip files from public-facing directories
+  const publicDirsToClean = [docs, path.join(root, 'public')];
+  publicDirsToClean.forEach(cleanDir => {
+    if (fs.existsSync(cleanDir)) {
+      const filesToRemove = [
+        'server.cjs',
+        'server.cjs.map',
+        'admin-credentials.zip',
+        'admin-credentials.txt',
+        'admin-credentials.json'
+      ];
+      filesToRemove.forEach(file => {
+        const fullPath = path.join(cleanDir, file);
+        if (fs.existsSync(fullPath)) {
+          try { fs.unlinkSync(fullPath); console.log(`[Postbuild Clean] Removed protected ${file} from ${path.relative(root, cleanDir)}`); } catch {}
+        }
+      });
+      // Also remove any stray .zip files in public directories
+      try {
+        const entries = fs.readdirSync(cleanDir);
+        entries.forEach(e => {
+          if (e.endsWith('.zip') || e.endsWith('.tar') || e.endsWith('.gz')) {
+            try { fs.unlinkSync(path.join(cleanDir, e)); console.log(`[Postbuild Clean] Removed archive ${e} from ${path.relative(root, cleanDir)}`); } catch {}
+          }
+        });
+      } catch {}
+    }
+  });
+
+  // Also remove any stray credentials or zip files in dist and root
+  ['admin-credentials.zip', 'admin-credentials.txt', 'admin-credentials.json'].forEach(f => {
+    try { if (fs.existsSync(path.join(dist, f))) fs.unlinkSync(path.join(dist, f)); } catch {}
+    try { if (fs.existsSync(path.join(root, f))) fs.unlinkSync(path.join(root, f)); } catch {}
+  });
+
+  console.log('[Postbuild] Successfully synced dist, docs, assets, 404.html, CNAME, favicon suite, products.json, and sitemap.xml!');
 } catch (err) {
   console.error('[Postbuild Error]', err);
 }

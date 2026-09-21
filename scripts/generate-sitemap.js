@@ -74,6 +74,11 @@ const categories = Array.from(allCategoriesSet);
 
 let urls = [
   { loc: `${DOMAIN}/`, priority: '1.0', changefreq: 'daily' },
+  // Important Policy & Trust Pages for Google & Users
+  { loc: `${DOMAIN}/privacy`, priority: '0.8', changefreq: 'monthly', lastmod: today },
+  { loc: `${DOMAIN}/privacy-policy`, priority: '0.8', changefreq: 'monthly', lastmod: today },
+  { loc: `${DOMAIN}/return-refund`, priority: '0.8', changefreq: 'monthly', lastmod: today },
+  { loc: `${DOMAIN}/delivery-policy`, priority: '0.8', changefreq: 'monthly', lastmod: today },
   // Clean category URLs (e.g. https://nirapodkroy.shop/baby-and-kids)
   ...categories.map(cat => ({
     loc: `${DOMAIN}/${toSlug(cat)}`,
@@ -107,11 +112,24 @@ ${urls
 fs.writeFileSync(path.join(publicDir, 'sitemap.xml'), sitemapXml, 'utf-8');
 fs.writeFileSync(path.join(root, 'sitemap.xml'), sitemapXml, 'utf-8');
 
-// Write robots.txt
+// Write robots.txt with comprehensive security disallow rules
 const robotsTxt = `User-agent: *
 Allow: /
+Allow: /favicon*
+Allow: /logo.png
+Allow: /assets/
+Allow: /products.json
+Allow: /site.webmanifest
+Allow: /manifest.json
 Disallow: /api/admin/
 Disallow: /admin
+Disallow: /.secure-vault/
+Disallow: /admin-credentials*
+Disallow: /*.zip$
+Disallow: /*.tar$
+Disallow: /*.gz$
+Disallow: /*.map$
+Disallow: /*.cjs$
 
 Sitemap: ${DOMAIN}/sitemap.xml
 `;

@@ -1,6 +1,19 @@
 User-agent: *
 Allow: /
+Allow: /favicon*
+Allow: /logo.png
+Allow: /assets/
+Allow: /products.json
+Allow: /site.webmanifest
+Allow: /manifest.json
 Disallow: /api/admin/
 Disallow: /admin
+Disallow: /.secure-vault/
+Disallow: /admin-credentials*
+Disallow: /*.zip$
+Disallow: /*.tar$
+Disallow: /*.gz$
+Disallow: /*.map$
+Disallow: /*.cjs$
 
 Sitemap: https://nirapodkroy.shop/sitemap.xml

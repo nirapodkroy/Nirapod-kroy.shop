@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+.secure-vault/
+admin-credentials*
+*.zip
+*.tar
+*.gz
+docs/server.cjs*
+
