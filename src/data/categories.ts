@@ -52,6 +52,7 @@ export const BASE_CATEGORIES: string[] = [
   "Sports",
   "Electronics",
   "Fashion",
+  "Shirt",
   "Sharee",
   "Panjabi",
   "Women Hijab",
@@ -79,6 +80,7 @@ export const CATEGORY_SLUG_MAP: Record<string, string> = {
   "Sports": "sports",
   "Electronics": "electronics",
   "Fashion": "fashion",
+  "Shirt": "shirt",
   "Sharee": "sharee",
   "Panjabi": "panjabi",
   "Women Hijab": "women-hijab",
@@ -206,6 +208,8 @@ export function formatCategoryDisplayLabel(cat: string, lang: string = "bn"): st
     return lang === "bn" ? "মুদি ও খাদ্য (Groceries & Food)" : "Groceries & Food";
   if (c === "electronics") return lang === "bn" ? "ইলেকট্রনিক্স (Electronics)" : "Electronics";
   if (c === "fashion") return lang === "bn" ? "পোশাক ও ফ্যাশন (Fashion)" : "Fashion";
+  if (c === "shirt" || c === "shart" || c === "shirts" || c === "শার্ট")
+    return lang === "bn" ? "শার্ট (Shirt)" : "Shirt";
   if (c === "sharee" || c === "saree" || c === "shari" || c === "sari" || c === "শাড়ি" || c === "শাড়ী")
     return lang === "bn" ? "শাড়ি (Sharee)" : "Sharee";
   if (c === "panjabi" || c === "punjabi" || c === "পাঞ্জাবি" || c === "পাঞ্জাবী")
@@ -390,6 +394,15 @@ export const SLUG_ALIASES: Record<string, string> = {
   "poshak": "Fashion",
   "পোশাক": "Fashion",
   "পোশাক-ও-ফ্যাশন": "Fashion",
+
+  // Shirt
+  "shirt": "Shirt",
+  "shart": "Shirt",
+  "shirts": "Shirt",
+  "শার্ট": "Shirt",
+  "formal-shirt": "Shirt",
+  "casual-shirt": "Shirt",
+  "cotton-shirt": "Shirt",
 
   // Sharee
   "sharee": "Sharee",

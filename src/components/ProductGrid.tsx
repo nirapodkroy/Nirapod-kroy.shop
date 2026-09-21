@@ -112,12 +112,26 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
       } else {
         const isShareeFilter = catLower === "sharee" || catLower === "saree" || catLower === "shari" || catLower === "sari" || catLower === "শাড়ি" || catLower === "শাড়ী";
         const isPanjabiFilter = catLower === "panjabi" || catLower === "punjabi" || catLower === "পাঞ্জাবি" || catLower === "পাঞ্জাবী";
+        const isShirtFilter = catLower === "shirt" || catLower === "shart" || catLower === "shirts" || catLower === "শার্ট";
         const isFashionParent = catLower === "fashion" || catLower === "পোশাক" || catLower === "পোশাক-ও-ফ্যাশন";
 
         list = list.filter((p) => {
           const pCat = p.category.toLowerCase().trim();
           const pParent = (p.parentCategory || "").toLowerCase().trim();
           const pTitle = (p.title || "").toLowerCase();
+
+          if (isShirtFilter) {
+            return (
+              pCat === "shirt" ||
+              pCat === "shart" ||
+              pCat === "shirts" ||
+              pCat === "শার্ট" ||
+              pParent === "shirt" ||
+              pTitle.includes("shirt") ||
+              pTitle.includes("shart") ||
+              pTitle.includes("শার্ট")
+            );
+          }
 
           if (isShareeFilter) {
             return (
@@ -150,9 +164,14 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
             return (
               pParent === "fashion" ||
               pCat === "fashion" ||
+              pCat === "shirt" ||
+              pCat === "shart" ||
               pCat === "sharee" ||
               pCat === "panjabi" ||
               pCat === "women hijab" ||
+              pTitle.includes("shirt") ||
+              pTitle.includes("shart") ||
+              pTitle.includes("শার্ট") ||
               pTitle.includes("sharee") ||
               pTitle.includes("শাড়ি") ||
               pTitle.includes("panjabi")

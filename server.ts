@@ -55,7 +55,8 @@ let googleSheetWebhookUrl = (process.env.GOOGLE_SHEET_WEBHOOK_URL || DEFAULT_GOO
 
 // Types
 interface SizeChartRow {
-  name: string;
+  name?: string;
+  parameter?: string;
   values: { [size: string]: string };
 }
 
@@ -1303,7 +1304,12 @@ app.post("/api/admin/github/push", async (req, res) => {
       return res.status(400).json({ error: "GitHub Token এবং Repository নাম দেওয়া আবশ্যক।" });
     }
 
-    const cleanRepo = String(repo).trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+    const cleanRepo = String(repo)
+      .trim()
+      .replace(/^https?:\/\//i, "")
+      .replace(/^github\.com\//i, "")
+      .replace(/\.git$/i, "")
+      .replace(/\/+$/, "");
     const cleanBranch = (branch && String(branch).trim()) || "main";
     const cleanToken = String(token).trim();
     const targetProducts = Array.isArray(products) && products.length > 0 ? products : storeState.products;
@@ -1314,8 +1320,37 @@ app.post("/api/admin/github/push", async (req, res) => {
 
     const authHeader = cleanToken.startsWith("ghp_") ? `token ${cleanToken}` : `Bearer ${cleanToken}`;
 
+    // Helper to get all file SHAs from git tree in one call to bypass 1MB blob limits and 403 errors
+    let repoTreeCache: Map<string, string> | null = null;
+    async function getRepoTreeSha(targetPath: string): Promise<string> {
+      if (!repoTreeCache) {
+        try {
+          const treeRes = await fetch(`https://api.github.com/repos/${cleanRepo}/git/trees/${cleanBranch}?recursive=1`, {
+            headers: {
+              Authorization: authHeader,
+              Accept: "application/vnd.github.v3+json",
+              "User-Agent": "NirapodKroy-Admin"
+            }
+          });
+          if (treeRes.ok) {
+            const treeData: any = await treeRes.json();
+            repoTreeCache = new Map();
+            if (Array.isArray(treeData?.tree)) {
+              for (const item of treeData.tree) {
+                if (item.path && item.sha) repoTreeCache.set(item.path, item.sha);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[GitHub Push] Tree SHA fetch error:", e);
+        }
+      }
+      return repoTreeCache?.get(targetPath) || "";
+    }
+
     // Helper to commit a single file to GitHub contents API
-    async function commitSingleFile(filePath: string, contentStr: string, commitMsg: string) {
+    async function commitSingleFile(filePath: string, contentBufferOrStr: Buffer | string, commitMsg: string) {
+      let sha = "";
       const getUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}?ref=${cleanBranch}`;
       const getRes = await fetch(getUrl, {
         headers: {
@@ -1324,17 +1359,23 @@ app.post("/api/admin/github/push", async (req, res) => {
           "User-Agent": "NirapodKroy-Admin"
         }
       });
-      let sha = "";
+
       if (getRes.ok) {
         const fileData: any = await getRes.json();
         sha = fileData.sha;
-      } else if (getRes.status === 401 || getRes.status === 403) {
+      } else if (getRes.status === 401) {
         throw new Error("AUTH_ERROR");
+      } else {
+        // If 403 (blob > 1MB) or 404, check git tree
+        sha = await getRepoTreeSha(filePath);
       }
 
-      const base64Content = Buffer.from(contentStr, "utf-8").toString("base64");
+      const base64Content = Buffer.isBuffer(contentBufferOrStr)
+        ? contentBufferOrStr.toString("base64")
+        : Buffer.from(contentBufferOrStr, "utf-8").toString("base64");
+
       const putUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}`;
-      const putRes = await fetch(putUrl, {
+      let putRes = await fetch(putUrl, {
         method: "PUT",
         headers: {
           Authorization: authHeader,
@@ -1353,6 +1394,32 @@ app.post("/api/admin/github/push", async (req, res) => {
           }
         })
       });
+
+      // If 409 Conflict, force refresh tree and retry once
+      if (putRes.status === 409) {
+        repoTreeCache = null;
+        const freshSha = await getRepoTreeSha(filePath);
+        putRes = await fetch(putUrl, {
+          method: "PUT",
+          headers: {
+            Authorization: authHeader,
+            Accept: "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+            "User-Agent": "NirapodKroy-Admin"
+          },
+          body: JSON.stringify({
+            message: commitMsg,
+            content: base64Content,
+            sha: freshSha || undefined,
+            branch: cleanBranch,
+            committer: {
+              name: "Nirapod Kroy Admin",
+              email: "admin@nirapodkroy.shop"
+            }
+          })
+        });
+      }
+
       return putRes;
     }
 
@@ -1408,6 +1475,23 @@ app.post("/api/admin/github/push", async (req, res) => {
         );
       } catch (tsErr) {
         console.warn("[GitHub Push] Warning committing defaultProducts.ts:", tsErr);
+      }
+
+      // 6. Also sync product images if needed
+      try {
+        const imgDir = path.join(process.cwd(), "public", "images", "products");
+        if (fs.existsSync(imgDir)) {
+          const files = fs.readdirSync(imgDir);
+          for (const file of files) {
+            if (file.endsWith(".jpg") || file.endsWith(".png") || file.endsWith(".webp")) {
+              const imgBuf = fs.readFileSync(path.join(imgDir, file));
+              await commitSingleFile(`public/images/products/${file}`, imgBuf, `chore(assets): sync ${file}`).catch(() => {});
+              await commitSingleFile(`docs/images/products/${file}`, imgBuf, `chore(assets): sync docs ${file}`).catch(() => {});
+            }
+          }
+        }
+      } catch (imgErr) {
+        console.warn("[GitHub Push] Image assets sync notice:", imgErr);
       }
 
       return res.json({

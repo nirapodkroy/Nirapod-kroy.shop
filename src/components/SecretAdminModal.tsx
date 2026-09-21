@@ -275,6 +275,15 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [formAffiliateSource, setFormAffiliateSource] = useState("");
   const [formAffiliateButtonText, setFormAffiliateButtonText] = useState("");
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+  const [autoPushOnSave, setAutoPushOnSave] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem("nirapod_auto_push_on_save");
+      if (cached !== null) return cached === "true";
+      return !!localStorage.getItem("nirapod_github_token");
+    } catch {
+      return false;
+    }
+  });
 
   // Product Sizing & Size Chart states
   const [formHasSizes, setFormHasSizes] = useState(false);
@@ -856,10 +865,18 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   };
 
   // Push directly to GitHub repo
-  const handlePushToGithub = async () => {
+  const handlePushToGithub = async (overrideProducts?: Product[]) => {
     const token = githubToken.trim();
-    const cleanRepo = githubRepo.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+    const cleanRepo = String(githubRepo)
+      .trim()
+      .replace(/^https?:\/\//i, "")
+      .replace(/^github\.com\//i, "")
+      .replace(/\.git$/i, "")
+      .replace(/\/+$/, "");
     const cleanBranch = githubBranch.trim() || "main";
+    const productsToPush = Array.isArray(overrideProducts) && overrideProducts.length > 0
+      ? overrideProducts
+      : adminProducts;
 
     if (!token) {
       setActiveTab("github");
@@ -868,7 +885,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         status: "error",
         message: "টোকেন পাওয়া যায়নি! নিচে আপনার GitHub Personal Access Token দিয়ে 'টোকেন সংরক্ষণ' করুন।"
       });
-      return;
+      return false;
     }
 
     setIsPushingToGithub(true);
@@ -887,7 +904,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           token,
           repo: cleanRepo,
           branch: cleanBranch,
-          products: adminProducts
+          products: productsToPush
         })
       });
 
@@ -906,14 +923,14 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         });
 
         try {
-          const publicCatalog = adminProducts.filter(p => p.isActive !== false);
+          const publicCatalog = productsToPush.filter(p => p.isActive !== false);
           localStorage.setItem("nirapod_products_cache", JSON.stringify(publicCatalog));
           window.dispatchEvent(new CustomEvent("nirapod-catalog-updated"));
         } catch {}
         onProductsUpdated();
 
         addToast("সফলভাবে GitHub-এ পুশ ও কমিট হয়েছে! ১ মিনিটের মধ্যে লাইভ সাইট আপডেট হবে।", "success");
-        return;
+        return true;
       }
 
       // If server returned a business error (like 401, 403, 404, 409)
@@ -921,68 +938,122 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       if (errJson.error && serverPushRes.status !== 404) {
         addToast(`GitHub Sync: ${errJson.error}`, "error");
         setGithubConnectionInfo({ status: "error", message: errJson.error });
-        return;
+        return false;
       }
 
       // 2. Direct client fallback for static deployment (using safe chunked Base64 encoding)
-      const filePath = "public/products.json";
       const authHeader = token.startsWith("ghp_") ? `token ${token}` : `Bearer ${token}`;
 
-      // Get current SHA
-      const getUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}?ref=${cleanBranch}`;
-      const getRes = await fetch(getUrl, {
-        headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
-      });
-
-      let sha = "";
-      if (getRes.ok) {
-        const fileData = await getRes.json();
-        sha = fileData.sha;
-      } else if (getRes.status === 401 || getRes.status === 403) {
-        addToast("GitHub Token সঠিক নয় বা 'repo' পারমিশন নেই।", "error");
-        setGithubConnectionInfo({ status: "error", message: "Token সঠিক নয় বা 'repo' পারমিশন নেই।" });
-        return;
-      } else if (getRes.status === 404) {
-        const checkRepo = await fetch(`https://api.github.com/repos/${cleanRepo}`, {
-          headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
-        });
-        if (!checkRepo.ok) {
-          addToast(`Repository '${cleanRepo}' খুঁজে পাওয়া যায়নি!`, "error");
-          setGithubConnectionInfo({ status: "error", message: `Repository '${cleanRepo}' খুঁজে পাওয়া যায়নি!` });
-          return;
-        }
-      }
-
-      // Safe Base64 encoding via TextEncoder
-      const jsonStr = JSON.stringify(adminProducts, null, 2);
-      const bytes = new TextEncoder().encode(jsonStr);
-      let binary = "";
-      const chunkSize = 8192;
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-      }
-      const base64Content = btoa(binary);
-
-      // Put commit to GitHub
-      const putUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}`;
-      const putRes = await fetch(putUrl, {
-        method: "PUT",
-        headers: {
-          Authorization: authHeader,
-          Accept: "application/vnd.github.v3+json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          message: `chore(catalog): sync ${adminProducts.length} products via admin panel`,
-          content: base64Content,
-          sha: sha || undefined,
-          branch: cleanBranch,
-          committer: {
-            name: "Nirapod Kroy Admin",
-            email: "admin@nirapodkroy.shop"
+      // Helper to get file SHA from tree in one call to bypass 1MB blob limits and 403 errors
+      let clientTreeCache: Map<string, string> | null = null;
+      const getClientTreeSha = async (targetPath: string): Promise<string> => {
+        if (!clientTreeCache) {
+          try {
+            const treeRes = await fetch(`https://api.github.com/repos/${cleanRepo}/git/trees/${cleanBranch}?recursive=1`, {
+              headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
+            });
+            if (treeRes.ok) {
+              const treeData = await treeRes.json();
+              clientTreeCache = new Map();
+              if (Array.isArray(treeData?.tree)) {
+                for (const item of treeData.tree) {
+                  if (item.path && item.sha) clientTreeCache.set(item.path, item.sha);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("Client tree sha fetch error:", e);
           }
-        })
-      });
+        }
+        return clientTreeCache?.get(targetPath) || "";
+      };
+
+      // Helper for safe UTF-8 base64 encoding
+      const encodeBase64 = (str: string): string => {
+        const bytes = new TextEncoder().encode(str);
+        let binary = "";
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+        return btoa(binary);
+      };
+
+      const jsonStr = JSON.stringify(productsToPush, null, 2);
+      const base64Content = encodeBase64(jsonStr);
+
+      // Helper to commit a single file directly from client
+      const commitFileClient = async (filePath: string, contentBase64: string, msg: string) => {
+        let sha = "";
+        try {
+          const getUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}?ref=${cleanBranch}`;
+          const getRes = await fetch(getUrl, {
+            headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
+          });
+          if (getRes.ok) {
+            const fileData = await getRes.json();
+            sha = fileData.sha;
+          } else if (getRes.status === 401) {
+            throw new Error("AUTH_ERROR");
+          } else {
+            sha = await getClientTreeSha(filePath);
+          }
+        } catch {
+          sha = await getClientTreeSha(filePath);
+        }
+
+        const putUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}`;
+        let putRes = await fetch(putUrl, {
+          method: "PUT",
+          headers: {
+            Authorization: authHeader,
+            Accept: "application/vnd.github.v3+json",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            message: msg,
+            content: contentBase64,
+            sha: sha || undefined,
+            branch: cleanBranch,
+            committer: {
+              name: "Nirapod Kroy Admin",
+              email: "admin@nirapodkroy.shop"
+            }
+          })
+        });
+
+        if (putRes.status === 409) {
+          clientTreeCache = null;
+          const freshSha = await getClientTreeSha(filePath);
+          putRes = await fetch(putUrl, {
+            method: "PUT",
+            headers: {
+              Authorization: authHeader,
+              Accept: "application/vnd.github.v3+json",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              message: msg,
+              content: contentBase64,
+              sha: freshSha || undefined,
+              branch: cleanBranch,
+              committer: {
+                name: "Nirapod Kroy Admin",
+                email: "admin@nirapodkroy.shop"
+              }
+            })
+          });
+        }
+
+        return putRes;
+      };
+
+      // 2a. Commit public/products.json
+      const putRes = await commitFileClient(
+        "public/products.json",
+        base64Content,
+        `chore(catalog): sync ${productsToPush.length} products via admin panel`
+      );
 
       if (putRes.ok) {
         const putData = await putRes.json();
@@ -994,129 +1065,59 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         localStorage.setItem("nirapod_gh_last_time", timeStr);
 
         // Also commit docs/products.json so GitHub Pages (/docs) updates live!
-        try {
-          const docsFilePath = "docs/products.json";
-          const getDocsUrl = `https://api.github.com/repos/${cleanRepo}/contents/${docsFilePath}?ref=${cleanBranch}`;
-          const getDocsRes = await fetch(getDocsUrl, {
-            headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
-          });
-          let docsSha = "";
-          if (getDocsRes.ok) {
-            const docsData = await getDocsRes.json();
-            docsSha = docsData.sha;
-          }
-          await fetch(`https://api.github.com/repos/${cleanRepo}/contents/${docsFilePath}`, {
-            method: "PUT",
-            headers: {
-              Authorization: authHeader,
-              Accept: "application/vnd.github.v3+json",
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              message: `chore(catalog): sync ${adminProducts.length} products to docs/products.json (live site)`,
-              content: base64Content,
-              sha: docsSha || undefined,
-              branch: cleanBranch,
-              committer: {
-                name: "Nirapod Kroy Admin",
-                email: "admin@nirapodkroy.shop"
-              }
-            })
-          });
-        } catch (docsErr) {
-          console.warn("[Client GitHub Push] Warning committing docs/products.json:", docsErr);
-        }
+        await commitFileClient(
+          "docs/products.json",
+          base64Content,
+          `chore(catalog): sync ${productsToPush.length} products to docs/products.json (live site)`
+        ).catch(() => {});
 
         // Also commit root products.json so direct root fetches (/products.json) succeed
-        try {
-          const rootFilePath = "products.json";
-          const getRootUrl = `https://api.github.com/repos/${cleanRepo}/contents/${rootFilePath}?ref=${cleanBranch}`;
-          const getRootRes = await fetch(getRootUrl, {
-            headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
-          });
-          let rootSha = "";
-          if (getRootRes.ok) {
-            const rootData = await getRootRes.json();
-            rootSha = rootData.sha;
-          }
-          await fetch(`https://api.github.com/repos/${cleanRepo}/contents/${rootFilePath}`, {
-            method: "PUT",
-            headers: {
-              Authorization: authHeader,
-              Accept: "application/vnd.github.v3+json",
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              message: `chore(catalog): sync ${adminProducts.length} products to products.json (root)`,
-              content: base64Content,
-              sha: rootSha || undefined,
-              branch: cleanBranch,
-              committer: {
-                name: "Nirapod Kroy Admin",
-                email: "admin@nirapodkroy.shop"
-              }
-            })
-          });
-        } catch (rootErr) {
-          console.warn("[Client GitHub Push] Warning committing root products.json:", rootErr);
-        }
+        await commitFileClient(
+          "products.json",
+          base64Content,
+          `chore(catalog): sync ${productsToPush.length} products to products.json (root)`
+        ).catch(() => {});
 
         // Also commit src/data/defaultProducts.ts so build time bundles it directly
-        try {
-          const tsFilePath = "src/data/defaultProducts.ts";
-          const getTsUrl = `https://api.github.com/repos/${cleanRepo}/contents/${tsFilePath}?ref=${cleanBranch}`;
-          const getTsRes = await fetch(getTsUrl, {
-            headers: { Authorization: authHeader, Accept: "application/vnd.github.v3+json" }
-          });
-          let tsSha = "";
-          if (getTsRes.ok) {
-            const tsData = await getTsRes.json();
-            tsSha = tsData.sha;
-          }
-          const tsContent = `import { Product } from "../types";\n\nexport const DEFAULT_PRODUCTS: Product[] = ${JSON.stringify(adminProducts, null, 2)};\n`;
-          const base64Ts = btoa(unescape(encodeURIComponent(tsContent)));
-          await fetch(`https://api.github.com/repos/${cleanRepo}/contents/${tsFilePath}`, {
-            method: "PUT",
-            headers: {
-              Authorization: authHeader,
-              Accept: "application/vnd.github.v3+json",
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              message: `chore(catalog): sync ${adminProducts.length} products to defaultProducts.ts`,
-              content: base64Ts,
-              sha: tsSha || undefined,
-              branch: cleanBranch,
-              committer: {
-                name: "Nirapod Kroy Admin",
-                email: "admin@nirapodkroy.shop"
-              }
-            })
-          });
-        } catch (tsErr) {
-          console.warn("[Client GitHub Push] Warning committing defaultProducts.ts:", tsErr);
-        }
+        const tsContent = `import { Product } from "../types";\n\nexport const DEFAULT_PRODUCTS: Product[] = ${jsonStr};\n`;
+        const base64Ts = encodeBase64(tsContent);
+        await commitFileClient(
+          "src/data/defaultProducts.ts",
+          base64Ts,
+          `chore(catalog): sync ${productsToPush.length} products to defaultProducts.ts`
+        ).catch(() => {});
 
         try {
-          const publicCatalog = adminProducts.filter(p => p.isActive !== false);
+          const publicCatalog = productsToPush.filter(p => p.isActive !== false);
           localStorage.setItem("nirapod_products_cache", JSON.stringify(publicCatalog));
           window.dispatchEvent(new CustomEvent("nirapod-catalog-updated"));
         } catch {}
         onProductsUpdated();
 
-        addToast("সফলভাবে GitHub-এ কমিট হয়েছে! ১ মিনিটের মধ্যে nirapodkroy.shop লাইভ আপডেট হবে।", "success");
+        setGithubConnectionInfo({
+          status: "success",
+          message: "সফলভাবে GitHub-এ পুশ ও ফাইল সেভ হয়েছে!",
+          details: `কমিট লিংক: ${commitUrl}`
+        });
+        addToast("সফলভাবে GitHub-এ পুশ ও কমিট হয়েছে! ১ মিনিটের মধ্যে লাইভ সাইট আপডেট হবে।", "success");
+        return true;
       } else {
         const errData = await putRes.json().catch(() => ({}));
-        let friendlyErr = errData.message || "Failed to commit";
-        if (putRes.status === 409) friendlyErr = "GitHub Conflict: ফাইলের ভার্সন মেলেনি। আবার পুশ বাটনে ক্লিক করুন।";
-        if (putRes.status === 404) friendlyErr = `Repository '${cleanRepo}' বা ব্রাঞ্চ '${cleanBranch}' পাওয়া যায়নি।`;
-        addToast(`GitHub Error: ${friendlyErr}`, "error");
-        setGithubConnectionInfo({ status: "error", message: friendlyErr });
+        let errMsg = errData.message || "GitHub-এ পুশ করতে সমস্যা হয়েছে।";
+        if (putRes.status === 401) errMsg = "GitHub Token সঠিক নয় বা পারমিশন নেই।";
+        if (putRes.status === 404) errMsg = `Repository '${cleanRepo}' বা ব্রাঞ্চ '${cleanBranch}' পাওয়া যায়নি।`;
+        addToast(`GitHub Sync Error: ${errMsg}`, "error");
+        setGithubConnectionInfo({ status: "error", message: errMsg });
+        return false;
       }
     } catch (err: any) {
-      console.error(err);
-      addToast(`GitHub Sync Error: ${err.message || "Network error"}`, "error");
-      setGithubConnectionInfo({ status: "error", message: err.message || "Network error" });
+      console.error("Error pushing to GitHub:", err);
+      addToast(`GitHub Error: ${err.message || "Failed to push"}`, "error");
+      setGithubConnectionInfo({
+        status: "error",
+        message: `পুশ ব্যর্থ হয়েছে: ${err.message || "অজানা ত্রুটি"}`
+      });
+      return false;
     } finally {
       setIsPushingToGithub(false);
     }
@@ -1351,8 +1352,10 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   };
 
   // Submit Product (Create or Update)
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveProduct = async (e?: React.FormEvent, pushDirectlyNow?: boolean) => {
+    if (e && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
     if (!formTitle.trim() || !formPrice) {
       addToast("Title and price are required", "warning");
       return;
@@ -1484,13 +1487,23 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
 
         addToast(
           editingProduct
-            ? "পণ্য সফলভাবে আপডেট ও সেভ হয়েছে (Product updated & saved)!"
-            : "নতুন পণ্য তৈরি ও স্থায়ীভাবে সেভ হয়েছে (Product saved permanently)!",
+            ? "পণ্যের তথ্য সফলভাবে পরিবর্তন ও সংরক্ষণ হয়েছে (Product changes saved successfully)!"
+            : "নতুন পণ্য তৈরি ও স্থায়ীভাবে সংরক্ষণ হয়েছে (Product saved permanently)!",
           "success"
         );
         setIsProductFormOpen(false);
         onProductsUpdated();
-        fetchAdminData();
+
+        // Direct GitHub Push trigger on Product Add/Edit
+        const shouldPushToGithub = pushDirectlyNow || autoPushOnSave;
+        if (shouldPushToGithub) {
+          if (githubToken.trim()) {
+            addToast("সরাসরি GitHub-এ পুশ ও লাইভ সাইট আপডেট শুরু হচ্ছে...", "info");
+            handlePushToGithub(updatedList);
+          } else {
+            addToast("পণ্য সেভ হয়েছে! সরাসরি GitHub পুশ স্বয়ংক্রিয় করতে GitHub ট্যাবে Token সেট করুন।", "warning");
+          }
+        }
       } else {
         const errData = await res.json().catch(() => ({}));
         addToast(errData.error || "Failed to save product", "error");
@@ -4204,13 +4217,26 @@ function cleanAndFixOrderSheetRows() {
                           Add, edit, toggle active/inactive status, or manage affiliate items
                         </p>
                       </div>
-                      <button
-                        onClick={handleOpenAddProduct}
-                        className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Add New Product</span>
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePushToGithub()}
+                          disabled={isPushingToGithub}
+                          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs shadow-md shadow-purple-900/30 transition-all cursor-pointer"
+                          title="GitHub-এ সরাসরি সকল পণ্য পুশ ও লাইভ ডিপ্লয় করুন"
+                        >
+                          <Github className={`w-4 h-4 ${isPushingToGithub ? "animate-spin" : ""}`} />
+                          <span>{isPushingToGithub ? "গিটহাবে পুশ হচ্ছে..." : "GitHub-এ পুশ করুন (Push)"}</span>
+                        </button>
+
+                        <button
+                          onClick={handleOpenAddProduct}
+                          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Add New Product</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Search & Filter Bar */}
@@ -4470,20 +4496,24 @@ function cleanAndFixOrderSheetRows() {
                                         <span className="text-zinc-500">-</span>
                                       )}
                                     </td>
-                                    <td className="p-3.5 text-right space-x-2">
+                                    <td className="p-3.5 text-right space-x-2 whitespace-nowrap">
                                       <button
+                                        type="button"
                                         onClick={() => handleOpenEditProduct(prod)}
-                                        className="p-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200 transition-colors cursor-pointer"
-                                        title="Edit Product"
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold transition-all cursor-pointer shadow-xs"
+                                        title="পণ্য পরিবর্তন ও এডিট করুন (Change / Edit Product)"
                                       >
                                         <Edit2 className="w-3.5 h-3.5" />
+                                        <span>পরিবর্তন / এডিট</span>
                                       </button>
                                       <button
+                                        type="button"
                                         onClick={() => handleDeleteProduct(prod.id, prod.title)}
-                                        className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-400 transition-colors cursor-pointer"
-                                        title="Instant Delete Product"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/40 text-xs transition-colors cursor-pointer"
+                                        title="পণ্য মুছে ফেলুন (Delete Product)"
                                       >
                                         <Trash2 className="w-3.5 h-3.5" />
+                                        <span>ডিলিট</span>
                                       </button>
                                     </td>
                                   </tr>
@@ -4608,20 +4638,23 @@ function cleanAndFixOrderSheetRows() {
                                     </div>
 
                                     {/* Action Buttons */}
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-2">
                                       <button
+                                        type="button"
                                         onClick={() => handleOpenEditProduct(prod)}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200 text-[11px] font-medium transition-colors cursor-pointer"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all cursor-pointer"
+                                        title="পণ্য পরিবর্তন ও এডিট করুন"
                                       >
-                                        <Edit2 className="w-3 h-3" />
-                                        <span>Edit</span>
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                        <span>পরিবর্তন / এডিট</span>
                                       </button>
                                       <button
+                                        type="button"
                                         onClick={() => handleDeleteProduct(prod.id, prod.title)}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-[11px] font-medium transition-colors cursor-pointer"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-800/40 text-xs transition-colors cursor-pointer"
                                       >
-                                        <Trash2 className="w-3 h-3" />
-                                        <span>Delete</span>
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span>ডিলিট</span>
                                       </button>
                                     </div>
                                   </div>
@@ -6158,9 +6191,16 @@ function cleanAndFixOrderSheetRows() {
             <div className="fixed inset-0 z-[60] flex flex-col items-center justify-start sm:justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-xs overflow-y-auto overscroll-contain">
               <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-4 sm:p-6 max-w-lg w-full max-h-[92dvh] overflow-y-auto space-y-4 my-auto overscroll-contain">
                 <div className="flex justify-between items-center pb-2 border-b border-zinc-800">
-                  <h3 className="font-bold text-base text-white">
-                    {editingProduct ? "Edit Product" : "Add New Catalog Product"}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-base text-white">
+                      {editingProduct ? "পণ্য পরিবর্তন / এডিট করুন" : "নতুন পণ্য যুক্ত করুন (Add Product)"}
+                    </h3>
+                    {editingProduct && (
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
+                        পরিবর্তন মোড (Change Mode)
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={() => {
                       stopCamera();
@@ -7472,23 +7512,87 @@ function cleanAndFixOrderSheetRows() {
                     />
                   </div>
 
-                  <div className="pt-2 flex justify-end gap-2">
+                  {/* GITHUB DIRECT PUSH OPTION IN PRODUCT FORM */}
+                  <div className="p-3 rounded-2xl bg-purple-950/40 border border-purple-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={autoPushOnSave}
+                        onChange={(e) => {
+                          const nextVal = e.target.checked;
+                          setAutoPushOnSave(nextVal);
+                          try {
+                            localStorage.setItem("nirapod_auto_push_on_save", String(nextVal));
+                          } catch {}
+                        }}
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-zinc-800 border-zinc-700 cursor-pointer"
+                      />
+                      <span className="text-xs text-purple-200 font-medium flex items-center gap-1.5">
+                        <Github className="w-3.5 h-3.5 text-purple-400" />
+                        <span>সেভ করার সাথে সাথে সরাসরি GitHub-এ পুশ করুন (Auto-Push on Save)</span>
+                      </span>
+                    </label>
+
+                    {githubToken.trim() ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-medium">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>টোকেন কানেক্টেড</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsProductFormOpen(false);
+                          setActiveTab("github");
+                        }}
+                        className="text-[11px] text-purple-300 hover:text-purple-200 underline cursor-pointer"
+                      >
+                        GitHub টোকেন সেট করুন
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="pt-2 flex flex-wrap items-center justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         stopCamera();
                         setIsProductFormOpen(false);
                       }}
-                      className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 hover:bg-zinc-700 font-bold cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 hover:bg-zinc-700 font-bold text-xs cursor-pointer"
                     >
                       Cancel
                     </button>
+
+                    <button
+                      type="button"
+                      disabled={isSubmittingProduct || isPushingToGithub}
+                      onClick={(e) => handleSaveProduct(e, true)}
+                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white font-bold text-xs shadow-lg shadow-purple-900/30 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+                      title="পণ্য সেভ করে তৎক্ষণাৎ GitHub-এ পুশ ও লাইভ আপডেট করুন"
+                    >
+                      <Github className={`w-3.5 h-3.5 ${isPushingToGithub ? "animate-spin" : ""}`} />
+                      <span>
+                        {isSubmittingProduct
+                          ? "সেভ হচ্ছে..."
+                          : isPushingToGithub
+                          ? "গিটহাবে পুশ হচ্ছে..."
+                          : editingProduct
+                          ? "পরিবর্তন সেভ ও GitHub-এ পুশ করুন"
+                          : "সেভ ও GitHub-এ পুশ করুন"}
+                      </span>
+                    </button>
+
                     <button
                       type="submit"
                       disabled={isSubmittingProduct}
-                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md cursor-pointer disabled:opacity-50"
+                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md cursor-pointer disabled:opacity-50"
                     >
-                      {isSubmittingProduct ? "Saving..." : "Save Product"}
+                      {isSubmittingProduct
+                        ? "সেভ হচ্ছে..."
+                        : editingProduct
+                        ? "পরিবর্তন সংরক্ষণ করুন (Save Changes)"
+                        : "পণ্য তৈরি করুন (Save Product)"}
                     </button>
                   </div>
                 </form>

@@ -34,9 +34,33 @@ const WISHLIST_CACHE_KEY = "nirapod_wishlist_ids";
 
 function mergeWithDefaultProducts(loadedList: Product[]): Product[] {
   if (!Array.isArray(loadedList) || loadedList.length === 0) return DEFAULT_PRODUCTS;
-  const existingIds = new Set(loadedList.map((p) => p.id));
+  const defaultsMap = new Map(DEFAULT_PRODUCTS.map((dp) => [dp.id, dp]));
+  
+  // Cleanly upgrade loaded items with updated data images and details from default products if available
+  const upgradedList = loadedList.map((item) => {
+    const defaultItem = defaultsMap.get(item.id);
+    if (!defaultItem) return item;
+    
+    const needsImageUpgrade =
+      !item.imageUrl ||
+      !item.imageUrl.startsWith("data:") ||
+      !Array.isArray(item.images) ||
+      item.images.length === 0 ||
+      !item.images[0]?.startsWith("data:");
+
+    if (needsImageUpgrade && defaultItem.imageUrl?.startsWith("data:")) {
+      return {
+        ...item,
+        imageUrl: defaultItem.imageUrl,
+        images: defaultItem.images && defaultItem.images.length > 0 ? defaultItem.images : item.images
+      };
+    }
+    return item;
+  });
+
+  const existingIds = new Set(upgradedList.map((p) => p.id));
   const missingFromDefaults = DEFAULT_PRODUCTS.filter((dp) => !existingIds.has(dp.id));
-  return missingFromDefaults.length > 0 ? [...loadedList, ...missingFromDefaults] : loadedList;
+  return missingFromDefaults.length > 0 ? [...upgradedList, ...missingFromDefaults] : upgradedList;
 }
 
 const StoreContent: React.FC = () => {

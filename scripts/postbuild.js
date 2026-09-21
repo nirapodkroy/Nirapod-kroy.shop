@@ -247,6 +247,8 @@ try {
       'sports': { bn: 'খেলাধুলা', en: 'Sports' },
       'electronics': { bn: 'ইলেকট্রনিক্স', en: 'Electronics' },
       'fashion': { bn: 'ফ্যাশন ও পোশাক', en: 'Fashion' },
+      'shirt': { bn: 'শার্ট', en: 'Shirt' },
+      'shart': { bn: 'শার্ট', en: 'Shirt' },
       'sharee': { bn: 'শাড়ি', en: 'Sharee' },
       'saree': { bn: 'শাড়ি', en: 'Sharee' },
       'shari': { bn: 'শাড়ি', en: 'Sharee' },

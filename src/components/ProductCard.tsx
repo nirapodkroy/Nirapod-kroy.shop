@@ -48,9 +48,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="relative aspect-square w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800/60">
         {/* Primary Image */}
         <img
-          src={product.imageUrl}
+          src={product.imageUrl || (product.images && product.images[0]) || "/images/products/prod-shirt-0.jpg"}
           alt={product.title}
           loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            const target = e.currentTarget;
+            if (product.images && product.images.length > 0 && target.src !== product.images[0]) {
+              target.src = product.images[0];
+            }
+          }}
           className={`h-full w-full object-cover object-center transition-all duration-500 ease-out ${
             secondaryImage
               ? "group-hover:opacity-0 group-hover:scale-105"
@@ -64,6 +71,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             src={secondaryImage}
             alt={`${product.title} - alternate view`}
             loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              // Hide broken alternate image silently
+              e.currentTarget.style.display = "none";
+            }}
             className="absolute inset-0 h-full w-full object-cover object-center opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-105 transition-all duration-500 ease-out"
           />
         )}

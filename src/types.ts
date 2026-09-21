@@ -1,5 +1,6 @@
 export interface SizeChartRow {
-  name: string;
+  name?: string;
+  parameter?: string;
   values: { [size: string]: string };
 }
 
