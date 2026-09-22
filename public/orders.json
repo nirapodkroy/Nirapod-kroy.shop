@@ -1,0 +1,83 @@
+[
+  {
+    "id": "TRK-585755",
+    "customerName": "Muhammad Tarif",
+    "customerEmail": "muhammadtarif018@gmail.com",
+    "customerPhone": "8801711223344",
+    "shippingAddress": "Dhaka, Bangladesh, Dhaka (ঢাকার ভেতরে)",
+    "items": [
+      {
+        "productId": "sheet-item",
+        "title": "Skin Print (x1 @ ৳820) (x1 @ ৳880) (x1 @ ৳880)",
+        "price": 880,
+        "quantity": 1,
+        "imageUrl": ""
+      }
+    ],
+    "totalPrice": 880,
+    "paymentMethod": "Cash on Delivery",
+    "status": "Shipped",
+    "createdAt": "Muhammad Tarif",
+    "syncedToGoogleSheet": true,
+    "trackingNumber": "TRK-585755",
+    "orderTrackingDetails": "Steadfast কুরিয়ার সার্ভিসে বুকিং সম্পন্ন হয়েছে। ট্র্যাকিং শুরু হয়েছে।",
+    "trackingDetails": "Steadfast কুরিয়ার সার্ভিসে বুকিং সম্পন্ন হয়েছে। ট্র্যাকিং শুরু হয়েছে।",
+    "currentStepIndex": 2,
+    "trackingStage": "dispatched",
+    "trackingSteps": [
+      {
+        "id": "confirmed",
+        "stepNumber": 1,
+        "titleBn": "অর্ডার কনফার্মেশন",
+        "titleEn": "Order Confirmed",
+        "descBn": "অর্ডার গৃহীত ও ভেরিফাই সম্পন্ন",
+        "descEn": "Order verified & confirmed",
+        "completed": true,
+        "completedAt": "Muhammad Tarif",
+        "note": "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।"
+      },
+      {
+        "id": "processing",
+        "stepNumber": 2,
+        "titleBn": "প্যাকেজিং ও প্রসেসিং",
+        "titleEn": "Packaging & Processing",
+        "descBn": "মান যাচাই ও প্যাকেজিং চলছে",
+        "descEn": "Quality check & packaging",
+        "completed": true,
+        "completedAt": "Muhammad Tarif",
+        "note": "পণ্যের মান যাচাই সম্পন্ন হয়েছে এবং পার্সেল প্যাকেজিং চলছে।"
+      },
+      {
+        "id": "dispatched",
+        "stepNumber": 3,
+        "titleBn": "কুরিয়ারে পাঠানো হয়েছে",
+        "titleEn": "Dispatched to Courier",
+        "descBn": "কুরিয়ার হাবে হস্তান্তর হয়েছে",
+        "descEn": "Handed over to courier hub",
+        "completed": true,
+        "completedAt": "2026-09-22T17:33:51.789Z",
+        "note": "Steadfast কুরিয়ার সার্ভিসে বুকিং সম্পন্ন হয়েছে। ট্র্যাকিং শুরু হয়েছে।"
+      },
+      {
+        "id": "out_for_delivery",
+        "stepNumber": 4,
+        "titleBn": "ডেলিভারির পথে",
+        "titleEn": "Out for Delivery",
+        "descBn": "ডেলিভারিম্যান আপনার ঠিকানায় রওনা হয়েছে",
+        "descEn": "Rider is heading to your address",
+        "completed": false,
+        "note": "ডেলিভারি রাইডার আপনার ঠিকানায় পার্সেল নিয়ে রওনা হয়েছে। ফোন সচল রাখুন।"
+      },
+      {
+        "id": "delivered",
+        "stepNumber": 5,
+        "titleBn": "ডেলিভারি সম্পন্ন",
+        "titleEn": "Delivered",
+        "descBn": "পণ্য গ্রাহকের নিকট সফলভাবে হস্তান্তরিত",
+        "descEn": "Successfully delivered to customer",
+        "completed": false,
+        "note": "পণ্যটি গ্রাহকের নিকট সফলভাবে হস্তান্তর ও ডেলিভারি সম্পন্ন হয়েছে।"
+      }
+    ]
+  }
+]
