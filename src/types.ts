@@ -75,12 +75,26 @@ export interface OrderItem {
   selectedSize?: string;
 }
 
+export interface TrackingStep {
+  id: 'confirmed' | 'processing' | 'dispatched' | 'out_for_delivery' | 'delivered' | string;
+  stepNumber: number; // 1 to 5
+  titleBn: string;
+  titleEn: string;
+  descBn: string;
+  descEn: string;
+  completed: boolean;
+  completedAt?: string;
+  note?: string;
+}
+
 export interface Order {
   id: string;
   trackingNumber?: string;
   orderTrackingDetails?: string; // Order Tracking Details (order traking detis) from Google Sheet or Admin
   trackingDetails?: string;
   trackingStage?: 'confirmed' | 'processing' | 'dispatched' | 'out_for_delivery' | 'delivered' | string;
+  currentStepIndex?: number; // 0 to 4
+  trackingSteps?: TrackingStep[];
   productCodes?: string;
   customerName: string;
   customerEmail: string;

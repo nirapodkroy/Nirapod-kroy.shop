@@ -55,9 +55,21 @@ import {
   MapPin,
   Compass,
   Ruler,
-  Star
+  Star,
+  Boxes,
+  Bike,
+  ShieldCheck,
+  ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  ORDER_TRACKING_STEPS_DEF,
+  getStepIndexFromOrder,
+  buildTrackingSteps,
+  generateDefaultTrackingNumber,
+  formatTrackingDate
+} from "../utils/orderTracking";
+import { TrackOrderModal } from "./TrackOrderModal";
 import {
   BASE_CATEGORIES,
   categoryToSlug,
@@ -191,7 +203,14 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isSavingSyncedData, setIsSavingSyncedData] = useState(false);
   const [isClearingSavedData, setIsClearingSavedData] = useState(false);
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
-  const [orderTrackingDrafts, setOrderTrackingDrafts] = useState<Record<string, { trackingNumber?: string; orderTrackingDetails?: string; status?: string }>>({});
+  const [orderTrackingDrafts, setOrderTrackingDrafts] = useState<Record<string, {
+    trackingNumber?: string;
+    orderTrackingDetails?: string;
+    status?: string;
+    currentStepIndex?: number;
+    trackingStage?: string;
+  }>>({});
+  const [previewTrackingOrder, setPreviewTrackingOrder] = useState<Order | null>(null);
   const [isUpdatingTracking, setIsUpdatingTracking] = useState<Record<string, boolean>>({});
 
   // Admin Products State (Includes inactive products)
@@ -1774,26 +1793,63 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   };
 
   // Update Order Tracking Details & Tracking Number (Syncs to Google Sheets & memory)
-  const handleUpdateOrderTracking = async (orderId: string, trackingNumber?: string, orderTrackingDetails?: string, status?: string) => {
+  const handleUpdateOrderTracking = async (
+    orderId: string,
+    trackingNumber?: string,
+    orderTrackingDetails?: string,
+    status?: string,
+    stepIndexParam?: number,
+    stageParam?: string
+  ) => {
     setIsUpdatingTracking(prev => ({ ...prev, [orderId]: true }));
     try {
       const currentOrder = orders.find(o => o.id === orderId);
-      const updatedTrackingNumber = (trackingNumber !== undefined && trackingNumber !== "")
-        ? trackingNumber
-        : (currentOrder?.trackingNumber || ("TRK-" + orderId.replace(/\D/g, "")));
-      const updatedTrackingDetails = (orderTrackingDetails !== undefined && orderTrackingDetails !== "")
-        ? orderTrackingDetails
-        : (currentOrder?.orderTrackingDetails || currentOrder?.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।");
-      const updatedStatus = status || currentOrder?.status || "Pending";
+      const safeStepIndex = typeof stepIndexParam === "number"
+        ? Math.max(0, Math.min(4, stepIndexParam))
+        : getStepIndexFromOrder(currentOrder);
+      const stepDef = ORDER_TRACKING_STEPS_DEF[safeStepIndex] || ORDER_TRACKING_STEPS_DEF[0];
+      const updatedStage = stageParam || stepDef.id;
 
-      // 1. Immediately update React state so the UI reflects the change right away
-      setOrders(prev => prev.map(o => o.id === orderId ? {
-        ...o,
+      const updatedTrackingNumber = (trackingNumber !== undefined && trackingNumber !== "")
+        ? trackingNumber.trim()
+        : (currentOrder?.trackingNumber || generateDefaultTrackingNumber(orderId));
+
+      const updatedTrackingDetails = (orderTrackingDetails !== undefined && orderTrackingDetails !== "")
+        ? orderTrackingDetails.trim()
+        : (currentOrder?.orderTrackingDetails || currentOrder?.trackingDetails || stepDef.defaultNote);
+
+      const updatedStatus = status || stepDef.defaultStatus || currentOrder?.status || "Pending";
+
+      const updatedTrackingSteps = buildTrackingSteps(
+        safeStepIndex,
+        currentOrder?.trackingSteps,
+        currentOrder?.createdAt,
+        updatedTrackingDetails
+      );
+
+      const updatedOrderObject: Order = {
+        ...(currentOrder || ({} as Order)),
+        id: orderId,
+        customerName: currentOrder?.customerName || "Customer",
+        customerEmail: currentOrder?.customerEmail || "",
+        customerPhone: currentOrder?.customerPhone || "",
+        shippingAddress: currentOrder?.shippingAddress || "",
+        items: currentOrder?.items || [],
+        totalPrice: currentOrder?.totalPrice || 0,
+        paymentMethod: currentOrder?.paymentMethod || "Cash on Delivery",
+        createdAt: currentOrder?.createdAt || new Date().toISOString(),
+        syncedToGoogleSheet: currentOrder?.syncedToGoogleSheet || false,
         trackingNumber: updatedTrackingNumber,
         orderTrackingDetails: updatedTrackingDetails,
         trackingDetails: updatedTrackingDetails,
-        status: updatedStatus as any
-      } : o));
+        status: updatedStatus as any,
+        currentStepIndex: safeStepIndex,
+        trackingStage: updatedStage,
+        trackingSteps: updatedTrackingSteps
+      };
+
+      // 1. Immediately update React state so the UI reflects the change right away
+      setOrders(prev => prev.map(o => o.id === orderId ? updatedOrderObject : o));
 
       // 2. Immediately update localStorage 'auracart_orders' so customer-facing tracking views it immediately
       try {
@@ -1801,13 +1857,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         if (rawLocal) {
           const parsed = JSON.parse(rawLocal);
           if (Array.isArray(parsed)) {
-            const updated = parsed.map((o: any) => o.id === orderId ? {
-              ...o,
-              trackingNumber: updatedTrackingNumber,
-              orderTrackingDetails: updatedTrackingDetails,
-              trackingDetails: updatedTrackingDetails,
-              status: updatedStatus
-            } : o);
+            const updated = parsed.map((o: any) => o.id === orderId ? updatedOrderObject : o);
             localStorage.setItem("auracart_orders", JSON.stringify(updated));
           }
         }
@@ -1826,37 +1876,25 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           trackingNumber: updatedTrackingNumber,
           orderTrackingDetails: updatedTrackingDetails,
           status: updatedStatus,
-          order: currentOrder ? {
-            ...currentOrder,
-            trackingNumber: updatedTrackingNumber,
-            orderTrackingDetails: updatedTrackingDetails,
-            trackingDetails: updatedTrackingDetails,
-            status: updatedStatus
-          } : undefined
+          currentStepIndex: safeStepIndex,
+          trackingStage: updatedStage,
+          trackingSteps: updatedTrackingSteps,
+          order: updatedOrderObject
         })
       });
 
       // 4. Also trigger direct Google Sheet sync fallback
-      if (currentOrder) {
-        const orderToSync: Order = {
-          ...currentOrder,
-          trackingNumber: updatedTrackingNumber,
-          orderTrackingDetails: updatedTrackingDetails,
-          trackingDetails: updatedTrackingDetails,
-          status: updatedStatus as any
-        };
-        syncOrderToGoogleSheets(orderToSync, undefined, true).catch(() => {});
-      }
+      syncOrderToGoogleSheets(updatedOrderObject, undefined, true).catch(() => {});
 
       if (res.ok) {
-        let msg = "ট্র্যাকিং তথ্য সেভ ও গুগল শিটে আপডেট সম্পন্ন!";
+        let msg = `অর্ডার #${orderId} এর ধাপ ${safeStepIndex + 1} (${stepDef.titleBn}) সফলভাবে সেভ হয়েছে!`;
         try {
           const data = await res.json();
           if (data && data.message) msg = data.message;
         } catch {}
         addToast(msg, "success");
       } else {
-        addToast("ট্র্যাকিং তথ্য সফলভাবে সেভ হয়েছে!", "success");
+        addToast(`অর্ডার #${orderId} এর ট্র্যাকিং ধাপ ${safeStepIndex + 1} সফলভাবে সংরক্ষিত হয়েছে!`, "success");
       }
     } catch {
       addToast("ট্র্যাকিং তথ্য সেভ ও শিটে আপডেট সম্পন্ন!", "success");
@@ -2127,7 +2165,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   };
 
   // Discard preview without saving
-  const handleDiscardPreview = () => {
+  const handleDiscardPreview = async () => {
     setOrders([]);
     setCustomers([]);
     setSubscribers([]);
@@ -2148,7 +2186,30 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       syncedGoogleSheetsCount: 0
     } : null);
     setIsLiveSheetMode(false);
-    addToast("শিট প্রিভিউ ডেটা সরিয়ে নেওয়া হয়েছে।", "info");
+    setIsSyncedDataSaved(false);
+
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.removeItem("nirapod_orders");
+      localStorage.removeItem("nirapod_admin_customers");
+      localStorage.removeItem("nirapod_admin_subscribers");
+      localStorage.removeItem("nirapod_admin_user_tracking");
+      localStorage.removeItem("nirapod_admin_data_saved");
+      localStorage.removeItem("nirapod_admin_stats");
+    }
+
+    try {
+      await safeAdminFetch("/api/admin/discard-preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAdminAuthToken()}`
+        }
+      });
+    } catch (e) {
+      console.warn("Discard preview backend call fallback:", e);
+    }
+
+    addToast("শিট প্রিভিউ ডেটা ও ট্র্যাকিং সম্পূর্ণ বাতিল ও মুছে ফেলা হয়েছে।", "info");
   };
 
   // Save Webhook URL
@@ -2271,9 +2332,12 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
+  const [isClearingTracking, setIsClearingTracking] = useState(false);
+
   // Fetch Tracking Data
   const fetchTrackingData = useCallback(async () => {
     if (!adminToken) return;
+    if (isLiveSheetMode) return; // Do not fetch & overwrite preview data when inspecting Google Sheets
     setIsLoadingTracking(true);
     try {
       const res = await safeAdminFetch("/api/admin/tracking", {
@@ -2281,30 +2345,42 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       if (res.ok) {
         const data = await res.json();
-        setUserTracking(data.tracking || []);
-        setTrackingStats({
-          totalVisits: data.totalVisits || 0,
-          activeNow: data.activeNow || 0,
-          pageStats: data.pageStats || {},
-          deviceStats: data.deviceStats || {},
-          browserStats: data.browserStats || {}
-        });
+        // If data is not saved and not live previewing, ensure clean empty state
+        if (!data.isSaved && !isLiveSheetMode) {
+          setUserTracking([]);
+          setTrackingStats({
+            totalVisits: 0,
+            activeNow: 0,
+            pageStats: {},
+            deviceStats: {},
+            browserStats: {}
+          });
+        } else {
+          setUserTracking(data.tracking || []);
+          setTrackingStats({
+            totalVisits: data.totalVisits || 0,
+            activeNow: data.activeNow || 0,
+            pageStats: data.pageStats || {},
+            deviceStats: data.deviceStats || {},
+            browserStats: data.browserStats || {}
+          });
+        }
       }
     } catch (err) {
       console.warn("Tracking data fetch fallback:", err);
     } finally {
       setIsLoadingTracking(false);
     }
-  }, [adminToken]);
+  }, [adminToken, isLiveSheetMode]);
 
   // Auto-refresh live visitor tracking every 4 seconds when tracking tab is open
   useEffect(() => {
-    if (isAdminModalOpen && activeTab === "tracking" && adminToken) {
+    if (isAdminModalOpen && activeTab === "tracking" && adminToken && !isLiveSheetMode) {
       fetchTrackingData();
       const pollTimer = setInterval(fetchTrackingData, 4000);
       return () => clearInterval(pollTimer);
     }
-  }, [isAdminModalOpen, activeTab, adminToken, fetchTrackingData]);
+  }, [isAdminModalOpen, activeTab, adminToken, fetchTrackingData, isLiveSheetMode]);
 
   // Test User Tracking Webhook -> sends dummy log to "user traking" tab in Google Sheets
   const handleTestTrackingWebhook = async () => {
@@ -2330,6 +2406,43 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       addToast("User Tracking test failed.", "error");
     } finally {
       setIsTestingTrackingWebhook(false);
+    }
+  };
+
+  // Clear all User Tracking Logs
+  const handleClearUserTracking = async () => {
+    if (!window.confirm("আপনি কি নিশ্চিত যে সমস্ত ভিজিটর ট্র্যাকিং হিস্ট্রি মুছে ফেলতে চান?")) {
+      return;
+    }
+    setIsClearingTracking(true);
+    try {
+      setUserTracking([]);
+      setTrackingStats({
+        totalVisits: 0,
+        activeNow: 0,
+        pageStats: {},
+        deviceStats: {},
+        browserStats: {}
+      });
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.removeItem("nirapod_admin_user_tracking");
+      }
+      const res = await safeAdminFetch("/api/admin/tracking/clear", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAdminAuthToken()}`
+        }
+      });
+      if (res.ok) {
+        addToast("ভিজিটর ট্র্যাকিং হিস্ট্রি সফলভাবে মুছে ফেলা হয়েছে।", "success");
+      } else {
+        addToast("ট্র্যাকিং হিস্ট্রি সরানো হয়েছে।", "info");
+      }
+    } catch (err: any) {
+      addToast(err?.message || "ট্র্যাকিং হিস্ট্রি মুছতে সমস্যা হয়েছে", "error");
+    } finally {
+      setIsClearingTracking(false);
     }
   };
 
@@ -2553,10 +2666,17 @@ function doGet(e) {
 
       result.orders = rows
         .filter(function(r) {
-          // ট্র্যাকিংয়ের ভুল রো বাদ দিয়ে শুধু আসল অর্ডার ফিল্টার
-          var colA = String(r[0] || "");
-          var colB = String(r[1] || "");
-          return colA.indexOf("NK-") !== -1 || colA.indexOf("ORD-") !== -1 || colB.indexOf("হোমপেজ") === -1;
+          var idVal = String(r[colMap.id] || "").trim();
+          var nameVal = String(r[colMap.customerName] || "").trim();
+          var phoneVal = String(r[colMap.customerPhone] || "").trim();
+          var priceVal = String(r[colMap.totalPrice] || "").trim();
+          var colA = String(r[0] || "").trim();
+          var colB = String(r[1] || "").trim();
+          // Skip empty deleted rows
+          if (!idVal && !nameVal && !phoneVal && !priceVal && !colA) return false;
+          // Filter out accidental tracking rows logged to order sheet
+          if (colB.indexOf("হোমপেজ") !== -1 || colB.indexOf("অর্ডার ট্র্যাকিং") !== -1) return false;
+          return true;
         })
         .map(function(r) {
           return {
@@ -2584,14 +2704,19 @@ function doGet(e) {
     var subSheet = findSheet(ss, ["subscribe", "Subscribe", "Subscribers", "সাবস্ক্রাইব"], "subscrib", "order", "custom");
     if (subSheet && subSheet.getLastRow() > 1) {
       var sRows = subSheet.getRange(2, 1, subSheet.getLastRow() - 1, Math.min(subSheet.getLastColumn(), 4)).getValues();
-      result.subscribers = sRows.map(function(r) {
-        return {
-          date: String(r[0] || ""),
-          email: String(r[1] || ""),
-          source: String(r[2] || ""),
-          status: String(r[3] || "Active")
-        };
-      });
+      result.subscribers = sRows
+        .filter(function(r) {
+          var em = String(r[1] || "").trim();
+          return em !== "" && em.indexOf("@") !== -1;
+        })
+        .map(function(r) {
+          return {
+            date: String(r[0] || ""),
+            email: String(r[1] || "").trim(),
+            source: String(r[2] || ""),
+            status: String(r[3] || "Active")
+          };
+        });
     }
 
     // 3. User Tracking tab ("user traking" বা "user tracking")
@@ -2599,21 +2724,28 @@ function doGet(e) {
     if (trackSheet && trackSheet.getLastRow() > 1) {
       var maxRowsToRead = Math.min(trackSheet.getLastRow() - 1, 200);
       var tRows = trackSheet.getRange(2, 1, maxRowsToRead, 11).getValues();
-      result.tracking = tRows.map(function(r) {
-        return {
-          time: String(r[0] || ""),
-          page: String(r[1] || ""),
-          ip: String(r[2] || ""),
-          location: String(r[3] || ""),
-          device: String(r[4] || ""),
-          os: String(r[5] || ""),
-          browser: String(r[6] || ""),
-          timeSpent: String(r[7] || ""),
-          referrer: String(r[8] || ""),
-          screen: String(r[9] || ""),
-          sessionId: String(r[10] || "")
-        };
-      });
+      result.tracking = tRows
+        .filter(function(r) {
+          var sId = String(r[10] || "").trim();
+          var tTime = String(r[0] || "").trim();
+          var tPage = String(r[1] || "").trim();
+          return (sId !== "" || tTime !== "") && (tPage !== "" || sId !== "");
+        })
+        .map(function(r) {
+          return {
+            time: String(r[0] || ""),
+            page: String(r[1] || ""),
+            ip: String(r[2] || ""),
+            location: String(r[3] || ""),
+            device: String(r[4] || ""),
+            os: String(r[5] || ""),
+            browser: String(r[6] || ""),
+            timeSpent: String(r[7] || ""),
+            referrer: String(r[8] || ""),
+            screen: String(r[9] || ""),
+            sessionId: String(r[10] || "")
+          };
+        });
     }
 
     // 4. Customers tab ("Customers" বা "coustomer sheet" বা "গ্রাহক" - ডাইনামিক হেডার ম্যাপিং)
@@ -2637,17 +2769,25 @@ function doGet(e) {
       }
 
       var cRows = custSheet.getRange(2, 1, maxCustRows, custLastCol).getValues();
-      result.customers = cRows.map(function(r) {
-        return {
-          id: String(r[cMap.id] || ""),
-          registeredAt: String(r[cMap.registeredAt] || ""),
-          name: String(r[cMap.name] || ""),
-          phone: String(r[cMap.phone] || ""),
-          email: String(r[cMap.email] || ""),
-          address: String(r[cMap.address] || ""),
-          password: String(r[cMap.password] || "")
-        };
-      });
+      result.customers = cRows
+        .filter(function(r) {
+          var name = String(r[cMap.name] || "").trim();
+          var phone = String(r[cMap.phone] || "").trim();
+          var email = String(r[cMap.email] || "").trim();
+          var cid = String(r[cMap.id] || "").trim();
+          return name !== "" || phone !== "" || email !== "" || cid !== "";
+        })
+        .map(function(r) {
+          return {
+            id: String(r[cMap.id] || ""),
+            registeredAt: String(r[cMap.registeredAt] || ""),
+            name: String(r[cMap.name] || ""),
+            phone: String(r[cMap.phone] || ""),
+            email: String(r[cMap.email] || ""),
+            address: String(r[cMap.address] || ""),
+            password: String(r[cMap.password] || "")
+          };
+        });
     }
 
     return ContentService.createTextOutput(JSON.stringify(result))
@@ -4872,104 +5012,332 @@ function cleanAndFixOrderSheetRows() {
                               </div>
                             </div>
 
-                            {/* 📦 Order Tracking & Google Sheet Details Management */}
-                            <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-emerald-500/30 space-y-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                                    <Truck className="w-3.5 h-3.5" />
+                            {/* 📦 Step-by-Step Order Tracking & Delivery Management */}
+                            {(() => {
+                              const draft = orderTrackingDrafts[order.id] || {};
+                              const activeStepIdx = draft.currentStepIndex !== undefined
+                                ? draft.currentStepIndex
+                                : getStepIndexFromOrder(order);
+                              const activeStepDef = ORDER_TRACKING_STEPS_DEF[activeStepIdx] || ORDER_TRACKING_STEPS_DEF[0];
+
+                              const currentTrackingNumber = draft.trackingNumber !== undefined
+                                ? draft.trackingNumber
+                                : (order.trackingNumber || generateDefaultTrackingNumber(order.id));
+
+                              const currentTrackingDetails = draft.orderTrackingDetails !== undefined
+                                ? draft.orderTrackingDetails
+                                : (order.orderTrackingDetails || order.trackingDetails || activeStepDef.defaultNote);
+
+                              const currentStatus = draft.status || activeStepDef.defaultStatus || order.status || "Pending";
+
+                              return (
+                                <div className="p-3.5 sm:p-4 rounded-2xl bg-zinc-900/90 border-2 border-emerald-500/40 space-y-3.5 shadow-md">
+                                  {/* Header */}
+                                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-zinc-800">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-sm">
+                                        <Truck className="w-4 h-4" />
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-xs font-bold text-white">
+                                            অর্ডার ট্র্যাকিং ও ৫-ধাপ ডেলিভারি কন্ট্রোল
+                                          </span>
+                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                            ধাপ {activeStepIdx + 1} / ৫: {activeStepDef.titleBn}
+                                          </span>
+                                        </div>
+                                        <p className="text-[11px] text-zinc-400">
+                                          একটি একটি করে ধাপ ওকে (টিক) দিন এবং সেভ করুন — গ্রাহক ট্র্যাকিংয়ে লাইভ দেখতে পাবেন
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewTrackingOrder(order)}
+                                        className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-medium transition-all flex items-center gap-1.5 border border-zinc-700 cursor-pointer"
+                                        title="গ্রাহক কীভাবে দেখবে তা প্রিভিউ করুন"
+                                      >
+                                        <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                                        <span>কাস্টমার ভিউ প্রিভিউ</span>
+                                      </button>
+                                    </div>
                                   </div>
-                                  <span className="text-xs font-bold text-white">
-                                    অর্ডার ট্র্যাকিং ও গুগল শিট বিবরণ (Order Tracking Details)
-                                  </span>
-                                </div>
-                                <span className="text-[11px] text-emerald-400 font-medium">
-                                  গ্রাহক Order Tracking এ এই তথ্য দেখতে পাবেন
-                                </span>
-                              </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                {/* Tracking Number Input */}
-                                <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                                    ট্র্যাকিং নম্বর (Tracking ID)
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={
-                                      orderTrackingDrafts[order.id]?.trackingNumber !== undefined
-                                        ? orderTrackingDrafts[order.id].trackingNumber
-                                        : (order.trackingNumber || ("TRK-" + order.id.replace(/\D/g, "")))
-                                    }
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setOrderTrackingDrafts((prev) => ({
-                                        ...prev,
-                                        [order.id]: {
-                                          ...prev[order.id],
-                                          trackingNumber: val
-                                        }
-                                      }));
-                                    }}
-                                    placeholder="যেমন: TRK-123456 বা কুরিয়ার আইডি"
-                                    className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs font-mono text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                  />
-                                </div>
+                                  {/* 5-Step Visual Timeline & Interactive Buttons */}
+                                  <div className="space-y-2">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                                      <span>ধাপ অনুযায়ী ওকে (টিক) দিন:</span>
+                                      <span className="text-emerald-400 text-[10px]">
+                                        {activeStepIdx === 4 ? "সব ধাপ সম্পন্ন" : `পরবর্তী: ধাপ ${activeStepIdx + 2} (${ORDER_TRACKING_STEPS_DEF[activeStepIdx + 1]?.titleBn})`}
+                                      </span>
+                                    </div>
 
-                                {/* Order Tracking Details Input */}
-                                <div className="space-y-1 sm:col-span-2">
-                                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                                    অর্ডার ট্র্যাকিং বিবরণ (Order Tracking Details - শিটের রো/কলামে যাবে)
-                                  </label>
-                                  <div className="flex gap-2">
-                                    <input
-                                      type="text"
-                                      value={
-                                        orderTrackingDrafts[order.id]?.orderTrackingDetails !== undefined
-                                          ? orderTrackingDrafts[order.id].orderTrackingDetails
-                                          : (order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। প্যাকেজিং ও কুরিয়ারে পাঠানোর কাজ চলছে।")
-                                      }
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setOrderTrackingDrafts((prev) => ({
-                                          ...prev,
-                                          [order.id]: {
-                                            ...prev[order.id],
-                                            orderTrackingDetails: val
-                                          }
-                                        }));
-                                      }}
-                                      placeholder="যেমন: সুন্দরবন কুরিয়ারে বুকিং হয়েছে, ট্র্যাকিং নং: SB-99201"
-                                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                    />
+                                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                                      {ORDER_TRACKING_STEPS_DEF.map((def, idx) => {
+                                        const isPassed = idx < activeStepIdx;
+                                        const isCurrent = idx === activeStepIdx;
 
-                                    <button
-                                      type="button"
-                                      disabled={isUpdatingTracking[order.id]}
-                                      onClick={() => {
-                                        const draft = orderTrackingDrafts[order.id] || {};
-                                        const tNum = draft.trackingNumber !== undefined
-                                          ? draft.trackingNumber
-                                          : (order.trackingNumber || ("TRK-" + order.id.replace(/\D/g, "")));
-                                        const tDet = draft.orderTrackingDetails !== undefined
-                                          ? draft.orderTrackingDetails
-                                          : (order.orderTrackingDetails || order.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।");
-                                        const st = draft.status || order.status;
-                                        handleUpdateOrderTracking(order.id, tNum, tDet, st);
-                                      }}
-                                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0"
-                                    >
-                                      {isUpdatingTracking[order.id] ? (
-                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                      ) : (
-                                        <Check className="w-3.5 h-3.5" />
+                                        return (
+                                          <div
+                                            key={def.id}
+                                            onClick={() => {
+                                              setOrderTrackingDrafts(prev => ({
+                                                ...prev,
+                                                [order.id]: {
+                                                  ...prev[order.id],
+                                                  currentStepIndex: idx,
+                                                  trackingStage: def.id,
+                                                  status: def.defaultStatus,
+                                                  orderTrackingDetails: def.defaultNote
+                                                }
+                                              }));
+                                            }}
+                                            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                                              isCurrent
+                                                ? "bg-emerald-950/60 border-emerald-500 text-white shadow-md ring-2 ring-emerald-500/30"
+                                                : isPassed
+                                                ? "bg-emerald-950/20 border-emerald-800/60 text-zinc-200 hover:border-emerald-600"
+                                                : "bg-zinc-800/40 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                                            }`}
+                                          >
+                                            <div className="flex items-center justify-between gap-1">
+                                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                                isPassed || isCurrent ? "bg-emerald-500 text-white" : "bg-zinc-700 text-zinc-300"
+                                              }`}>
+                                                {isPassed ? <Check className="w-3 h-3 stroke-[3]" /> : idx + 1}
+                                              </span>
+
+                                              {isPassed ? (
+                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                                  ✓ ওকে
+                                                </span>
+                                              ) : isCurrent ? (
+                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500 text-white">
+                                                  ● বর্তমান
+                                                </span>
+                                              ) : (
+                                                <span className="text-[9px] text-zinc-500">
+                                                  অপেক্ষমাণ
+                                                </span>
+                                              )}
+                                            </div>
+
+                                            <div>
+                                              <div className="text-xs font-bold leading-tight">
+                                                {def.titleBn}
+                                              </div>
+                                              <div className="text-[10px] text-zinc-400 mt-0.5 line-clamp-1">
+                                                {def.descBn}
+                                              </div>
+                                            </div>
+
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOrderTrackingDrafts(prev => ({
+                                                  ...prev,
+                                                  [order.id]: {
+                                                    ...prev[order.id],
+                                                    currentStepIndex: idx,
+                                                    trackingStage: def.id,
+                                                    status: def.defaultStatus,
+                                                    orderTrackingDetails: def.defaultNote
+                                                  }
+                                                }));
+                                              }}
+                                              className={`w-full mt-1 py-1 px-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-all ${
+                                                isCurrent
+                                                  ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+                                                  : isPassed
+                                                  ? "bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border border-emerald-500/30"
+                                                  : "bg-zinc-800 hover:bg-emerald-900/40 text-zinc-300 hover:text-white"
+                                              }`}
+                                            >
+                                              <Check className="w-3 h-3 stroke-[2.5]" />
+                                              <span>{isCurrent ? "এই ধাপে সক্রিয়" : isPassed ? "পুনরায় ওকে দিন" : "এই ধাপ ওকে দিন"}</span>
+                                            </button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  {/* Quick Preset Note Suggestions for Active Step */}
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                                      <span className="font-semibold">ধাপ {activeStepIdx + 1} এর দ্রুত নোট সাজেশন (ক্লিক করলে ইনপুটে বসবে):</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {activeStepDef.presetSuggestions.map((suggestion, sIdx) => (
+                                        <button
+                                          key={sIdx}
+                                          type="button"
+                                          onClick={() => {
+                                            setOrderTrackingDrafts(prev => ({
+                                              ...prev,
+                                              [order.id]: {
+                                                ...prev[order.id],
+                                                orderTrackingDetails: suggestion
+                                              }
+                                            }));
+                                          }}
+                                          className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-emerald-950/40 hover:border-emerald-600 border border-zinc-700 text-[11px] text-zinc-300 hover:text-white transition-all text-left cursor-pointer"
+                                        >
+                                          {suggestion}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Inputs: Tracking ID & Tracking Details */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                                    {/* Tracking ID Input */}
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                          ট্র্যাকিং নম্বর (Tracking ID)
+                                        </label>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const gen = generateDefaultTrackingNumber(order.id);
+                                            setOrderTrackingDrafts(prev => ({
+                                              ...prev,
+                                              [order.id]: {
+                                                ...prev[order.id],
+                                                trackingNumber: gen
+                                              }
+                                            }));
+                                          }}
+                                          className="text-[10px] text-emerald-400 hover:underline cursor-pointer"
+                                        >
+                                          অটো জেনারেট
+                                        </button>
+                                      </div>
+                                      <input
+                                        type="text"
+                                        value={currentTrackingNumber}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setOrderTrackingDrafts((prev) => ({
+                                            ...prev,
+                                            [order.id]: {
+                                              ...prev[order.id],
+                                              trackingNumber: val
+                                            }
+                                          }));
+                                        }}
+                                        placeholder="যেমন: TRK-123456 বা কুরিয়ার আইডি"
+                                        className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs font-mono text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                      />
+                                    </div>
+
+                                    {/* Order Tracking Details Input */}
+                                    <div className="space-y-1 sm:col-span-2">
+                                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                        অর্ডার ট্র্যাকিং বিবরণ (Order Tracking Details - গ্রাহক ও গুগল শিটে যাবে)
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={currentTrackingDetails}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setOrderTrackingDrafts((prev) => ({
+                                            ...prev,
+                                            [order.id]: {
+                                              ...prev[order.id],
+                                              orderTrackingDetails: val
+                                            }
+                                          }));
+                                        }}
+                                        placeholder="যেমন: সুন্দরবন কুরিয়ারে বুকিং হয়েছে, ট্র্যাকিং নং: SB-99201"
+                                        className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Actions: Save button & Next step button */}
+                                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-800/80">
+                                    <div className="flex items-center gap-2">
+                                      {activeStepIdx < 4 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nextIdx = activeStepIdx + 1;
+                                            const nextDef = ORDER_TRACKING_STEPS_DEF[nextIdx];
+                                            setOrderTrackingDrafts(prev => ({
+                                              ...prev,
+                                              [order.id]: {
+                                                ...prev[order.id],
+                                                currentStepIndex: nextIdx,
+                                                trackingStage: nextDef.id,
+                                                status: nextDef.defaultStatus,
+                                                orderTrackingDetails: nextDef.defaultNote
+                                              }
+                                            }));
+                                          }}
+                                          className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-all border border-zinc-700 flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                          <span>পরবর্তী ধাপ {activeStepIdx + 2} ➔</span>
+                                        </button>
                                       )}
-                                      <span>সেভ ও শিট আপডেট</span>
-                                    </button>
+
+                                      {activeStepIdx > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const prevIdx = activeStepIdx - 1;
+                                            const prevDef = ORDER_TRACKING_STEPS_DEF[prevIdx];
+                                            setOrderTrackingDrafts(prev => ({
+                                              ...prev,
+                                              [order.id]: {
+                                                ...prev[order.id],
+                                                currentStepIndex: prevIdx,
+                                                trackingStage: prevDef.id,
+                                                status: prevDef.defaultStatus,
+                                                orderTrackingDetails: prevDef.defaultNote
+                                              }
+                                            }));
+                                          }}
+                                          className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs transition-all border border-zinc-700 cursor-pointer"
+                                        >
+                                          পূর্ববর্তী ধাপ
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        disabled={isUpdatingTracking[order.id]}
+                                        onClick={() => {
+                                          handleUpdateOrderTracking(
+                                            order.id,
+                                            currentTrackingNumber,
+                                            currentTrackingDetails,
+                                            currentStatus,
+                                            activeStepIdx,
+                                            activeStepDef.id
+                                          );
+                                        }}
+                                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md shadow-emerald-950 flex items-center gap-2 cursor-pointer"
+                                      >
+                                        {isUpdatingTracking[order.id] ? (
+                                          <RefreshCw className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                          <Save className="w-4 h-4" />
+                                        )}
+                                        <span>💾 ধাপ {activeStepIdx + 1} ট্র্যাকিং সেভ করুন (Save Tracking)</span>
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </div>
+                              );
+                            })()}
                           </div>
                         ))}
                       </div>
@@ -5301,6 +5669,16 @@ function cleanAndFixOrderSheetRows() {
                         >
                           <Send className="w-3.5 h-3.5 text-emerald-400" />
                           <span>{isTestingTrackingWebhook ? "পাঠানো হচ্ছে..." : "🧪 টেস্ট ট্র্যাকিং"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearUserTracking}
+                          disabled={isClearingTracking || (userTracking.length === 0 && (!trackingStats || trackingStats.totalVisits === 0))}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-semibold cursor-pointer transition-colors disabled:opacity-40"
+                          title="সমস্ত ভিজিটর ট্র্যাকিং হিস্ট্রি মুছে ফেলুন"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                          <span>{isClearingTracking ? "মুছছে..." : "ট্র্যাকিং মুছুন"}</span>
                         </button>
                         <button
                           onClick={exportTrackingToCsv}
@@ -8003,6 +8381,15 @@ function cleanAndFixOrderSheetRows() {
           )}
         </motion.div>
       </div>
+      )}
+
+      {/* Customer Tracking View Preview Modal */}
+      {previewTrackingOrder && (
+        <TrackOrderModal
+          isOpen={!!previewTrackingOrder}
+          onClose={() => setPreviewTrackingOrder(null)}
+          initialOrder={previewTrackingOrder}
+        />
       )}
     </AnimatePresence>
   );

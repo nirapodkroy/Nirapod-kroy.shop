@@ -24,13 +24,26 @@ import {
 import { useLanguage } from "../context/LanguageContext";
 import { Order } from "../types";
 import { safeGetLocalStorage } from "../utils/storage";
+import {
+  ORDER_TRACKING_STEPS_DEF,
+  getStepIndexFromOrder,
+  buildTrackingSteps,
+  formatTrackingDate
+} from "../utils/orderTracking";
 
 interface TrackOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTrackingQuery?: string;
+  initialOrder?: Order | null;
 }
 
-export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClose }) => {
+export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
+  isOpen,
+  onClose,
+  initialTrackingQuery,
+  initialOrder
+}) => {
   const { language, formatPrice } = useLanguage();
   const [searchKey, setSearchKey] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -40,9 +53,21 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClos
   const [copiedTracking, setCopiedTracking] = useState(false);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
 
-  // Load recent local orders for quick-click convenience
+  // Load initial order or recent local orders for quick-click convenience
   useEffect(() => {
     if (isOpen) {
+      if (initialOrder) {
+        setFoundOrder(initialOrder);
+        setSearchKey(initialOrder.trackingNumber || initialOrder.id);
+        setHasSearched(true);
+        return;
+      }
+      if (initialTrackingQuery) {
+        setSearchKey(initialTrackingQuery);
+        performSearch(initialTrackingQuery);
+        return;
+      }
+
       try {
         const savedOrdersRaw = safeGetLocalStorage("auracart_orders");
         if (savedOrdersRaw) {
@@ -65,7 +90,7 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClos
         // Ignore storage errors
       }
     }
-  }, [isOpen]);
+  }, [isOpen, initialOrder, initialTrackingQuery]);
 
   if (!isOpen) return null;
 
@@ -161,64 +186,18 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClos
     }
   };
 
-  // 5 Explicit tracking steps as requested:
-  // ১. অর্ডার কনফার্মেশন (Order Confirmation)
-  // ২. প্যাকেজিং ও প্রসেসিং (Packaging & Processing)
-  // ৩. কুরিয়ারে পাঠানো হয়েছে (Dispatched to Courier)
-  // ৪. ডেলিভারির পথে (Out for Delivery)
-  // ৫. ডেলিভারি সম্পন্ন (Delivered)
-  const steps = [
-    {
-      id: "confirmed",
-      titleBn: "অর্ডার কনফার্মেশন",
-      titleEn: "Order Confirmed",
-      descBn: "অর্ডার গৃহীত ও ভেরিফাই সম্পন্ন",
-      descEn: "Order verified & confirmed",
-      icon: CheckCircle2
-    },
-    {
-      id: "processing",
-      titleBn: "প্যাকেজিং ও প্রসেসিং",
-      titleEn: "Packaging & Processing",
-      descBn: "মান যাচাই ও প্যাকেজিং চলছে",
-      descEn: "Quality check & packaging",
-      icon: Boxes
-    },
-    {
-      id: "dispatched",
-      titleBn: "কুরিয়ারে পাঠানো হয়েছে",
-      titleEn: "Dispatched to Courier",
-      descBn: "কুরিয়ার হাবে হস্তান্তর হয়েছে",
-      descEn: "Handed over to courier hub",
-      icon: Truck
-    },
-    {
-      id: "out_for_delivery",
-      titleBn: "ডেলিভারির পথে",
-      titleEn: "Out for Delivery",
-      descBn: "ডেলিভারিম্যান আপনার ঠিকানায় রওনা হয়েছে",
-      descEn: "Rider is heading to your address",
-      icon: Bike
-    },
-    {
-      id: "delivered",
-      titleBn: "ডেলিভারি সম্পন্ন",
-      titleEn: "Delivered",
-      descBn: "পণ্য গ্রাহকের নিকট সফলভাবে হস্তান্তরিত",
-      descEn: "Successfully delivered to customer",
-      icon: ShieldCheck
-    }
-  ];
-
-  // Map order status to one of the 5 steps (0 to 4)
-  const getStepIndex = (status?: string, stage?: string, details?: string): number => {
-    const s = `${stage || ""} ${status || ""} ${details || ""}`.toLowerCase();
-    if (s.includes("deliver") || s.includes("সম্পন্ন")) return 4;
-    if (s.includes("out") || s.includes("পথে") || s.includes("transit") || s.includes("way")) return 3;
-    if (s.includes("ship") || s.includes("dispatch") || s.includes("কুরিয়ার") || s.includes("কুরিয়ারে") || s.includes("kuri") || s.includes("courier")) return 2;
-    if (s.includes("process") || s.includes("প্যাকেজিং") || s.includes("প্রসেসিং")) return 1;
-    return 0; // Default: অর্ডার কনফার্মেশন
+  const stepIconMap: Record<string, React.ElementType> = {
+    confirmed: CheckCircle2,
+    processing: Boxes,
+    dispatched: Truck,
+    out_for_delivery: Bike,
+    delivered: ShieldCheck
   };
+
+  const steps = ORDER_TRACKING_STEPS_DEF.map((def) => ({
+    ...def,
+    icon: stepIconMap[def.id] || CheckCircle2
+  }));
 
   const isCancelled = foundOrder && foundOrder.status?.toLowerCase() === "cancelled";
   const trackingDetails =
@@ -226,8 +205,12 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClos
     (foundOrder as any)?.trackingDetails ||
     (foundOrder as any)?.orderTrackingDetis ||
     "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। ডেলিভারি এরিয়া অনুযায়ী পণ্য প্যাকেজিং ও কুরিয়ারে হস্তান্তরের কাজ চলছে।";
-  const currentStep = foundOrder ? getStepIndex(foundOrder.status, foundOrder.trackingStage, trackingDetails) : 0;
+  const currentStep = foundOrder ? getStepIndexFromOrder(foundOrder) : 0;
   const trackingNumber = foundOrder?.trackingNumber || (foundOrder?.id ? `TRK-${foundOrder.id.replace(/\D/g, "")}` : "");
+
+  const detailedSteps = foundOrder
+    ? buildTrackingSteps(currentStep, foundOrder.trackingSteps, foundOrder.createdAt, trackingDetails)
+    : [];
 
   // Pre-filled WhatsApp message for support
   const supportWhatsappUrl = foundOrder
@@ -481,6 +464,82 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClos
                             >
                               {step.titleBn}
                             </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Detailed Vertical Step Progress List */}
+                  <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+                    <h5 className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                      ধাপ অনুযায়ী অগ্রগতি বিবরণ (Tracking Step Breakdown):
+                    </h5>
+                    <div className="space-y-2">
+                      {detailedSteps.map((step, idx) => {
+                        const StepIcon = stepIconMap[step.id] || CheckCircle2;
+                        const isCompleted = step.completed;
+                        const isCurrent = idx === currentStep;
+
+                        return (
+                          <div
+                            key={step.id}
+                            className={`p-3 rounded-xl border transition-all flex items-start gap-3 ${
+                              isCurrent
+                                ? "bg-emerald-500/10 border-emerald-500/40 dark:bg-emerald-950/30 dark:border-emerald-500/40 shadow-sm"
+                                : isCompleted
+                                ? "bg-emerald-50/50 border-emerald-200/60 dark:bg-zinc-800/60 dark:border-zinc-700/60"
+                                : "bg-zinc-50/40 border-zinc-200/50 dark:bg-zinc-900/40 dark:border-zinc-800/50 opacity-60"
+                            }`}
+                          >
+                            <div
+                              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                                isCompleted
+                                  ? "bg-emerald-600 text-white"
+                                  : isCurrent
+                                  ? "bg-emerald-500 text-white ring-2 ring-emerald-400/40"
+                                  : "bg-zinc-200 dark:bg-zinc-700 text-zinc-400"
+                              }`}
+                            >
+                              {isCompleted ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <StepIcon className="w-3.5 h-3.5" />}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                <span className={`text-xs font-bold ${isCurrent ? "text-emerald-700 dark:text-emerald-300" : isCompleted ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400"}`}>
+                                  {language === "bn" ? `ধাপ ${step.stepNumber}: ${step.titleBn}` : `Step ${step.stepNumber}: ${step.titleEn}`}
+                                </span>
+
+                                {isCompleted ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                    <span>সম্পন্ন</span>
+                                    {step.completedAt && (
+                                      <span className="font-normal opacity-80 pl-1 border-l border-emerald-300 dark:border-emerald-700">
+                                        {formatTrackingDate(step.completedAt, language === "bn" ? "bn" : "en")}
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : isCurrent ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                    <span>বর্তমান অবস্থান</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-zinc-400">অপেক্ষমাণ</span>
+                                )}
+                              </div>
+
+                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                {language === "bn" ? step.descBn : step.descEn}
+                              </p>
+
+                              {isCurrent && trackingDetails && (
+                                <div className="mt-1.5 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/80 dark:border-emerald-800/80 text-[11px] text-emerald-900 dark:text-emerald-200 font-medium">
+                                  <strong>লাইভ আপডেট:</strong> {trackingDetails}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         );
                       })}

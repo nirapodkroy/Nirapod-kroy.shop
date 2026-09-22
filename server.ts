@@ -129,6 +129,9 @@ interface Order {
   trackingNumber?: string;
   orderTrackingDetails?: string; // "Order Tracking Details" (order traking detis) beside tracking number
   trackingDetails?: string;
+  currentStepIndex?: number;
+  trackingStage?: string;
+  trackingSteps?: any[];
   productCodes?: string;
 }
 
@@ -293,6 +296,12 @@ function loadState() {
       if (parsed.products && Array.isArray(parsed.products)) {
         storeState = parsed;
         storeState.isDataSaved = Boolean(parsed.isDataSaved);
+        if (!storeState.isDataSaved) {
+          storeState.orders = [];
+          storeState.customers = [];
+          storeState.subscribers = [];
+          storeState.userTracking = [];
+        }
       }
     }
 
@@ -1857,7 +1866,7 @@ app.put("/api/admin/orders/:id/status", requireAdmin, (req, res) => {
 
 // PUT /api/admin/orders/:id/tracking (Admin update tracking number, order tracking details, and status)
 app.put("/api/admin/orders/:id/tracking", requireAdmin, async (req, res) => {
-  const { trackingNumber, orderTrackingDetails, status, order: providedOrder } = req.body;
+  const { trackingNumber, orderTrackingDetails, status, currentStepIndex, trackingStage, trackingSteps, order: providedOrder } = req.body;
   const rawId = req.params.id;
   const targetId = decodeURIComponent(rawId).trim().toLowerCase();
   const cleanTargetId = targetId.replace(/^#/, "");
@@ -1885,6 +1894,15 @@ app.put("/api/admin/orders/:id/tracking", requireAdmin, async (req, res) => {
   }
   if (status !== undefined) {
     order.status = String(status).trim();
+  }
+  if (currentStepIndex !== undefined) {
+    order.currentStepIndex = Number(currentStepIndex);
+  }
+  if (trackingStage !== undefined) {
+    order.trackingStage = String(trackingStage).trim();
+  }
+  if (Array.isArray(trackingSteps)) {
+    order.trackingSteps = trackingSteps;
   }
 
   saveState();
@@ -2248,21 +2266,35 @@ app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
     const normalizedOrders: Order[] = [];
     if (liveData.orders && Array.isArray(liveData.orders)) {
       for (const sheetOrder of liveData.orders) {
+        const orderId = String(sheetOrder.id || "").trim();
+        const custName = String(sheetOrder.customerName || "").trim();
+        const custPhone = String(sheetOrder.customerPhone || "").trim();
+        const custEmail = String(sheetOrder.customerEmail || "").trim();
         const rawPrice = String(sheetOrder.totalPrice || "0").replace(/[^0-9.]/g, "");
+        const priceNum = Number(rawPrice) || 0;
+
+        // Skip blank or deleted rows from Google Sheets
+        if (!orderId && !custName && !custPhone && !custEmail && priceNum === 0) {
+          continue;
+        }
+        if (custName.toLowerCase() === "customer" && !custPhone && !custEmail && priceNum === 0 && !orderId) {
+          continue;
+        }
+
         normalizedOrders.push({
-          id: sheetOrder.id || `NK-${Math.floor(100000 + Math.random() * 900000)}`,
-          customerName: sheetOrder.customerName || "Customer",
-          customerEmail: sheetOrder.customerEmail || "",
-          customerPhone: sheetOrder.customerPhone || "",
+          id: orderId || `NK-${Math.floor(100000 + Math.random() * 900000)}`,
+          customerName: custName || "Customer",
+          customerEmail: custEmail,
+          customerPhone: custPhone,
           shippingAddress: sheetOrder.shippingAddress || "",
           items: [{
             productId: "sheet-item",
             title: sheetOrder.itemsText || "Order Items",
-            price: Number(rawPrice) || 0,
+            price: priceNum,
             quantity: 1,
             imageUrl: ""
           }],
-          totalPrice: Number(rawPrice) || 0,
+          totalPrice: priceNum,
           paymentMethod: sheetOrder.paymentMethod || "Cash on Delivery",
           status: sheetOrder.status || "Pending",
           createdAt: sheetOrder.createdAt || new Date().toISOString(),
@@ -2275,13 +2307,20 @@ app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
     const customerMap = new Map<string, any>();
     if (liveData.customers && Array.isArray(liveData.customers)) {
       for (const c of liveData.customers) {
-        const key = (c.email || c.phone || c.id || "").toLowerCase().trim();
+        const name = String(c.name || "").trim();
+        const email = String(c.email || "").trim();
+        const phone = String(c.phone || "").trim();
+        const cid = String(c.id || "").trim();
+        if (!name && !email && !phone && !cid) continue;
+        if (name.toLowerCase() === "customer" && !email && !phone) continue;
+
+        const key = (email || phone || cid).toLowerCase().trim();
         if (key) {
           customerMap.set(key, {
-            id: c.id || `cust_${Math.random().toString(36).slice(2, 8)}`,
-            name: c.name || "Customer",
-            email: c.email || "",
-            phone: c.phone || "",
+            id: cid || `cust_${Math.random().toString(36).slice(2, 8)}`,
+            name: name || "Customer",
+            email: email,
+            phone: phone,
             address: c.address || "",
             createdAt: c.registeredAt || new Date().toISOString(),
             orderCount: 0,
@@ -2321,9 +2360,11 @@ app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
     const normalizedSubscribers: Subscriber[] = [];
     if (liveData.subscribers && Array.isArray(liveData.subscribers)) {
       for (const s of liveData.subscribers) {
-        if (s.email && !normalizedSubscribers.some(ns => ns.email === s.email.toLowerCase())) {
+        const email = String(s.email || "").trim().toLowerCase();
+        if (!email || !email.includes("@")) continue;
+        if (!normalizedSubscribers.some(ns => ns.email === email)) {
           normalizedSubscribers.push({
-            email: s.email.toLowerCase(),
+            email: email,
             source: s.source || "Google Sheet",
             subscribedAt: s.date || s.subscribedAt || new Date().toISOString()
           });
@@ -2335,11 +2376,16 @@ app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
     const normalizedTracking: UserTrackingEntry[] = [];
     if (liveData.tracking && Array.isArray(liveData.tracking)) {
       for (const t of liveData.tracking) {
-        if (t.sessionId && !normalizedTracking.some(et => et.sessionId === t.sessionId)) {
+        const sid = String(t.sessionId || "").trim();
+        const tTime = String(t.time || "").trim();
+        const tPage = String(t.page || "").trim();
+        if (!sid || (!tTime && !tPage)) continue;
+
+        if (!normalizedTracking.some(et => et.sessionId === sid)) {
           normalizedTracking.push({
-            id: t.sessionId,
-            time: t.time || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
-            page: t.page || "হোমপেজ (Home)",
+            id: sid,
+            time: tTime || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+            page: tPage || "হোমপেজ (Home)",
             ip: t.ip || "Unknown",
             location: t.location || "Bangladesh",
             device: t.device || "Desktop / PC",
@@ -2348,7 +2394,7 @@ app.post("/api/admin/sync-from-sheets", requireAdmin, async (req, res) => {
             timeSpent: t.timeSpent || "সক্রিয় রয়েছে (Active)...",
             referrer: t.referrer || "সরাসরি (Direct)",
             screen: t.screen || "1920x1080",
-            sessionId: t.sessionId,
+            sessionId: sid,
             updatedAt: Date.now()
           });
         }
@@ -2415,6 +2461,33 @@ app.post("/api/admin/clear-saved-data", requireAdmin, (_req, res) => {
     message: "অ্যাডমিন প্যানেলের সংরক্ষিত ডেটা মুছে ফেলা হয়েছে (গুগল শিটের কোনো ডেটা ডিলিট হয়নি, তা অক্ষত রয়েছে)।"
   });
 });
+
+// POST /api/admin/discard-preview (Admin discards preview without saving, resets in-memory/disk tracking & preview)
+app.post("/api/admin/discard-preview", requireAdmin, (_req, res) => {
+  storeState.orders = [];
+  storeState.customers = [];
+  storeState.subscribers = [];
+  storeState.userTracking = [];
+  storeState.isDataSaved = false;
+  delete storeState.customTotalRevenue;
+  saveState();
+  return res.json({
+    success: true,
+    message: "প্রিভিউ ডেটা ও ট্র্যাকিং সম্পূর্ণ বাতিল করা হয়েছে।"
+  });
+});
+
+// POST / DELETE /api/admin/tracking/clear (Admin clears user visitor tracking logs)
+const handleClearUserTrackingLogs = (_req: any, res: any) => {
+  storeState.userTracking = [];
+  saveState();
+  return res.json({
+    success: true,
+    message: "ভিজিটর ট্র্যাকিং হিস্ট্রি সম্পূর্ণ মুছে ফেলা হয়েছে।"
+  });
+};
+app.post("/api/admin/tracking/clear", requireAdmin, handleClearUserTrackingLogs);
+app.delete("/api/admin/tracking", requireAdmin, handleClearUserTrackingLogs);
 
 // ==========================================
 // USER TRACKING ROUTES
@@ -2508,6 +2581,20 @@ app.post("/api/track", async (req, res) => {
 
 // 2. Admin: Get live user tracking stats & logs (GET /api/admin/tracking)
 app.get("/api/admin/tracking", requireAdmin, (_req, res) => {
+  if (!storeState.isDataSaved) {
+    return res.json({
+      success: true,
+      totalVisits: 0,
+      activeNow: 0,
+      tracking: [],
+      pageStats: {},
+      deviceStats: {},
+      browserStats: {},
+      sheetTab: "user tracking",
+      isSaved: false
+    });
+  }
+
   const trackingList = storeState.userTracking || [];
   const now = Date.now();
   // Active visitors in the last 2 minutes
@@ -2532,7 +2619,7 @@ app.get("/api/admin/tracking", requireAdmin, (_req, res) => {
     deviceStats: deviceCounts,
     browserStats: browserCounts,
     sheetTab: "user tracking",
-    isSaved: Boolean(storeState.isDataSaved)
+    isSaved: true
   });
 });
 
