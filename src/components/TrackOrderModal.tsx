@@ -48,10 +48,16 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClos
         if (savedOrdersRaw) {
           const parsed = JSON.parse(savedOrdersRaw);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setRecentOrders(parsed.slice(0, 3));
+            const seen = new Set<string>();
+            const unique = parsed.filter((o: Order) => {
+              if (!o?.id || seen.has(o.id)) return false;
+              seen.add(o.id);
+              return true;
+            });
+            setRecentOrders(unique.slice(0, 3));
             // If search is currently empty, prefill with most recent order
-            if (!searchKey && parsed[0]?.id) {
-              setSearchKey(parsed[0].id);
+            if (!searchKey && unique[0]?.id) {
+              setSearchKey(unique[0].id);
             }
           }
         }
@@ -205,22 +211,23 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClos
   ];
 
   // Map order status to one of the 5 steps (0 to 4)
-  const getStepIndex = (status?: string, stage?: string): number => {
-    const s = (stage || status || "Pending").toLowerCase();
+  const getStepIndex = (status?: string, stage?: string, details?: string): number => {
+    const s = `${stage || ""} ${status || ""} ${details || ""}`.toLowerCase();
     if (s.includes("deliver") || s.includes("সম্পন্ন")) return 4;
     if (s.includes("out") || s.includes("পথে") || s.includes("transit") || s.includes("way")) return 3;
-    if (s.includes("ship") || s.includes("dispatch") || s.includes("কুরিয়ার") || s.includes("কুরিয়ারে")) return 2;
+    if (s.includes("ship") || s.includes("dispatch") || s.includes("কুরিয়ার") || s.includes("কুরিয়ারে") || s.includes("kuri") || s.includes("courier")) return 2;
     if (s.includes("process") || s.includes("প্যাকেজিং") || s.includes("প্রসেসিং")) return 1;
     return 0; // Default: অর্ডার কনফার্মেশন
   };
 
   const isCancelled = foundOrder && foundOrder.status?.toLowerCase() === "cancelled";
-  const currentStep = foundOrder ? getStepIndex(foundOrder.status, foundOrder.trackingStage) : 0;
-  const trackingNumber = foundOrder?.trackingNumber || (foundOrder?.id ? `TRK-${foundOrder.id.replace(/\D/g, "")}` : "");
   const trackingDetails =
-    foundOrder?.orderTrackingDetails ||
-    foundOrder?.trackingDetails ||
+    (foundOrder as any)?.orderTrackingDetails ||
+    (foundOrder as any)?.trackingDetails ||
+    (foundOrder as any)?.orderTrackingDetis ||
     "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। ডেলিভারি এরিয়া অনুযায়ী পণ্য প্যাকেজিং ও কুরিয়ারে হস্তান্তরের কাজ চলছে।";
+  const currentStep = foundOrder ? getStepIndex(foundOrder.status, foundOrder.trackingStage, trackingDetails) : 0;
+  const trackingNumber = foundOrder?.trackingNumber || (foundOrder?.id ? `TRK-${foundOrder.id.replace(/\D/g, "")}` : "");
 
   // Pre-filled WhatsApp message for support
   const supportWhatsappUrl = foundOrder
@@ -319,9 +326,9 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClos
                 <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
                   {language === "bn" ? "আপনার সাম্প্রতিক অর্ডার:" : "Recent Order:"}
                 </span>
-                {recentOrders.map((ord) => (
+                {recentOrders.map((ord, idx) => (
                   <button
-                    key={ord.id}
+                    key={`${ord.id}-${idx}`}
                     type="button"
                     onClick={() => {
                       setSearchKey(ord.id);

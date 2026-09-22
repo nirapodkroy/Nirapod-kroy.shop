@@ -1857,8 +1857,21 @@ app.put("/api/admin/orders/:id/status", requireAdmin, (req, res) => {
 
 // PUT /api/admin/orders/:id/tracking (Admin update tracking number, order tracking details, and status)
 app.put("/api/admin/orders/:id/tracking", requireAdmin, async (req, res) => {
-  const { trackingNumber, orderTrackingDetails, status } = req.body;
-  const order = storeState.orders.find(o => o.id === req.params.id);
+  const { trackingNumber, orderTrackingDetails, status, order: providedOrder } = req.body;
+  const rawId = req.params.id;
+  const targetId = decodeURIComponent(rawId).trim().toLowerCase();
+  const cleanTargetId = targetId.replace(/^#/, "");
+
+  let order = storeState.orders.find(o => {
+    const oId = (o.id || "").trim().toLowerCase();
+    return oId === targetId || oId === cleanTargetId || oId.replace(/^#/, "") === cleanTargetId;
+  });
+
+  if (!order && providedOrder) {
+    order = { ...providedOrder, id: rawId };
+    storeState.orders.unshift(order);
+  }
+
   if (!order) {
     return res.status(404).json({ error: "Order not found" });
   }
@@ -1876,8 +1889,8 @@ app.put("/api/admin/orders/:id/tracking", requireAdmin, async (req, res) => {
 
   saveState();
 
-  // Background dispatch to Google Sheets to update the row
-  syncOrderToGoogleSheets(order, storeState.webhookUrl).catch((err) => {
+  // Background dispatch to Google Sheets to update the row (forceSync=true to bypass deduplication cache)
+  syncOrderToGoogleSheets(order, storeState.webhookUrl, true).catch((err) => {
     console.error("Failed to sync updated tracking to Google Sheet:", err);
   });
 

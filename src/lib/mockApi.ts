@@ -152,12 +152,12 @@ function setSafeStorage<T>(key: string, val: T): void {
 const syncedOrderIdsCache = new Set<string>();
 
 // Background sync to Google Sheets (supports static sites via direct Webhook post)
-export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string): Promise<boolean> {
+export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceSync: boolean = false): Promise<boolean> {
   if (!order || !order.id) return false;
 
   // Strict deduplication guard
   const cleanOrderId = String(order.id).trim();
-  if (syncedOrderIdsCache.has(cleanOrderId)) {
+  if (!forceSync && syncedOrderIdsCache.has(cleanOrderId)) {
     return true; // Already queued or synced
   }
   syncedOrderIdsCache.add(cleanOrderId);
@@ -825,6 +825,124 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     return createJsonResponse({ ticker: tickerItems });
   }
 
+  // 7.1 Track Order (/api/orders/track) - Customer live tracking lookup
+  if ((path === "/api/orders/track" || path.startsWith("/api/orders/track")) && method === "GET") {
+    const rawParam = (
+      parsedUrl.searchParams.get("q") ||
+      parsedUrl.searchParams.get("id") ||
+      parsedUrl.searchParams.get("trackingNumber") ||
+      parsedUrl.searchParams.get("orderId") ||
+      parsedUrl.searchParams.get("query") ||
+      path.replace("/api/orders/track", "").replace(/^\//, "")
+    ).trim();
+
+    if (!rawParam) {
+      return createJsonResponse({ error: "অনুগ্রহ করে একটি অর্ডার নম্বর বা ট্র্যাকিং আইডি প্রদান করুন।" }, 400);
+    }
+
+    const query = rawParam.toLowerCase();
+    const cleanQuery = query.replace(/^#/, "");
+    const digitsOnly = rawParam.replace(/\D/g, "");
+
+    const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
+    let matchedOrder = orders.find(o => {
+      const oId = (o.id || "").toLowerCase();
+      const oCleanId = oId.replace(/^#/, "");
+      const oTrk = (o.trackingNumber || "").toLowerCase();
+      const oPhone = (o.customerPhone || "").replace(/\D/g, "");
+
+      return (
+        oId === query ||
+        oCleanId === cleanQuery ||
+        oTrk === query ||
+        oTrk === cleanQuery ||
+        oCleanId.includes(cleanQuery) ||
+        oTrk.includes(cleanQuery) ||
+        (digitsOnly.length >= 4 && (oId.replace(/\D/g, "").includes(digitsOnly) || oTrk.replace(/\D/g, "").includes(digitsOnly))) ||
+        (digitsOnly.length >= 6 && oPhone.includes(digitsOnly))
+      );
+    });
+
+    const targetWebhook = resolveGoogleSheetWebhook();
+    if (targetWebhook && targetWebhook.startsWith("http")) {
+      try {
+        const liveData = await fetchLiveGoogleSheetData(targetWebhook);
+        if (liveData && Array.isArray(liveData.orders)) {
+          const sheetMatch = liveData.orders.find((so: any) => {
+            const sId = String(so.id || "").toLowerCase();
+            const sCleanId = sId.replace(/^#/, "");
+            const sTrk = String(so.trackingNumber || "").toLowerCase();
+            const sPhone = String(so.customerPhone || "").replace(/\D/g, "");
+
+            return (
+              sId === query ||
+              sCleanId === cleanQuery ||
+              sTrk === query ||
+              sTrk === cleanQuery ||
+              sCleanId.includes(cleanQuery) ||
+              sTrk.includes(cleanQuery) ||
+              (digitsOnly.length >= 4 && (sId.replace(/\D/g, "").includes(digitsOnly) || sTrk.replace(/\D/g, "").includes(digitsOnly))) ||
+              (digitsOnly.length >= 6 && sPhone.includes(digitsOnly))
+            );
+          });
+
+          if (sheetMatch) {
+            const liveTrackingDetails = sheetMatch.orderTrackingDetails || sheetMatch.trackingDetails || sheetMatch.orderTrackingDetis || "";
+            const liveStatus = sheetMatch.status || "";
+            const liveTrackingNum = sheetMatch.trackingNumber || "";
+
+            if (matchedOrder) {
+              if (liveTrackingDetails) {
+                matchedOrder.orderTrackingDetails = liveTrackingDetails;
+                matchedOrder.trackingDetails = liveTrackingDetails;
+              }
+              if (liveStatus) matchedOrder.status = liveStatus;
+              if (liveTrackingNum) matchedOrder.trackingNumber = liveTrackingNum;
+              setSafeStorage(ORDERS_KEY, orders);
+            } else {
+              matchedOrder = {
+                id: sheetMatch.id || rawParam,
+                trackingNumber: liveTrackingNum || ("TRK-" + rawParam.replace(/\D/g, "")),
+                orderTrackingDetails: liveTrackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
+                trackingDetails: liveTrackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
+                status: liveStatus || "Pending",
+                customerName: sheetMatch.customerName || "Customer",
+                customerEmail: sheetMatch.customerEmail || "",
+                customerPhone: sheetMatch.customerPhone || "",
+                shippingAddress: sheetMatch.shippingAddress || "",
+                items: [],
+                totalPrice: Number(String(sheetMatch.totalPrice || "0").replace(/[^\d.]/g, "")) || 0,
+                paymentMethod: sheetMatch.paymentMethod || "Cash on Delivery",
+                createdAt: sheetMatch.createdAt || new Date().toISOString(),
+                syncedToGoogleSheet: true
+              };
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (!matchedOrder) {
+      return createJsonResponse({
+        success: false,
+        message: "প্রদত্ত ট্র্যাকিং নম্বর বা অর্ডার আইডি দিয়ে কোনো অর্ডার পাওয়া যায়নি।"
+      }, 404);
+    }
+
+    const trackingNum = matchedOrder.trackingNumber || ("TRK-" + matchedOrder.id.replace(/\D/g, ""));
+    const trackingDetails = matchedOrder.orderTrackingDetails || matchedOrder.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। ডেলিভারি এরিয়া অনুযায়ী প্যাকেজিং ও কুরিয়ারে হস্তান্তরের কাজ চলছে।";
+
+    return createJsonResponse({
+      success: true,
+      order: {
+        ...matchedOrder,
+        trackingNumber: trackingNum,
+        orderTrackingDetails: trackingDetails,
+        trackingDetails: trackingDetails
+      }
+    });
+  }
+
   // 8. Products List (/api/products)
   if (path === "/api/products" && method === "GET") {
     const category = parsedUrl.searchParams.get("category");
@@ -996,6 +1114,50 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       order.status = body.status;
       setSafeStorage(ORDERS_KEY, orders);
       return createJsonResponse({ success: true, order });
+    }
+    return createJsonResponse({ error: "অর্ডার পাওয়া যায়নি" }, 404);
+  }
+
+  // PUT /api/admin/orders/:id/tracking (Admin update tracking number, details, and status)
+  if (path.startsWith("/api/admin/orders/") && path.endsWith("/tracking") && method === "PUT") {
+    const rawId = path.replace("/api/admin/orders/", "").replace("/tracking", "");
+    const targetId = decodeURIComponent(rawId).trim().toLowerCase();
+    const cleanTargetId = targetId.replace(/^#/, "");
+
+    const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
+    let order = orders.find(o => {
+      const oId = (o.id || "").trim().toLowerCase();
+      return oId === targetId || oId === cleanTargetId || oId.replace(/^#/, "") === cleanTargetId;
+    });
+
+    if (!order && body && body.order) {
+      order = { ...body.order, id: rawId };
+      orders.unshift(order);
+    }
+
+    if (order) {
+      if (body.trackingNumber !== undefined) {
+        order.trackingNumber = String(body.trackingNumber).trim();
+      }
+      if (body.orderTrackingDetails !== undefined) {
+        order.orderTrackingDetails = String(body.orderTrackingDetails).trim();
+        order.trackingDetails = String(body.orderTrackingDetails).trim();
+      }
+      if (body.status !== undefined) {
+        order.status = body.status;
+      }
+      setSafeStorage(ORDERS_KEY, orders);
+
+      // Background dispatch to Google Sheets to update the row with forceSync = true
+      syncOrderToGoogleSheets(order, undefined, true).catch((err) => {
+        console.warn("Failed to sync updated tracking to Google Sheet:", err);
+      });
+
+      return createJsonResponse({
+        success: true,
+        message: "অর্ডার ট্র্যাকিং বিবরণ সফলভাবে সংরক্ষিত হয়েছে এবং গুগল শিটে পাঠানো হয়েছে!",
+        order
+      });
     }
     return createJsonResponse({ error: "অর্ডার পাওয়া যায়নি" }, 404);
   }

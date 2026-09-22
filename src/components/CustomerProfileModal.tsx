@@ -148,9 +148,9 @@ export const CustomerProfileModal: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {orders.map((order) => (
+                  {orders.map((order, idx) => (
                     <div
-                      key={order.id}
+                      key={`${order.id}-${idx}`}
                       className="p-4 sm:p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 space-y-3"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">

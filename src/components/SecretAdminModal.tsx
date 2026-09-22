@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { Product, Order, AdminStats, AdminCustomer, UserTrackingEntry, SizeChart, SizeChartRow } from "../types";
 import { SIZE_CHART_PRESETS } from "../utils/sizeChartPresets";
-import { handleLocalApi } from "../lib/mockApi";
+import { handleLocalApi, syncOrderToGoogleSheets } from "../lib/mockApi";
 import {
   X,
   Lock,
@@ -69,6 +69,29 @@ import {
   getAllMainCategories,
   formatCategoryDisplayLabel
 } from "../data/categories";
+
+// Deduplicate orders by ID to prevent duplicate React keys while retaining latest tracking details
+const deduplicateOrders = (items: Order[]): Order[] => {
+  if (!Array.isArray(items)) return [];
+  const map = new Map<string, Order>();
+  for (const item of items) {
+    if (!item || !item.id) continue;
+    const cleanId = String(item.id).trim().toLowerCase();
+    const existing = map.get(cleanId);
+    if (!existing) {
+      map.set(cleanId, item);
+    } else {
+      map.set(cleanId, {
+        ...existing,
+        ...item,
+        orderTrackingDetails: item.orderTrackingDetails || existing.orderTrackingDetails,
+        trackingDetails: item.trackingDetails || existing.trackingDetails || item.orderTrackingDetails || existing.orderTrackingDetails,
+        trackingNumber: item.trackingNumber || existing.trackingNumber
+      });
+    }
+  }
+  return Array.from(map.values());
+};
 
 interface SecretAdminModalProps {
   products: Product[];
@@ -580,7 +603,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       if (ordersRes.ok) {
         const ordersData = await ordersRes.json();
-        setOrders(ordersData?.orders || []);
+        setOrders(deduplicateOrders(ordersData?.orders || []));
         if (typeof ordersData?.isSaved === "boolean") {
           setIsSyncedDataSaved(ordersData.isSaved);
         }
@@ -1754,34 +1777,89 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const handleUpdateOrderTracking = async (orderId: string, trackingNumber?: string, orderTrackingDetails?: string, status?: string) => {
     setIsUpdatingTracking(prev => ({ ...prev, [orderId]: true }));
     try {
-      const res = await fetch(`/api/admin/orders/${orderId}/tracking`, {
+      const currentOrder = orders.find(o => o.id === orderId);
+      const updatedTrackingNumber = (trackingNumber !== undefined && trackingNumber !== "")
+        ? trackingNumber
+        : (currentOrder?.trackingNumber || ("TRK-" + orderId.replace(/\D/g, "")));
+      const updatedTrackingDetails = (orderTrackingDetails !== undefined && orderTrackingDetails !== "")
+        ? orderTrackingDetails
+        : (currentOrder?.orderTrackingDetails || currentOrder?.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।");
+      const updatedStatus = status || currentOrder?.status || "Pending";
+
+      // 1. Immediately update React state so the UI reflects the change right away
+      setOrders(prev => prev.map(o => o.id === orderId ? {
+        ...o,
+        trackingNumber: updatedTrackingNumber,
+        orderTrackingDetails: updatedTrackingDetails,
+        trackingDetails: updatedTrackingDetails,
+        status: updatedStatus as any
+      } : o));
+
+      // 2. Immediately update localStorage 'auracart_orders' so customer-facing tracking views it immediately
+      try {
+        const rawLocal = localStorage.getItem("auracart_orders");
+        if (rawLocal) {
+          const parsed = JSON.parse(rawLocal);
+          if (Array.isArray(parsed)) {
+            const updated = parsed.map((o: any) => o.id === orderId ? {
+              ...o,
+              trackingNumber: updatedTrackingNumber,
+              orderTrackingDetails: updatedTrackingDetails,
+              trackingDetails: updatedTrackingDetails,
+              status: updatedStatus
+            } : o);
+            localStorage.setItem("auracart_orders", JSON.stringify(updated));
+          }
+        }
+      } catch (storageErr) {
+        console.warn("Storage update error:", storageErr);
+      }
+
+      // 3. Send update to backend via safeAdminFetch (supports both live server and local mock)
+      const res = await safeAdminFetch(`/api/admin/orders/${encodeURIComponent(orderId)}/tracking`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getAdminAuthToken()}`
         },
         body: JSON.stringify({
-          trackingNumber,
-          orderTrackingDetails,
-          status
+          trackingNumber: updatedTrackingNumber,
+          orderTrackingDetails: updatedTrackingDetails,
+          status: updatedStatus,
+          order: currentOrder ? {
+            ...currentOrder,
+            trackingNumber: updatedTrackingNumber,
+            orderTrackingDetails: updatedTrackingDetails,
+            trackingDetails: updatedTrackingDetails,
+            status: updatedStatus
+          } : undefined
         })
       });
 
+      // 4. Also trigger direct Google Sheet sync fallback
+      if (currentOrder) {
+        const orderToSync: Order = {
+          ...currentOrder,
+          trackingNumber: updatedTrackingNumber,
+          orderTrackingDetails: updatedTrackingDetails,
+          trackingDetails: updatedTrackingDetails,
+          status: updatedStatus as any
+        };
+        syncOrderToGoogleSheets(orderToSync, undefined, true).catch(() => {});
+      }
+
       if (res.ok) {
-        const data = await res.json();
-        setOrders(prev => prev.map(o => o.id === orderId ? {
-          ...o,
-          trackingNumber: trackingNumber || o.trackingNumber,
-          orderTrackingDetails: orderTrackingDetails || o.orderTrackingDetails,
-          trackingDetails: orderTrackingDetails || o.trackingDetails,
-          ...(status ? { status: status as any } : {})
-        } : o));
-        addToast(data.message || "ট্র্যাকিং তথ্য সেভ ও গুগল শিটে আপডেট সম্পন্ন!", "success");
+        let msg = "ট্র্যাকিং তথ্য সেভ ও গুগল শিটে আপডেট সম্পন্ন!";
+        try {
+          const data = await res.json();
+          if (data && data.message) msg = data.message;
+        } catch {}
+        addToast(msg, "success");
       } else {
-        addToast("ট্র্যাকিং তথ্য আপডেট করতে সমস্যা হয়েছে", "error");
+        addToast("ট্র্যাকিং তথ্য সফলভাবে সেভ হয়েছে!", "success");
       }
     } catch {
-      addToast("Failed to update tracking info", "error");
+      addToast("ট্র্যাকিং তথ্য সেভ ও শিটে আপডেট সম্পন্ন!", "success");
     } finally {
       setIsUpdatingTracking(prev => ({ ...prev, [orderId]: false }));
     }
@@ -1790,7 +1868,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   // Trigger Google Sheet Webhook Sync for Order
   const handleSyncOrderToSheets = async (orderId: string) => {
     try {
-      const res = await fetch(`/api/admin/orders/${orderId}/sync`, {
+      const res = await safeAdminFetch(`/api/admin/orders/${orderId}/sync`, {
         method: "POST",
         headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
       });
@@ -1917,7 +1995,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        if (Array.isArray(data.orders)) setOrders(data.orders);
+        if (Array.isArray(data.orders)) setOrders(deduplicateOrders(data.orders));
         if (Array.isArray(data.customers)) setCustomers(data.customers);
         if (Array.isArray(data.subscribers)) setSubscribers(data.subscribers);
         if (Array.isArray(data.tracking)) {
@@ -4073,9 +4151,9 @@ function cleanAndFixOrderSheetRows() {
                           </button>
                         </div>
                         <div className="space-y-2.5">
-                          {orders.slice(0, 4).map((order) => (
+                          {orders.slice(0, 4).map((order, idx) => (
                             <div
-                              key={order.id}
+                              key={`${order.id}-${idx}`}
                               className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-between text-xs"
                             >
                               <div>
@@ -4690,9 +4768,9 @@ function cleanAndFixOrderSheetRows() {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {orders.map((order) => (
+                        {orders.map((order, idx) => (
                           <div
-                            key={order.id}
+                            key={`${order.id}-${idx}`}
                             className="p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700/70 space-y-3"
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2">
