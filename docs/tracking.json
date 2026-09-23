@@ -1,26 +1,38 @@
 {
-  "trk-765550": {
-    "id": "TRK-765550",
-    "trackingNumber": "TRK-765550",
-    "orderTrackingDetails": "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
-    "status": "Pending",
-    "currentStepIndex": 0,
-    "trackingStage": "confirmed",
-    "customerName": "Muhammad Tarif",
-    "customerPhone": "8801711223344",
-    "totalPrice": 640,
-    "createdAt": "Muhammad Tarif"
-  },
   "trk-585755": {
     "id": "TRK-585755",
     "trackingNumber": "TRK-585755",
-    "orderTrackingDetails": "Steadfast কুরিয়ার সার্ভিসে বুকিং সম্পন্ন হয়েছে। ট্র্যাকিং শুরু হয়েছে।",
-    "status": "Shipped",
-    "currentStepIndex": 2,
-    "trackingStage": "dispatched",
+    "orderTrackingDetails": "পণ্যটি গ্রাহকের নিকট সফলভাবে হস্তান্তর ও ডেলিভারি সম্পন্ন হয়েছে।",
+    "status": "Delivered",
+    "currentStepIndex": 4,
+    "trackingStage": "delivered",
     "customerName": "Muhammad Tarif",
     "customerPhone": "8801711223344",
     "totalPrice": 880,
     "createdAt": "Muhammad Tarif"
+  },
+  "ord-948210": {
+    "id": "ORD-948210",
+    "trackingNumber": "TRK-948210",
+    "orderTrackingDetails": "ক্যাশ অন ডেলিভারি পেমেন্ট গৃহীত এবং অর্ডার সফলভাবে সম্পন্ন হয়েছে।",
+    "status": "Delivered",
+    "currentStepIndex": 4,
+    "trackingStage": "delivered",
+    "customerName": "Mahmudul Karim",
+    "customerPhone": "+8801712345678",
+    "totalPrice": 1260,
+    "createdAt": "2026-09-22T08:47:34.866Z"
+  },
+  "trk-948210": {
+    "id": "ORD-948210",
+    "trackingNumber": "TRK-948210",
+    "orderTrackingDetails": "ক্যাশ অন ডেলিভারি পেমেন্ট গৃহীত এবং অর্ডার সফলভাবে সম্পন্ন হয়েছে।",
+    "status": "Delivered",
+    "currentStepIndex": 4,
+    "trackingStage": "delivered",
+    "customerName": "Mahmudul Karim",
+    "customerPhone": "+8801712345678",
+    "totalPrice": 1260,
+    "createdAt": "2026-09-22T08:47:34.866Z"
   }
 }

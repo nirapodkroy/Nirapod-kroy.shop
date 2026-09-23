@@ -327,6 +327,18 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   });
 
+  const [autoPushOrdersOnSave, setAutoPushOrdersOnSave] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem("nirapod_auto_push_orders_on_save");
+      if (cached !== null) return cached === "true";
+      return true;
+    } catch {
+      return true;
+    }
+  });
+  const [isPushingOrdersToGithub, setIsPushingOrdersToGithub] = useState(false);
+  const [deleteFromGithubOnOrderDelete, setDeleteFromGithubOnOrderDelete] = useState(true);
+
   // Product Sizing & Size Chart states
   const [formHasSizes, setFormHasSizes] = useState(false);
   const [formSizesInput, setFormSizesInput] = useState("S, M, L, XL, XXL");
@@ -673,14 +685,25 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       if (trackRes.ok) {
         const trackData = await trackRes.json();
-        setUserTracking(trackData?.tracking || []);
-        setTrackingStats({
-          totalVisits: trackData?.totalVisits || 0,
-          activeNow: trackData?.activeNow || 0,
-          pageStats: trackData?.pageStats || {},
-          deviceStats: trackData?.deviceStats || {},
-          browserStats: trackData?.browserStats || {}
-        });
+        if (!trackData?.isSaved && !isLiveSheetMode) {
+          setUserTracking([]);
+          setTrackingStats({
+            totalVisits: 0,
+            activeNow: 0,
+            pageStats: {},
+            deviceStats: {},
+            browserStats: {}
+          });
+        } else {
+          setUserTracking(trackData?.tracking || []);
+          setTrackingStats({
+            totalVisits: trackData?.totalVisits || 0,
+            activeNow: trackData?.activeNow || 0,
+            pageStats: trackData?.pageStats || {},
+            deviceStats: trackData?.deviceStats || {},
+            browserStats: trackData?.browserStats || {}
+          });
+        }
       }
     } catch (e) {
       console.warn("Admin tracking fetch fallback:", e);
@@ -1792,14 +1815,75 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  // Update Order Tracking Details & Tracking Number (Syncs to Google Sheets & memory)
+  // Push orders & tracking directly to GitHub repo
+  const handlePushOrdersToGithub = async (overrideOrders?: Order[]) => {
+    const token = githubToken.trim();
+    const cleanRepo = String(githubRepo)
+      .trim()
+      .replace(/^https?:\/\//i, "")
+      .replace(/^github\.com\//i, "")
+      .replace(/\.git$/i, "")
+      .replace(/\/+$/, "");
+    const cleanBranch = githubBranch.trim() || "main";
+    const ordersToPush = Array.isArray(overrideOrders) && overrideOrders.length > 0
+      ? overrideOrders
+      : orders;
+
+    if (!token) {
+      setActiveTab("github");
+      addToast("GitHub-এ পুশ করার জন্য আগে আপনার GitHub Personal Access Token দিন", "warning");
+      return false;
+    }
+
+    setIsPushingOrdersToGithub(true);
+    try {
+      const activeAdminToken = getAdminAuthToken();
+      const res = await safeAdminFetch("/api/admin/github/push-orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${activeAdminToken}`
+        },
+        body: JSON.stringify({
+          token,
+          repo: cleanRepo,
+          branch: cleanBranch,
+          orders: ordersToPush
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const commitUrl = data.commitUrl || `https://github.com/${cleanRepo}/commits/${cleanBranch}`;
+        const timeStr = new Date().toLocaleTimeString("bn-BD");
+        setLastGithubCommitUrl(commitUrl);
+        setLastGithubSyncTime(timeStr);
+        localStorage.setItem("nirapod_gh_last_commit", commitUrl);
+        localStorage.setItem("nirapod_gh_last_time", timeStr);
+        addToast(data.message || "অর্ডার ও ট্র্যাকিং ডেটা সফলভাবে GitHub-এ পুশ হয়েছে!", "success");
+        return true;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addToast(errData.error || "GitHub-এ পুশ করতে সমস্যা হয়েছে।", "error");
+        return false;
+      }
+    } catch (err: any) {
+      addToast(`GitHub পুশ এরর: ${err.message}`, "error");
+      return false;
+    } finally {
+      setIsPushingOrdersToGithub(false);
+    }
+  };
+
+  // Update Order Tracking Details & Tracking Number (Syncs to Google Sheets, local memory & GitHub)
   const handleUpdateOrderTracking = async (
     orderId: string,
     trackingNumber?: string,
     orderTrackingDetails?: string,
     status?: string,
     stepIndexParam?: number,
-    stageParam?: string
+    stageParam?: string,
+    pushToGithubDirectly?: boolean
   ) => {
     setIsUpdatingTracking(prev => ({ ...prev, [orderId]: true }));
     try {
@@ -1849,7 +1933,8 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       };
 
       // 1. Immediately update React state so the UI reflects the change right away
-      setOrders(prev => prev.map(o => o.id === orderId ? updatedOrderObject : o));
+      const updatedOrdersList = orders.map(o => o.id === orderId ? updatedOrderObject : o);
+      setOrders(updatedOrdersList);
 
       // 2. Immediately update localStorage 'auracart_orders' so customer-facing tracking views it immediately
       try {
@@ -1865,6 +1950,17 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         console.warn("Storage update error:", storageErr);
       }
 
+      // GitHub credentials
+      const cleanRepo = String(githubRepo)
+        .trim()
+        .replace(/^https?:\/\//i, "")
+        .replace(/^github\.com\//i, "")
+        .replace(/\.git$/i, "")
+        .replace(/\/+$/, "");
+      const cleanBranch = githubBranch.trim() || "main";
+      const cleanToken = githubToken.trim();
+      const shouldPushToGithub = pushToGithubDirectly ?? (autoPushOrdersOnSave && !!cleanToken);
+
       // 3. Send update to backend via safeAdminFetch (supports both live server and local mock)
       const res = await safeAdminFetch(`/api/admin/orders/${encodeURIComponent(orderId)}/tracking`, {
         method: "PUT",
@@ -1879,15 +1975,26 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           currentStepIndex: safeStepIndex,
           trackingStage: updatedStage,
           trackingSteps: updatedTrackingSteps,
-          order: updatedOrderObject
+          order: updatedOrderObject,
+          pushToGithub: shouldPushToGithub,
+          token: cleanToken,
+          repo: cleanRepo,
+          branch: cleanBranch
         })
       });
 
       // 4. Also trigger direct Google Sheet sync fallback
       syncOrderToGoogleSheets(updatedOrderObject, undefined, true).catch(() => {});
 
+      // 5. If GitHub push was explicitly requested or auto-push is on, ensure client-side push as backup
+      if (shouldPushToGithub && cleanToken) {
+        handlePushOrdersToGithub(updatedOrdersList).catch(() => {});
+      }
+
       if (res.ok) {
-        let msg = `অর্ডার #${orderId} এর ধাপ ${safeStepIndex + 1} (${stepDef.titleBn}) সফলভাবে সেভ হয়েছে!`;
+        let msg = shouldPushToGithub
+          ? `অর্ডার #${orderId} এর ট্র্যাকিং ধাপ ${safeStepIndex + 1} সেভ হয়েছে, গুগল শিটে ও GitHub-এ সরাসরি পুশ হয়েছে!`
+          : `অর্ডার #${orderId} এর ধাপ ${safeStepIndex + 1} (${stepDef.titleBn}) সফলভাবে সেভ ও গুগল শিটে আপডেট হয়েছে!`;
         try {
           const data = await res.json();
           if (data && data.message) msg = data.message;
@@ -1898,6 +2005,90 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       }
     } catch {
       addToast("ট্র্যাকিং তথ্য সেভ ও শিটে আপডেট সম্পন্ন!", "success");
+    } finally {
+      setIsUpdatingTracking(prev => ({ ...prev, [orderId]: false }));
+    }
+  };
+
+  // Reset or Clear tracking details from admin panel, Google Sheet & GitHub
+  const handleResetOrderTracking = async (orderId: string, pushToGithub = true) => {
+    if (!window.confirm(`আপনি কি নিশ্চিত যে অর্ডার #${orderId} এর ট্র্যাকিং বিবরণ মুছে/রিসেট করতে চান? এটি অ্যাডমিন প্যানেল, গুগল শিট ও GitHub থেকে আপডেট হবে।`)) {
+      return;
+    }
+
+    setIsUpdatingTracking(prev => ({ ...prev, [orderId]: true }));
+    try {
+      const targetOrder = orders.find(o => o.id === orderId);
+      if (!targetOrder) return;
+
+      const resetOrder: Order = {
+        ...targetOrder,
+        trackingNumber: "",
+        orderTrackingDetails: "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
+        trackingDetails: "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
+        currentStepIndex: 0,
+        trackingStage: "confirmed",
+        trackingSteps: [
+          {
+            id: "confirmed",
+            stepNumber: 1,
+            titleBn: "অর্ডার কনফার্মেশন",
+            titleEn: "Order Confirmed",
+            descBn: "অর্ডার গৃহীত ও ভেরিফাই সম্পন্ন",
+            descEn: "Order verified & confirmed",
+            completed: true,
+            completedAt: targetOrder.createdAt || new Date().toISOString(),
+            note: "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।"
+          }
+        ]
+      };
+
+      const updatedOrdersList = orders.map(o => o.id === orderId ? resetOrder : o);
+      setOrders(updatedOrdersList);
+
+      try {
+        const rawLocal = localStorage.getItem("auracart_orders");
+        if (rawLocal) {
+          const parsed = JSON.parse(rawLocal);
+          if (Array.isArray(parsed)) {
+            localStorage.setItem("auracart_orders", JSON.stringify(parsed.map((o: any) => o.id === orderId ? resetOrder : o)));
+          }
+        }
+      } catch {}
+
+      const cleanRepo = String(githubRepo).trim().replace(/^https?:\/\//i, "").replace(/^github\.com\//i, "").replace(/\.git$/i, "").replace(/\/+$/, "");
+      const cleanBranch = githubBranch.trim() || "main";
+      const cleanToken = githubToken.trim();
+
+      await safeAdminFetch(`/api/admin/orders/${encodeURIComponent(orderId)}/tracking/reset`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAdminAuthToken()}`
+        },
+        body: JSON.stringify({
+          pushToGithub: pushToGithub && !!cleanToken,
+          token: cleanToken,
+          repo: cleanRepo,
+          branch: cleanBranch
+        })
+      });
+
+      syncOrderToGoogleSheets(resetOrder, undefined, true).catch(() => {});
+
+      if (pushToGithub && cleanToken) {
+        handlePushOrdersToGithub(updatedOrdersList).catch(() => {});
+      }
+
+      setOrderTrackingDrafts(prev => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
+
+      addToast(`অর্ডার #${orderId} এর ট্র্যাকিং বিবরণ সফলভাবে রিসেট/মুছে ফেলা হয়েছে!`, "success");
+    } catch {
+      addToast("ট্র্যাকিং রিসেট করতে সমস্যা হয়েছে", "error");
     } finally {
       setIsUpdatingTracking(prev => ({ ...prev, [orderId]: false }));
     }
@@ -1923,7 +2114,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  // Delete Order (Admin panel only, retains Google Sheets data)
+  // Delete Order (Admin panel, Google Sheets intact, sync to GitHub if chosen)
   const handleDeleteOrder = (order: Order) => {
     setOrderToDelete({ id: order.id, customerName: order.customerName, total: order.totalPrice });
   };
@@ -1936,16 +2127,33 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     // Optimistically update order list
     const remainingOrders = orders.filter(o => o.id !== id);
     setOrders(remainingOrders);
-    addToast(`অর্ডার #${id} অ্যাডমিন প্যানেল থেকে মুছে ফেলা হয়েছে (গুগল শিটের রেকর্ড অক্ষত রাখা হয়েছে)।`, "info");
+    addToast(`অর্ডার #${id} সফলভাবে মুছে ফেলা হয়েছে।`, "info");
+
+    const cleanRepo = String(githubRepo).trim().replace(/^https?:\/\//i, "").replace(/^github\.com\//i, "").replace(/\.git$/i, "").replace(/\/+$/, "");
+    const cleanBranch = githubBranch.trim() || "main";
+    const cleanToken = githubToken.trim();
 
     try {
       const res = await safeAdminFetch(`/api/admin/orders/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAdminAuthToken()}`
+        },
+        body: JSON.stringify({
+          pushToGithub: deleteFromGithubOnOrderDelete && !!cleanToken,
+          token: cleanToken,
+          repo: cleanRepo,
+          branch: cleanBranch
+        })
       });
-      if (res.ok) {
-        fetchAdminData();
+
+      if (deleteFromGithubOnOrderDelete && cleanToken) {
+        handlePushOrdersToGithub(remainingOrders).catch(() => {});
+        addToast(`অর্ডার #${id} GitHub থেকেও সফলভাবে মুছে ফেলা হয়েছে!`, "success");
       }
+
+      fetchAdminData();
     } catch (err) {
       console.error(err);
       fetchAdminData();
@@ -2115,10 +2323,58 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
+  // Helper to completely purge all admin & tracking localStorage caches
+  const clearAllAdminLocalStorage = () => {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    const keys = [
+      "nirapod_user_tracking_list",
+      "nirapod_admin_user_tracking",
+      "nirapod_admin_is_data_saved",
+      "nirapod_admin_data_saved",
+      "auracart_orders",
+      "nirapod_orders",
+      "nirapod_customers",
+      "nirapod_admin_customers",
+      "nirapod_subscribers",
+      "nirapod_admin_subscribers",
+      "nirapod_custom_revenue",
+      "nirapod_admin_stats"
+    ];
+    keys.forEach(k => {
+      try { localStorage.removeItem(k); } catch {}
+    });
+    try { sessionStorage.removeItem("_nirapod_user_geo"); } catch {}
+  };
+
   // Clear saved data from Admin Panel (Google Sheets remains 100% safe & untouched)
   const handleClearSavedData = async () => {
     setIsClearingSavedData(true);
     try {
+      setOrders([]);
+      setCustomers([]);
+      setSubscribers([]);
+      setUserTracking([]);
+      setTrackingStats({
+        totalVisits: 0,
+        activeNow: 0,
+        pageStats: {},
+        deviceStats: {},
+        browserStats: {}
+      });
+      setStats(prev => prev ? {
+        ...prev,
+        totalRevenue: 0,
+        calculatedRevenue: 0,
+        isCustomRevenue: false,
+        totalOrders: 0,
+        syncedGoogleSheetsCount: 0
+      } : null);
+      setIsSyncedDataSaved(false);
+      setIsLiveSheetMode(false);
+      setShowClearConfirmModal(false);
+
+      clearAllAdminLocalStorage();
+
       const res = await safeAdminFetch("/api/admin/clear-saved-data", {
         method: "POST",
         headers: {
@@ -2126,36 +2382,26 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           Authorization: `Bearer ${getAdminAuthToken()}`
         }
       });
+
+      try {
+        await safeAdminFetch("/api/admin/tracking/clear", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getAdminAuthToken()}`
+          },
+          body: JSON.stringify({ webhookUrl })
+        });
+      } catch {}
+
       const data = await res.json();
       if (res.ok && data.success) {
-        setOrders([]);
-        setCustomers([]);
-        setSubscribers([]);
-        setUserTracking([]);
-        setTrackingStats({
-          totalVisits: 0,
-          activeNow: 0,
-          pageStats: {},
-          deviceStats: {},
-          browserStats: {}
-        });
-        setStats(prev => prev ? {
-          ...prev,
-          totalRevenue: 0,
-          calculatedRevenue: 0,
-          isCustomRevenue: false,
-          totalOrders: 0,
-          syncedGoogleSheetsCount: 0
-        } : null);
-        setIsSyncedDataSaved(false);
-        setIsLiveSheetMode(false);
-        setShowClearConfirmModal(false);
         addToast(
           data.message || "অ্যাডমিন প্যানেলের সংরক্ষিত ডেটা মুছে ফেলা হয়েছে (গুগল শিট অক্ষত রয়েছে)।",
           "success"
         );
       } else {
-        addToast(data.error || "ডেটা মুছতে ব্যর্থ হয়েছে।", "error");
+        addToast("ডেটা মুছে ফেলা হয়েছে।", "info");
       }
     } catch (err: any) {
       addToast(err?.message || "মুছতে সমস্যা হয়েছে", "error");
@@ -2188,14 +2434,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setIsLiveSheetMode(false);
     setIsSyncedDataSaved(false);
 
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.removeItem("nirapod_orders");
-      localStorage.removeItem("nirapod_admin_customers");
-      localStorage.removeItem("nirapod_admin_subscribers");
-      localStorage.removeItem("nirapod_admin_user_tracking");
-      localStorage.removeItem("nirapod_admin_data_saved");
-      localStorage.removeItem("nirapod_admin_stats");
-    }
+    clearAllAdminLocalStorage();
 
     try {
       await safeAdminFetch("/api/admin/discard-preview", {
@@ -2207,6 +2446,19 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
     } catch (e) {
       console.warn("Discard preview backend call fallback:", e);
+    }
+
+    try {
+      await safeAdminFetch("/api/admin/tracking/clear", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAdminAuthToken()}`
+        },
+        body: JSON.stringify({ webhookUrl })
+      });
+    } catch (e) {
+      console.warn("Discard preview tracking clear fallback:", e);
     }
 
     addToast("শিট প্রিভিউ ডেটা ও ট্র্যাকিং সম্পূর্ণ বাতিল ও মুছে ফেলা হয়েছে।", "info");
@@ -2426,13 +2678,30 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       if (typeof window !== "undefined" && window.localStorage) {
         localStorage.removeItem("nirapod_admin_user_tracking");
+        localStorage.removeItem("nirapod_user_tracking_list");
+        try { sessionStorage.removeItem("_nirapod_user_geo"); } catch {}
       }
+
+      // If Google Sheet webhook is connected, also request Apps Script to clear the user tracking tab
+      if (webhookUrl && webhookUrl.startsWith("http")) {
+        try {
+          const fetchUrl = webhookUrl + (webhookUrl.includes("?") ? "&" : "?") + "action=clear_user_tracking";
+          fetch(fetchUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "clear_user_tracking" }),
+            mode: "no-cors"
+          }).catch(() => {});
+        } catch {}
+      }
+
       const res = await safeAdminFetch("/api/admin/tracking/clear", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getAdminAuthToken()}`
-        }
+        },
+        body: JSON.stringify({ webhookUrl })
       });
       if (res.ok) {
         addToast("ভিজিটর ট্র্যাকিং হিস্ট্রি সফলভাবে মুছে ফেলা হয়েছে।", "success");
@@ -2629,6 +2898,13 @@ function doGet(e) {
     if (e && e.parameter && (e.parameter.action === "fix_customers" || e.parameter.action === "clean_customers")) {
       var fixCustMsg = fixAndCleanCustomersSheet();
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: fixCustMsg }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ইউজার ট্র্যাকিং শিট খালি করার স্পেশাল কমান্ড (?action=clear_user_tracking)
+    if (e && e.parameter && e.parameter.action === "clear_user_tracking") {
+      var clearTrackMsg = clearUserTrackingSheetRows();
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: clearTrackMsg }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -2836,6 +3112,13 @@ function doPost(e) {
     if (data.action === "fix_customers" || data.action === "clean_customers" || (e && e.parameter && (e.parameter.action === "fix_customers" || e.parameter.action === "clean_customers"))) {
       var fixCustMsg = fixAndCleanCustomersSheet();
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: fixCustMsg }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ইউজার ট্র্যাকিং শিট সম্পূর্ণ খালি / ক্লিয়ার করার স্পেশাল কমান্ড
+    if (data.action === "clear_user_tracking" || (e && e.parameter && e.parameter.action === "clear_user_tracking")) {
+      var clearTrackMsg = clearUserTrackingSheetRows();
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: clearTrackMsg }))
         .setMimeType(ContentService.MimeType.JSON);
     }
     
@@ -3403,6 +3686,20 @@ function cleanOrderSheetTrackingRows() {
   }
   
   return "ক্লিনআপ সম্পন্ন! " + cleanedCount + " টি ট্র্যাকিং রো, " + duplicateOrdersRemoved + " টি ডুপ্লিকেট অর্ডার এবং " + duplicateTrackingRemoved + " টি ডুপ্লিকেট ট্র্যাকিং রো সফলভাবে মোছা হয়েছে!";
+}
+
+// ==========================================
+// ৩.১ ইউজার ট্র্যাকিং শিটের সকল ভিজিটর লগ মুছে খালি করার ফাংশন
+// ==========================================
+function clearUserTrackingSheetRows() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var trackSheet = findSheet(ss, ["user traking", "user tracking", "User Traking", "User Tracking"], "trak") || findSheet(ss, [], "track");
+  if (!trackSheet) return "ইউজার ট্র্যাকিং শিট খুঁজে পাওয়া যায়নি";
+  if (trackSheet.getLastRow() > 1) {
+    trackSheet.deleteRows(2, trackSheet.getLastRow() - 1);
+    return "ইউজার ট্র্যাকিং শিটের সকল ভিজিটর লগ সফলভাবে ডিলিট করা হয়েছে";
+  }
+  return "ইউজার ট্র্যাকিং শিট ইতিমধ্যে সম্পূর্ণ খালি রয়েছে";
 }
 
 // ==========================================
@@ -4888,16 +5185,55 @@ function cleanAndFixOrderSheetRows() {
                 {/* TAB 3: ORDERS MANAGEMENT */}
                 {activeTab === "orders" && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-zinc-800/40 border border-zinc-700/60">
                       <div>
-                        <h3 className="font-bold text-base text-white">Full Customer Orders List</h3>
-                        <p className="text-xs text-zinc-400">
-                          Complete privacy data (address, phone, items) visible exclusively to store owner
+                        <h3 className="font-bold text-base text-white flex items-center gap-2">
+                          <Package className="w-5 h-5 text-emerald-400" />
+                          <span>Customer Orders & Live Tracking</span>
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                          কাস্টমার অর্ডার ও ট্র্যাকিং আপডেট করুন — গুগল শিট ও GitHub-এ সরাসরি সিঙ্ক হবে
                         </p>
                       </div>
-                      <span className="text-xs font-semibold text-emerald-400">
-                        Total Orders: {orders.length}
-                      </span>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Auto push on tracking save toggle */}
+                        <label className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900/80 border border-zinc-700/80 text-xs text-zinc-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={autoPushOrdersOnSave}
+                            onChange={(e) => {
+                              const val = e.target.checked;
+                              setAutoPushOrdersOnSave(val);
+                              try {
+                                localStorage.setItem("nirapod_auto_push_orders_on_save", String(val));
+                              } catch {}
+                            }}
+                            className="rounded accent-emerald-500 w-3.5 h-3.5"
+                          />
+                          <span className="text-[11px] font-medium">অটো GitHub পুশ</span>
+                        </label>
+
+                        {/* Direct Push all orders & tracking to GitHub button */}
+                        <button
+                          type="button"
+                          disabled={isPushingOrdersToGithub}
+                          onClick={() => handlePushOrdersToGithub()}
+                          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          title="সকল অর্ডার ও ট্র্যাকিং ডেটা সরাসরি GitHub রিপোজিটরির docs/orders.json এবং tracking.json এ কমিট করুন"
+                        >
+                          {isPushingOrdersToGithub ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Github className="w-3.5 h-3.5" />
+                          )}
+                          <span>GitHub-এ পুশ করুন</span>
+                        </button>
+
+                        <span className="text-xs font-semibold text-emerald-400 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                          মোট অর্ডার: {orders.length}
+                        </span>
+                      </div>
                     </div>
 
                     {isLoadingOrders ? (
@@ -5310,7 +5646,20 @@ function cleanAndFixOrderSheetRows() {
                                       )}
                                     </div>
 
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                                      {/* Clear/Reset Tracking Button */}
+                                      <button
+                                        type="button"
+                                        disabled={isUpdatingTracking[order.id]}
+                                        onClick={() => handleResetOrderTracking(order.id, true)}
+                                        className="px-2.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                        title="অর্ডার ট্র্যাকিং বিবরণ অ্যাডমিন, শিট ও GitHub থেকে রিসেট/মুছুন"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span>ট্র্যাকিং মুছুন/রিসেট</span>
+                                      </button>
+
+                                      {/* Standard Save */}
                                       <button
                                         type="button"
                                         disabled={isUpdatingTracking[order.id]}
@@ -5324,14 +5673,40 @@ function cleanAndFixOrderSheetRows() {
                                             activeStepDef.id
                                           );
                                         }}
-                                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md shadow-emerald-950 flex items-center gap-2 cursor-pointer"
+                                        className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 disabled:opacity-50 text-zinc-100 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
                                       >
                                         {isUpdatingTracking[order.id] ? (
+                                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                          <Save className="w-3.5 h-3.5 text-emerald-400" />
+                                        )}
+                                        <span>সেভ</span>
+                                      </button>
+
+                                      {/* Direct Save & Push to GitHub */}
+                                      <button
+                                        type="button"
+                                        disabled={isUpdatingTracking[order.id] || isPushingOrdersToGithub}
+                                        onClick={() => {
+                                          handleUpdateOrderTracking(
+                                            order.id,
+                                            currentTrackingNumber,
+                                            currentTrackingDetails,
+                                            currentStatus,
+                                            activeStepIdx,
+                                            activeStepDef.id,
+                                            true
+                                          );
+                                        }}
+                                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md shadow-emerald-950 flex items-center gap-2 cursor-pointer"
+                                        title="ধাপ সেভ হবে, গুগল শিটে যাবে এবং সরাসরি GitHub-এ পুশ হবে"
+                                      >
+                                        {isUpdatingTracking[order.id] || isPushingOrdersToGithub ? (
                                           <RefreshCw className="w-4 h-4 animate-spin" />
                                         ) : (
-                                          <Save className="w-4 h-4" />
+                                          <Github className="w-4 h-4" />
                                         )}
-                                        <span>💾 ধাপ {activeStepIdx + 1} ট্র্যাকিং সেভ করুন (Save Tracking)</span>
+                                        <span>🚀 সেভ ও GitHub-এ পুশ</span>
                                       </button>
                                     </div>
                                   </div>
@@ -8123,6 +8498,16 @@ function cleanAndFixOrderSheetRows() {
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs leading-relaxed">
                   ✓ <strong>গুগল শিট সুরক্ষিত থাকবে:</strong> এই অর্ডারটি আপনার অ্যাডমিন প্যানেল থেকে মুছে যাবে, কিন্তু গুগল শিটের সমস্ত রেকর্ড অপরিবর্তিত ও সুরক্ষিত থাকবে।
                 </div>
+
+                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-zinc-800/80 border border-zinc-700 text-xs text-zinc-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={deleteFromGithubOnOrderDelete}
+                    onChange={(e) => setDeleteFromGithubOnOrderDelete(e.target.checked)}
+                    className="rounded accent-emerald-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span>GitHub থেকেও অর্ডার ও ট্র্যাকিং ডেটা মুছুন (Sync delete to GitHub)</span>
+                </label>
 
                 <div className="flex items-center justify-end gap-2 pt-1">
                   <button

@@ -34,6 +34,7 @@ interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOrderSuccess: () => void;
+  onOpenTrackOrder?: (orderId: string) => void;
   onOpenReturnPolicy?: () => void;
   onOpenPrivacyPolicy?: () => void;
   onOpenDeliveryPolicy?: () => void;
@@ -43,6 +44,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   isOpen,
   onClose,
   onOrderSuccess,
+  onOpenTrackOrder,
   onOpenReturnPolicy,
   onOpenPrivacyPolicy,
   onOpenDeliveryPolicy
@@ -243,6 +245,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         transactionId: transactionId.trim().toUpperCase() || undefined,
         deliveryArea: deliveryArea === "inside_dhaka" ? "ঢাকার ভেতরে (Inside Dhaka - ৳৬০)" : "ঢাকার বাইরে (Outside Dhaka - ৳১০০)",
         paymentMethod: finalPaymentMethod,
+        status: "Pending",
+        currentStepIndex: 0,
+        trackingStage: "confirmed",
+        orderTrackingDetails: "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
+        trackingDetails: "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
         notes: orderNotes.trim() || undefined
       };
 
@@ -304,6 +311,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         id: orderResult.order?.id || clientOrderId,
         items: (orderResult.order?.items && orderResult.order.items.length > 0) ? orderResult.order.items : orderedItemList
       };
+
+      // Save order to localStorage immediately so Track Order & Recent Orders see it without any delay
+      try {
+        const localKeys = ["nirapod_orders", "auracart_orders"];
+        for (const k of localKeys) {
+          const prevRaw = localStorage.getItem(k);
+          const prevList = prevRaw ? JSON.parse(prevRaw) : [];
+          const filtered = Array.isArray(prevList) ? prevList.filter((o: any) => o.id !== finalConfirmedOrder.id) : [];
+          localStorage.setItem(k, JSON.stringify([finalConfirmedOrder, ...filtered]));
+        }
+      } catch (e) {
+        console.warn("[Checkout] Failed to save order to localStorage:", e);
+      }
 
       setConfirmedOrder(finalConfirmedOrder);
       if (isDirectBuy) {
@@ -437,10 +457,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
                 <button
+                  type="button"
+                  onClick={() => {
+                    const ordId = confirmedOrder.id;
+                    handleClose();
+                    onOpenTrackOrder?.(ordId);
+                  }}
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Truck className="w-4 h-4" />
+                  {language === "bn" ? "অর্ডার ট্র্যাক করুন (Track Order)" : "Track This Order"}
+                </button>
+                <button
+                  type="button"
                   onClick={handleClose}
-                  className="px-8 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md transition-all cursor-pointer"
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-bold text-sm transition-all cursor-pointer"
                 >
                   {language === "bn" ? "আরও কেনাকাটা করুন" : "Continue Shopping"}
                 </button>

@@ -274,6 +274,14 @@ async function dispatchTrackingEvent(payload: {
 export function trackPageView(pageTitle: string, pageSlug = "root"): () => void {
   if (typeof window === "undefined") return () => {};
 
+  // Do not track visits when admin is logged in or managing the store
+  try {
+    const adminToken = sessionStorage.getItem("nirapod_admin_token") || localStorage.getItem("nirapod_admin_token");
+    if (adminToken) {
+      return () => {};
+    }
+  } catch {}
+
   // Clean up any previously active session
   if (currentTrackingSession) {
     endTrackingSession(currentTrackingSession);

@@ -29,7 +29,7 @@ import { ToastContainer } from "./components/ToastContainer";
 import { BASE_CATEGORIES, getDynamicCategories } from "./data/categories";
 import { trackPageView } from "./utils/tracker";
 
-const PRODUCTS_CACHE_KEY = "nirapod_products_cache";
+const PRODUCTS_CACHE_KEY = "nirapod_products_cache_v6";
 const WISHLIST_CACHE_KEY = "nirapod_wishlist_ids";
 
 function mergeWithDefaultProducts(loadedList: Product[]): Product[] {
@@ -41,26 +41,24 @@ function mergeWithDefaultProducts(loadedList: Product[]): Product[] {
     const defaultItem = defaultsMap.get(item.id);
     if (!defaultItem) return item;
     
-    const needsImageUpgrade =
-      !item.imageUrl ||
-      !item.imageUrl.startsWith("data:") ||
-      !Array.isArray(item.images) ||
-      item.images.length === 0 ||
-      !item.images[0]?.startsWith("data:");
-
-    if (needsImageUpgrade && defaultItem.imageUrl?.startsWith("data:")) {
-      return {
-        ...item,
-        imageUrl: defaultItem.imageUrl,
-        images: defaultItem.images && defaultItem.images.length > 0 ? defaultItem.images : item.images
-      };
-    }
-    return item;
+    return {
+      ...defaultItem,
+      ...item,
+      // Ensure high-resolution image and images array are preserved
+      imageUrl: item.imageUrl && item.imageUrl.length > 10 ? item.imageUrl : defaultItem.imageUrl,
+      images: Array.isArray(item.images) && item.images.length > 0 ? item.images : defaultItem.images,
+      // Ensure productCode, parentCategory, and category sync with latest catalog definition
+      productCode: item.productCode || defaultItem.productCode,
+      parentCategory: item.parentCategory || defaultItem.parentCategory,
+      title: item.title || defaultItem.title,
+      description: item.description || defaultItem.description
+    };
   });
 
   const existingIds = new Set(upgradedList.map((p) => p.id));
+  // Ensure newly added default products (e.g. prod-mucfvuwe) are included at the top if missing
   const missingFromDefaults = DEFAULT_PRODUCTS.filter((dp) => !existingIds.has(dp.id));
-  return missingFromDefaults.length > 0 ? [...upgradedList, ...missingFromDefaults] : upgradedList;
+  return missingFromDefaults.length > 0 ? [...missingFromDefaults, ...upgradedList] : upgradedList;
 }
 
 const StoreContent: React.FC = () => {
@@ -108,6 +106,11 @@ const StoreContent: React.FC = () => {
 
   // Modals & Drawers
   const [isTrackOrderOpen, setIsTrackOrderOpen] = useState(false);
+  const [trackOrderInitialQuery, setTrackOrderInitialQuery] = useState("");
+  const handleOpenTrackOrder = useCallback((query?: string) => {
+    setTrackOrderInitialQuery(query || "");
+    setIsTrackOrderOpen(true);
+  }, []);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
   const [isReturnPolicyOpen, setIsReturnPolicyOpen] = useState<boolean>(() => {
     return isReturnPolicyUrl();
@@ -381,27 +384,53 @@ const StoreContent: React.FC = () => {
 
       // 2. Full-stack / development environment
       try {
-        const res = await fetch("/api/products");
+        const res = await fetch(`/api/products?t=${Date.now()}`, {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache"
+          }
+        });
         const contentType = res.headers.get("content-type") || "";
+        let list: Product[] = [];
         if (res.ok && !contentType.includes("text/html")) {
           const data = await res.json();
-          const list = Array.isArray(data.products) && data.products.length > 0
-            ? data.products
-            : (localList || DEFAULT_PRODUCTS);
-          const merged = mergeWithDefaultProducts(list);
-          setProducts(merged);
-          safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(merged));
-        } else if (localList && localList.length > 0) {
-          setProducts(localList);
-        } else {
-          setProducts(DEFAULT_PRODUCTS);
+          if (Array.isArray(data.products) && data.products.length > 0) {
+            list = data.products;
+          }
         }
+        if (list.length === 0 && localList && localList.length > 0) {
+          list = localList;
+        }
+
+        // Also cross-check live domain nirapodkroy.shop for any newly added products
+        try {
+          const liveRes = await fetch(`https://nirapodkroy.shop/products.json?t=${Date.now()}`, {
+            cache: "no-store",
+            signal: AbortSignal.timeout(4000)
+          });
+          if (liveRes.ok) {
+            const liveList = await liveRes.json();
+            if (Array.isArray(liveList) && liveList.length > 0) {
+              const currentIds = new Set(list.map((p) => p.id));
+              for (const lp of liveList) {
+                if (lp && lp.id && !currentIds.has(lp.id)) {
+                  list.push(lp);
+                  currentIds.add(lp.id);
+                }
+              }
+            }
+          }
+        } catch {}
+
+        const finalCatalog = list.length > 0 ? list : DEFAULT_PRODUCTS;
+        const merged = mergeWithDefaultProducts(finalCatalog);
+        setProducts(merged);
+        safeSetLocalStorage(PRODUCTS_CACHE_KEY, JSON.stringify(merged));
       } catch {
-        if (localList && localList.length > 0) {
-          setProducts(localList);
-        } else {
-          setProducts(DEFAULT_PRODUCTS);
-        }
+        const fallback = localList && localList.length > 0 ? localList : DEFAULT_PRODUCTS;
+        const merged = mergeWithDefaultProducts(fallback);
+        setProducts(merged);
       }
     } catch (err) {
       console.warn("Could not reach /api/products, using fallback catalog:", err);
@@ -509,8 +538,8 @@ const StoreContent: React.FC = () => {
       />
 
       <main className="flex-1">
-        {selectedCategory === "All" && (
-          /* Full Hero Carousel shown on Home Page */
+        {selectedCategory === "All" && !searchQuery.trim() && (
+          /* Full Hero Carousel shown on Home Page when not searching */
           <HeroSection
             onSelectCategory={handleSelectCategoryFromHero}
             onExploreClick={handleExploreClick}
@@ -529,6 +558,7 @@ const StoreContent: React.FC = () => {
           setSelectedCategory={handleSelectCategory}
           categories={dynamicCategories}
           searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
           onQuickView={(prod) => setQuickViewProduct(prod)}
           onRefreshProducts={fetchProducts}
           onProductClick={handleProductClick}
@@ -558,7 +588,7 @@ const StoreContent: React.FC = () => {
       <MobileBottomNav
         selectedCategory={selectedCategory}
         onSelectCategory={handleSelectCategory}
-        onOpenTrackOrder={() => setIsTrackOrderOpen(true)}
+        onOpenTrackOrder={() => handleOpenTrackOrder()}
         onOpenWishlist={() => setIsWishlistOpen(true)}
         wishlistCount={wishlistIds.length}
         categories={dynamicCategories}
@@ -574,6 +604,7 @@ const StoreContent: React.FC = () => {
         onOrderSuccess={() => {
           fetchProducts(); // Refresh inventory counts
         }}
+        onOpenTrackOrder={(orderId) => handleOpenTrackOrder(orderId)}
         onOpenReturnPolicy={openReturnPolicy}
         onOpenPrivacyPolicy={openPrivacyPolicy}
         onOpenDeliveryPolicy={openDeliveryPolicy}
@@ -582,6 +613,7 @@ const StoreContent: React.FC = () => {
       {/* Track Order Modal */}
       <TrackOrderModal
         isOpen={isTrackOrderOpen}
+        initialTrackingQuery={trackOrderInitialQuery}
         onClose={() => setIsTrackOrderOpen(false)}
       />
 
@@ -591,7 +623,7 @@ const StoreContent: React.FC = () => {
         onClose={closeReturnPolicy}
         onOpenTrackOrder={() => {
           closeReturnPolicy();
-          setIsTrackOrderOpen(true);
+          handleOpenTrackOrder();
         }}
         onOpenPrivacyPolicy={openPrivacyPolicy}
         onOpenDeliveryPolicy={openDeliveryPolicy}
@@ -611,7 +643,7 @@ const StoreContent: React.FC = () => {
         onClose={closeDeliveryPolicy}
         onOpenTrackOrder={() => {
           closeDeliveryPolicy();
-          setIsTrackOrderOpen(true);
+          handleOpenTrackOrder();
         }}
         onOpenReturnPolicy={openReturnPolicy}
         onOpenPrivacyPolicy={openPrivacyPolicy}

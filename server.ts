@@ -287,6 +287,79 @@ let storeState: StoreState = {
   isDataSaved: false
 };
 
+// Helper to load orders from static JSON files
+function loadOrdersFromFiles(): Order[] {
+  const candidates = [
+    path.join(process.cwd(), "docs", "orders.json"),
+    path.join(process.cwd(), "public", "orders.json"),
+    path.join(process.cwd(), "orders.json")
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      try {
+        const raw = fs.readFileSync(p, "utf-8");
+        const list = JSON.parse(raw);
+        if (Array.isArray(list) && list.length > 0) {
+          return list;
+        }
+      } catch (e) {
+        console.warn(`[Store] Error reading ${p}:`, e);
+      }
+    }
+  }
+  return [];
+}
+
+// Robust order matching helper for server-side lookup
+function matchOrder(o: any, rawQuery: string): boolean {
+  if (!o || !rawQuery) return false;
+  const qLower = rawQuery.toLowerCase().trim();
+  if (!qLower) return false;
+
+  const qClean = qLower.replace(/[^a-z0-9]/g, "");
+  const qDigits = rawQuery.replace(/\D/g, "");
+
+  const oId = String(o.id || "").toLowerCase();
+  const oCleanId = oId.replace(/[^a-z0-9]/g, "");
+  const oTrk = String(o.trackingNumber || "").toLowerCase();
+  const oCleanTrk = oTrk.replace(/[^a-z0-9]/g, "");
+  const oPhone = String(o.customerPhone || "").replace(/\D/g, "");
+  const oName = String(o.customerName || "").toLowerCase();
+  const oEmail = String(o.customerEmail || "").toLowerCase();
+
+  // 1. Direct or clean alphanumeric match on ID or Tracking Number
+  if (oId === qLower || oTrk === qLower) return true;
+  if (qClean.length >= 3 && (oCleanId === qClean || oCleanTrk === qClean)) return true;
+  if (qClean.length >= 4 && (oCleanId.includes(qClean) || oCleanTrk.includes(qClean) || qClean.includes(oCleanId) || qClean.includes(oCleanTrk))) return true;
+
+  // 2. Digits match on ID or Tracking Number (e.g., user enters "765550")
+  if (qDigits.length >= 4) {
+    const oIdDigits = oId.replace(/\D/g, "");
+    const oTrkDigits = oTrk.replace(/\D/g, "");
+    if (oIdDigits === qDigits || oTrkDigits === qDigits) return true;
+    if (oIdDigits.includes(qDigits) || oTrkDigits.includes(qDigits) || (qDigits.length >= 5 && (qDigits.includes(oIdDigits) || qDigits.includes(oTrkDigits)))) return true;
+  }
+
+  // 3. Bangladeshi Phone Number match (01XXXXXXXXX vs 8801XXXXXXXXX vs +880...)
+  if (qDigits.length >= 7 && oPhone.length >= 7) {
+    if (oPhone === qDigits) return true;
+    if (oPhone.includes(qDigits) || qDigits.includes(oPhone)) return true;
+    const qTail = qDigits.slice(-10);
+    const oTail = oPhone.slice(-10);
+    if (qTail.length >= 8 && oTail.length >= 8) {
+      if (qTail === oTail || qTail.endsWith(oTail) || oTail.endsWith(qTail)) return true;
+    }
+  }
+
+  // 4. Customer Name match
+  if (qLower.length >= 3 && (oName === qLower || oName.includes(qLower) || (qLower.length >= 4 && qLower.includes(oName)))) return true;
+
+  // 5. Customer Email match
+  if (qLower.includes("@") && oEmail.includes(qLower)) return true;
+
+  return false;
+}
+
 // Load or save persistence helper
 function loadState() {
   try {
@@ -296,13 +369,25 @@ function loadState() {
       if (parsed.products && Array.isArray(parsed.products)) {
         storeState = parsed;
         storeState.isDataSaved = Boolean(parsed.isDataSaved);
-        if (!storeState.isDataSaved) {
-          storeState.orders = [];
-          storeState.customers = [];
-          storeState.subscribers = [];
-          storeState.userTracking = [];
+      }
+    }
+
+    // Always restore orders from authoritative static orders.json if missing or empty
+    const diskOrders = loadOrdersFromFiles();
+    if (Array.isArray(diskOrders) && diskOrders.length > 0) {
+      if (!storeState.orders || !Array.isArray(storeState.orders) || storeState.orders.length === 0) {
+        storeState.orders = diskOrders;
+      } else {
+        const existingIds = new Set(storeState.orders.map(o => String(o.id).toLowerCase()));
+        for (const ord of diskOrders) {
+          if (ord && ord.id && !existingIds.has(String(ord.id).toLowerCase())) {
+            storeState.orders.push(ord);
+            existingIds.add(String(ord.id).toLowerCase());
+          }
         }
       }
+    } else if (!storeState.orders || !Array.isArray(storeState.orders) || storeState.orders.length === 0) {
+      storeState.orders = INITIAL_ORDERS;
     }
 
     // Check if public/products.json exists and use it as authoritative product catalog
@@ -373,7 +458,12 @@ function saveState() {
     // 6. Write root products.json so direct root fetches (/products.json) succeed
     fs.writeFileSync(path.join(process.cwd(), "products.json"), JSON.stringify(storeState.products, null, 2), "utf-8");
 
-    console.log(`[Store] Live state synchronized across all targets (${storeState.products.length} products).`);
+    // 7. Write orders and tracking to static JSON files (orders.json & tracking.json)
+    if (storeState.orders && Array.isArray(storeState.orders) && storeState.orders.length > 0) {
+      saveOrdersToStaticFiles(storeState.orders);
+    }
+
+    console.log(`[Store] Live state synchronized across all targets (${storeState.products.length} products, ${(storeState.orders || []).length} orders).`);
   } catch (e) {
     console.error("Error saving store data file:", e);
   }
@@ -381,6 +471,113 @@ function saveState() {
 
 loadState();
 saveState();
+
+// Automatic sync helper to pull newly added products from live website (nirapodkroy.shop)
+let lastLiveProductSyncTime = 0;
+async function syncProductsFromLiveSite() {
+  const now = Date.now();
+  if (now - lastLiveProductSyncTime < 15000) return; // throttle 15s
+  lastLiveProductSyncTime = now;
+  try {
+    const urls = [
+      "https://nirapodkroy.shop/products.json?t=" + now,
+      "https://nirapodkroy.shop/docs/products.json?t=" + now
+    ];
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) {
+            let changed = false;
+            const currentIds = new Set((storeState.products || []).map(p => p.id));
+            for (const item of list) {
+              if (item && item.id && !currentIds.has(item.id)) {
+                storeState.products.push(item);
+                currentIds.add(item.id);
+                changed = true;
+              }
+            }
+            if (changed) {
+              console.log(`[Store] Synced products from live site (${storeState.products.length} total)`);
+              saveState();
+            }
+            break;
+          }
+        }
+      } catch {}
+    }
+  } catch (e) {
+    console.warn("[Store] Live product sync failed:", e);
+  }
+}
+syncProductsFromLiveSite().catch(() => {});
+
+// Automatic sync helper to pull newly placed orders from live website (nirapodkroy.shop)
+let lastLiveOrderSyncTime = 0;
+async function syncOrdersFromLiveSite() {
+  const now = Date.now();
+  if (now - lastLiveOrderSyncTime < 8000) return; // throttle 8s
+  lastLiveOrderSyncTime = now;
+  try {
+    const urls = [
+      "https://nirapodkroy.shop/orders.json?t=" + now,
+      "https://nirapodkroy.shop/docs/orders.json?t=" + now
+    ];
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) {
+            let changed = false;
+            if (!storeState.orders) storeState.orders = [];
+            const currentIds = new Set(storeState.orders.map(o => String(o.id).toLowerCase()));
+            for (const item of list) {
+              if (item && item.id) {
+                const lowerId = String(item.id).toLowerCase();
+                const stepIdx = typeof item.currentStepIndex === "number" ? item.currentStepIndex : (item.status === "Delivered" ? 4 : item.status === "Shipped" ? 2 : item.status === "Processing" ? 1 : 0);
+                const stage = item.trackingStage || (item.status === "Delivered" ? "delivered" : item.status === "Shipped" ? "dispatched" : item.status === "Processing" ? "processing" : "confirmed");
+                const details = item.orderTrackingDetails || item.trackingDetails || (item.status === "Delivered" ? "পণ্যটি সফলভাবে গ্রাহকের কাছে হস্তান্তর করা হয়েছে।" : "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।");
+
+                const normalized: Order = {
+                  ...item,
+                  currentStepIndex: stepIdx,
+                  trackingStage: stage,
+                  orderTrackingDetails: details,
+                  trackingDetails: details
+                };
+
+                if (!currentIds.has(lowerId)) {
+                  storeState.orders.unshift(normalized);
+                  currentIds.add(lowerId);
+                  changed = true;
+                } else {
+                  const existingIdx = storeState.orders.findIndex(o => String(o.id).toLowerCase() === lowerId);
+                  if (existingIdx >= 0) {
+                    const ex = storeState.orders[existingIdx];
+                    if (ex.currentStepIndex === undefined || ex.trackingStage === undefined) {
+                      storeState.orders[existingIdx] = { ...ex, ...normalized };
+                      changed = true;
+                    }
+                  }
+                }
+              }
+            }
+            if (changed) {
+              console.log(`[Store] Synced orders from live site (${storeState.orders.length} total)`);
+              saveState();
+            }
+            break;
+          }
+        }
+      } catch {}
+    }
+  } catch (e) {
+    console.warn("[Store] Live order sync failed:", e);
+  }
+}
+syncOrdersFromLiveSite().catch(() => {});
 
 // Active admin sessions in memory (sessionToken -> timestamp)
 const adminSessions = new Map<string, number>();
@@ -986,6 +1183,7 @@ app.post("/api/auth/login", (req, res) => {
 // 4. Products API
 // GET /api/products
 app.get("/api/products", (req, res) => {
+  syncProductsFromLiveSite().catch(() => {});
   const { category, search, includeInactive } = req.query;
   const authHeader = req.headers.authorization;
   const isAdmin = authHeader && authHeader.startsWith("Bearer ") && (adminSessions.has(authHeader.split(" ")[1]) || authHeader.split(" ")[1].startsWith("adm_"));
@@ -1020,13 +1218,38 @@ app.get("/api/products", (req, res) => {
     }
   }
 
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+
   if (search) {
-    const q = String(search).toLowerCase();
-    list = list.filter(
-      p => p.title.toLowerCase().includes(q) ||
-           p.description.toLowerCase().includes(q) ||
-           p.category.toLowerCase().includes(q)
-    );
+    const rawQ = String(search).trim().toLowerCase();
+    const compactQ = rawQ.replace(/[^a-z0-9\u0980-\u09FF]/gi, "");
+    const tokens = rawQ.split(/[\s\-_,./+]+/).filter(t => t.length > 0);
+
+    list = list.filter(p => {
+      // 1. Direct ID or ProductCode match
+      if (p.id && p.id.toLowerCase().includes(rawQ)) return true;
+      if (p.productCode && p.productCode.toLowerCase().includes(rawQ)) return true;
+
+      const title = p.title || "";
+      const desc = p.description || "";
+      const cat = p.category || "";
+      const parentCat = p.parentCategory || "";
+      const badge = p.badge || "";
+      const corpus = `${title} ${desc} ${cat} ${parentCat} ${badge} ${p.id || ""}`.toLowerCase();
+      const compactCorpus = corpus.replace(/[^a-z0-9\u0980-\u09FF]/gi, "");
+
+      // 2. Compact continuous match
+      if (compactQ.length >= 2 && compactCorpus.includes(compactQ)) return true;
+
+      // 3. Multi-token match
+      if (tokens.length > 0) {
+        return tokens.every(token => corpus.includes(token) || compactCorpus.includes(token));
+      }
+
+      return corpus.includes(rawQ);
+    });
   }
 
   res.json({ products: list, total: list.length });
@@ -1305,6 +1528,245 @@ app.post("/api/admin/github/verify", async (req, res) => {
   }
 });
 
+// Helper to save orders and tracking to static JSON files
+function saveOrdersToStaticFiles(ordersList: any[]) {
+  try {
+    const jsonStr = JSON.stringify(ordersList, null, 2);
+    const trackingMap: Record<string, any> = {};
+    for (const o of ordersList) {
+      const entry = {
+        id: o.id,
+        trackingNumber: o.trackingNumber || o.id,
+        orderTrackingDetails: o.orderTrackingDetails || o.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
+        status: o.status || "Pending",
+        currentStepIndex: typeof o.currentStepIndex === "number" ? o.currentStepIndex : 0,
+        trackingStage: o.trackingStage || "confirmed",
+        customerName: o.customerName || "Customer",
+        customerPhone: o.customerPhone || "",
+        totalPrice: o.totalPrice || 0,
+        createdAt: o.createdAt || new Date().toISOString()
+      };
+      if (o.id) trackingMap[String(o.id).toLowerCase()] = entry;
+      if (o.trackingNumber) trackingMap[String(o.trackingNumber).toLowerCase()] = entry;
+    }
+    const trackingJson = JSON.stringify(trackingMap, null, 2);
+
+    const publicOrders = path.join(process.cwd(), "public", "orders.json");
+    const docsOrders = path.join(process.cwd(), "docs", "orders.json");
+    const rootOrders = path.join(process.cwd(), "orders.json");
+
+    const publicTracking = path.join(process.cwd(), "public", "tracking.json");
+    const docsTracking = path.join(process.cwd(), "docs", "tracking.json");
+    const rootTracking = path.join(process.cwd(), "tracking.json");
+
+    fs.writeFileSync(publicOrders, jsonStr, "utf-8");
+    if (fs.existsSync(path.join(process.cwd(), "docs"))) {
+      fs.writeFileSync(docsOrders, jsonStr, "utf-8");
+      fs.writeFileSync(docsTracking, trackingJson, "utf-8");
+    }
+    fs.writeFileSync(rootOrders, jsonStr, "utf-8");
+    fs.writeFileSync(publicTracking, trackingJson, "utf-8");
+    fs.writeFileSync(rootTracking, trackingJson, "utf-8");
+  } catch (err) {
+    console.warn("[SaveOrdersFiles] Notice:", err);
+  }
+}
+
+// Reusable GitHub Committer Helper
+function createGithubCommitter(cleanRepo: string, cleanBranch: string, cleanToken: string) {
+  const authHeader = cleanToken.startsWith("ghp_") ? `token ${cleanToken}` : `Bearer ${cleanToken}`;
+  let repoTreeCache: Map<string, string> | null = null;
+
+  async function getRepoTreeSha(targetPath: string): Promise<string> {
+    if (!repoTreeCache) {
+      try {
+        const treeRes = await fetch(`https://api.github.com/repos/${cleanRepo}/git/trees/${cleanBranch}?recursive=1`, {
+          headers: {
+            Authorization: authHeader,
+            Accept: "application/vnd.github.v3+json",
+            "User-Agent": "NirapodKroy-Admin"
+          }
+        });
+        if (treeRes.ok) {
+          const treeData: any = await treeRes.json();
+          repoTreeCache = new Map();
+          if (Array.isArray(treeData?.tree)) {
+            for (const item of treeData.tree) {
+              if (item.path && item.sha) repoTreeCache.set(item.path, item.sha);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[GitHub Committer] Tree SHA fetch error:", e);
+      }
+    }
+    return repoTreeCache?.get(targetPath) || "";
+  }
+
+  async function commitSingleFile(filePath: string, contentBufferOrStr: Buffer | string, commitMsg: string) {
+    let sha = "";
+    const getUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}?ref=${cleanBranch}`;
+    const getRes = await fetch(getUrl, {
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "NirapodKroy-Admin"
+      }
+    });
+
+    if (getRes.ok) {
+      const fileData: any = await getRes.json();
+      sha = fileData.sha;
+    } else if (getRes.status === 401) {
+      throw new Error("AUTH_ERROR");
+    } else {
+      sha = await getRepoTreeSha(filePath);
+    }
+
+    const base64Content = Buffer.isBuffer(contentBufferOrStr)
+      ? contentBufferOrStr.toString("base64")
+      : Buffer.from(contentBufferOrStr, "utf-8").toString("base64");
+
+    const putUrl = `https://api.github.com/repos/${cleanRepo}/contents/${filePath}`;
+    let putRes = await fetch(putUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+        "User-Agent": "NirapodKroy-Admin"
+      },
+      body: JSON.stringify({
+        message: commitMsg,
+        content: base64Content,
+        sha: sha || undefined,
+        branch: cleanBranch,
+        committer: {
+          name: "Nirapod Kroy Admin",
+          email: "admin@nirapodkroy.shop"
+        }
+      })
+    });
+
+    if (putRes.status === 409) {
+      repoTreeCache = null;
+      const freshSha = await getRepoTreeSha(filePath);
+      putRes = await fetch(putUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: authHeader,
+          Accept: "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
+          "User-Agent": "NirapodKroy-Admin"
+        },
+        body: JSON.stringify({
+          message: commitMsg,
+          content: base64Content,
+          sha: freshSha || undefined,
+          branch: cleanBranch,
+          committer: {
+            name: "Nirapod Kroy Admin",
+            email: "admin@nirapodkroy.shop"
+          }
+        })
+      });
+    }
+
+    return putRes;
+  }
+
+  return { commitSingleFile, getRepoTreeSha };
+}
+
+async function commitOrdersAndTrackingToGithub(cleanRepo: string, cleanBranch: string, cleanToken: string, ordersList: any[]) {
+  const committer = createGithubCommitter(cleanRepo, cleanBranch, cleanToken);
+  const jsonStr = JSON.stringify(ordersList, null, 2);
+  const trackingMap: Record<string, any> = {};
+  for (const o of ordersList) {
+    const entry = {
+      id: o.id,
+      trackingNumber: o.trackingNumber || o.id,
+      orderTrackingDetails: o.orderTrackingDetails || o.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
+      status: o.status || "Pending",
+      currentStepIndex: typeof o.currentStepIndex === "number" ? o.currentStepIndex : 0,
+      trackingStage: o.trackingStage || "confirmed",
+      customerName: o.customerName || "Customer",
+      customerPhone: o.customerPhone || "",
+      totalPrice: o.totalPrice || 0,
+      createdAt: o.createdAt || new Date().toISOString()
+    };
+    if (o.id) trackingMap[String(o.id).toLowerCase()] = entry;
+    if (o.trackingNumber) trackingMap[String(o.trackingNumber).toLowerCase()] = entry;
+  }
+  const trackingJson = JSON.stringify(trackingMap, null, 2);
+
+  let lastCommitUrl = `https://github.com/${cleanRepo}/commits/${cleanBranch}`;
+
+  // 1. Commit docs/orders.json (essential for GitHub Pages live site nirapodkroy.shop)
+  try {
+    const docsRes = await committer.commitSingleFile(
+      "docs/orders.json",
+      jsonStr,
+      `chore(orders): sync ${ordersList.length} orders to docs/orders.json`
+    );
+    if (docsRes.ok) {
+      const data: any = await docsRes.json();
+      if (data.commit?.html_url) lastCommitUrl = data.commit.html_url;
+    }
+  } catch (err) {
+    console.warn("[PushOrders] Warning committing docs/orders.json:", err);
+  }
+
+  // 2. Commit public/orders.json
+  try {
+    const pubRes = await committer.commitSingleFile(
+      "public/orders.json",
+      jsonStr,
+      `chore(orders): sync ${ordersList.length} orders to public/orders.json`
+    );
+    if (pubRes.ok) {
+      const data: any = await pubRes.json();
+      if (data.commit?.html_url) lastCommitUrl = data.commit.html_url;
+    }
+  } catch (err) {
+    console.warn("[PushOrders] Warning committing public/orders.json:", err);
+  }
+
+  // 3. Commit root orders.json
+  try {
+    await committer.commitSingleFile(
+      "orders.json",
+      jsonStr,
+      `chore(orders): sync ${ordersList.length} orders to orders.json`
+    );
+  } catch (err) {
+    console.warn("[PushOrders] Warning committing root orders.json:", err);
+  }
+
+  // 4. Commit docs/tracking.json & public/tracking.json & root tracking.json
+  try {
+    await committer.commitSingleFile(
+      "docs/tracking.json",
+      trackingJson,
+      `chore(tracking): sync live tracking lookup to docs/tracking.json`
+    );
+    await committer.commitSingleFile(
+      "public/tracking.json",
+      trackingJson,
+      `chore(tracking): sync live tracking lookup to public/tracking.json`
+    );
+    await committer.commitSingleFile(
+      "tracking.json",
+      trackingJson,
+      `chore(tracking): sync live tracking lookup to tracking.json`
+    );
+  } catch (err) {
+    console.warn("[PushOrders] Warning committing tracking.json files:", err);
+  }
+
+  return { success: true, commitUrl: lastCommitUrl };
+}
+
 // POST /api/admin/github/push (Commit products.json directly to GitHub repo)
 app.post("/api/admin/github/push", async (req, res) => {
   try {
@@ -1521,6 +1983,44 @@ app.post("/api/admin/github/push", async (req, res) => {
   }
 });
 
+// POST /api/admin/github/push-orders (Commit orders.json & tracking.json directly to GitHub repo)
+app.post("/api/admin/github/push-orders", async (req, res) => {
+  try {
+    const { token, repo, branch, orders } = req.body;
+    if (!token || !repo) {
+      return res.status(400).json({ error: "GitHub Token এবং Repository নাম দেওয়া আবশ্যক।" });
+    }
+
+    const cleanRepo = String(repo)
+      .trim()
+      .replace(/^https?:\/\//i, "")
+      .replace(/^github\.com\//i, "")
+      .replace(/\.git$/i, "")
+      .replace(/\/+$/, "");
+    const cleanBranch = (branch && String(branch).trim()) || "main";
+    const cleanToken = String(token).trim();
+    const targetOrders = Array.isArray(orders) ? orders : storeState.orders;
+
+    if (Array.isArray(orders)) {
+      storeState.orders = orders;
+      saveState();
+    }
+    saveOrdersToStaticFiles(targetOrders);
+
+    const result = await commitOrdersAndTrackingToGithub(cleanRepo, cleanBranch, cleanToken, targetOrders);
+    return res.json({
+      success: true,
+      commitUrl: result.commitUrl,
+      message: `সফলভাবে GitHub-এ ${targetOrders.length} টি অর্ডার ও ট্র্যাকিং ডেটা পুশ ও কমিট হয়েছে!`
+    });
+  } catch (err: any) {
+    if (err.message === "AUTH_ERROR") {
+      return res.status(401).json({ error: "GitHub Token সঠিক নয় বা পারমিশন নেই।" });
+    }
+    return res.status(500).json({ error: `অর্ডার পুশ করার সময় এরর: ${err.message}` });
+  }
+});
+
 // 5. Orders API
 // POST /api/orders (Public checkout)
 app.post("/api/orders", async (req, res) => {
@@ -1603,6 +2103,10 @@ app.post("/api/orders", async (req, res) => {
     paymentGatewayFee: typeof req.body.paymentGatewayFee === "number" ? req.body.paymentGatewayFee : undefined,
     paymentProvider: req.body.paymentProvider ? String(req.body.paymentProvider).trim() : undefined,
     status: "Pending",
+    currentStepIndex: 0,
+    trackingStage: "confirmed",
+    orderTrackingDetails: "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
+    trackingDetails: "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
     createdAt: new Date().toISOString(),
     syncedToGoogleSheet: false,
     notes: notes ? notes.trim() : undefined
@@ -1660,10 +2164,19 @@ app.post("/api/orders", async (req, res) => {
 });
 
 // GET /api/orders (Public orders lookup for tracking and customer access)
-app.get("/api/orders", (_req, res) => {
-  const safeOrders = storeState.orders.map(o => ({
+app.get("/api/orders", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  await syncOrdersFromLiveSite();
+  let ordersList = storeState.orders;
+  if (!ordersList || ordersList.length === 0) {
+    ordersList = loadOrdersFromFiles();
+    if (ordersList.length > 0) {
+      storeState.orders = ordersList;
+    }
+  }
+  const safeOrders = ordersList.map(o => ({
     id: o.id,
-    trackingNumber: o.trackingNumber || ("TRK-" + o.id.replace(/\D/g, "")),
+    trackingNumber: o.trackingNumber || ("TRK-" + String(o.id).replace(/\D/g, "")),
     orderTrackingDetails: o.orderTrackingDetails || o.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। ডেলিভারি এরিয়া অনুযায়ী প্যাকেজিং ও কুরিয়ারে হস্তান্তরের কাজ চলছে।",
     trackingDetails: o.orderTrackingDetails || o.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। ডেলিভারি এরিয়া অনুযায়ী প্যাকেজিং ও কুরিয়ারে হস্তান্তরের কাজ চলছে।",
     status: o.status || "Pending",
@@ -1675,45 +2188,67 @@ app.get("/api/orders", (_req, res) => {
     totalPrice: o.totalPrice,
     paymentMethod: o.paymentMethod,
     items: o.items,
-    createdAt: o.createdAt
+    createdAt: o.createdAt,
+    currentStepIndex: o.currentStepIndex,
+    trackingStage: o.trackingStage,
+    trackingSteps: o.trackingSteps
   }));
   res.json({ orders: safeOrders });
 });
 
 // GET /api/orders/track and /api/orders/track/:query
-// Live tracking lookup with Google Sheets bidirectional synchronization
+// Live tracking lookup with instant local memory response & Google Sheets synchronization
 app.get(["/api/orders/track", "/api/orders/track/:query"], async (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   const rawParam = (req.params.query || req.query.q || req.query.id || req.query.trackingNumber || req.query.orderId || req.query.query || "").toString().trim();
   if (!rawParam) {
-    return res.status(400).json({ error: "অনুগ্রহ করে একটি অর্ডার নম্বর বা ট্র্যাকিং আইডি প্রদান করুন।" });
+    return res.status(400).json({
+      success: false,
+      error: "অনুগ্রহ করে একটি অর্ডার নম্বর, ট্র্যাকিং আইডি বা ফোন নম্বর প্রদান করুন।"
+    });
   }
 
-  const query = rawParam.toLowerCase();
-  const digitsOnly = rawParam.replace(/\D/g, "");
+  // 1. Fast local memory & static file search (0-2ms response)
+  let matchedOrder = storeState.orders.find(o => matchOrder(o, rawParam));
+  if (!matchedOrder) {
+    const diskOrders = loadOrdersFromFiles();
+    matchedOrder = diskOrders.find(o => matchOrder(o, rawParam));
+    if (matchedOrder) {
+      const exists = storeState.orders.some(o => String(o.id).toLowerCase() === String(matchedOrder!.id).toLowerCase());
+      if (!exists) {
+        storeState.orders.push(matchedOrder);
+      }
+    }
+  }
 
-  // 1. First search local memory/storeState.orders
-  let matchedOrder = storeState.orders.find(o => {
-    const oId = (o.id || "").toLowerCase();
-    const oTrk = (o.trackingNumber || "").toLowerCase();
-    const oPhone = (o.customerPhone || "").replace(/\D/g, "");
+  // If still not matched, sync with live site orders (e.g. newly placed customer orders)
+  if (!matchedOrder) {
+    await syncOrdersFromLiveSite();
+    matchedOrder = storeState.orders.find(o => matchOrder(o, rawParam));
+  }
 
-    return (
-      oId === query ||
-      oTrk === query ||
-      oId.includes(query) ||
-      oTrk.includes(query) ||
-      (digitsOnly.length >= 4 && (oId.replace(/\D/g, "").includes(digitsOnly) || oTrk.replace(/\D/g, "").includes(digitsOnly))) ||
-      (digitsOnly.length >= 6 && oPhone.includes(digitsOnly))
-    );
-  });
+  // If found locally, immediately respond to the user without any network lag
+  if (matchedOrder) {
+    const trackingNum = matchedOrder.trackingNumber || ("TRK-" + String(matchedOrder.id).replace(/\D/g, ""));
+    const trackingDetails = matchedOrder.orderTrackingDetails || matchedOrder.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।";
 
-  // 2. Fetch live data from Google Sheet if webhook URL is configured
-  // This satisfies: "ar amr je order sehhet ar traking number ace or pase akta row banaw row nambe order traking detis ami oi traking number a ja likbo order traking like kew serch korle sheet ar data ami ja likbo ta asbe seta coustomer dekte parbe"
+    return res.json({
+      success: true,
+      order: {
+        ...matchedOrder,
+        trackingNumber: trackingNum,
+        orderTrackingDetails: trackingDetails,
+        trackingDetails: trackingDetails
+      }
+    });
+  }
+
+  // 2. If not found locally, query Google Sheet with a 2.5 second timeout
   const webhookUrl = storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (webhookUrl && webhookUrl.startsWith("http")) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
       const sheetUrl = `${webhookUrl}${webhookUrl.includes("?") ? "&" : "?"}action=get_orders&tab=order+sheet`;
       
       const sheetRes = await fetch(sheetUrl, { signal: controller.signal });
@@ -1722,79 +2257,52 @@ app.get(["/api/orders/track", "/api/orders/track/:query"], async (req, res) => {
       if (sheetRes.ok) {
         const sheetData = (await sheetRes.json()) as any;
         if (sheetData && Array.isArray(sheetData.orders)) {
-          const sheetMatch = sheetData.orders.find((so: any) => {
-            const sId = String(so.id || "").toLowerCase();
-            const sTrk = String(so.trackingNumber || "").toLowerCase();
-            const sPhone = String(so.customerPhone || "").replace(/\D/g, "");
-
-            return (
-              sId === query ||
-              sTrk === query ||
-              sId.includes(query) ||
-              sTrk.includes(query) ||
-              (digitsOnly.length >= 4 && (sId.replace(/\D/g, "").includes(digitsOnly) || sTrk.replace(/\D/g, "").includes(digitsOnly))) ||
-              (digitsOnly.length >= 6 && sPhone.includes(digitsOnly))
-            );
-          });
+          const sheetMatch = sheetData.orders.find((so: any) => matchOrder(so, rawParam));
 
           if (sheetMatch) {
-            const liveTrackingDetails = sheetMatch.orderTrackingDetails || sheetMatch.trackingDetails || sheetMatch.orderTrackingDetis || "";
-            const liveStatus = sheetMatch.status || "";
-            const liveTrackingNum = sheetMatch.trackingNumber || "";
+            const liveStatus = sheetMatch.status || "Pending";
+            const liveTrackingDetails = sheetMatch.orderTrackingDetails || sheetMatch.trackingDetails || sheetMatch.orderTrackingDetis || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।";
+            const liveTrackingNum = sheetMatch.trackingNumber || ("TRK-" + String(sheetMatch.id || rawParam).replace(/\D/g, ""));
+            const liveStepIndex = typeof sheetMatch.currentStepIndex === "number" ? sheetMatch.currentStepIndex : (liveStatus === "Delivered" ? 4 : liveStatus === "Shipped" ? 2 : liveStatus === "Processing" ? 1 : 0);
+            const liveStage = sheetMatch.trackingStage || (liveStatus === "Delivered" ? "delivered" : liveStatus === "Shipped" ? "dispatched" : liveStatus === "Processing" ? "processing" : "confirmed");
 
-            if (matchedOrder) {
-              if (liveTrackingDetails) {
-                matchedOrder.orderTrackingDetails = liveTrackingDetails;
-                matchedOrder.trackingDetails = liveTrackingDetails;
-              }
-              if (liveStatus) matchedOrder.status = liveStatus;
-              if (liveTrackingNum) matchedOrder.trackingNumber = liveTrackingNum;
-              saveState();
-            } else {
-              // Found directly in Google Sheet!
-              matchedOrder = {
-                id: sheetMatch.id || rawParam,
-                trackingNumber: liveTrackingNum || ("TRK-" + rawParam.replace(/\D/g, "")),
-                orderTrackingDetails: liveTrackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
-                trackingDetails: liveTrackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।",
-                status: liveStatus || "Pending",
-                customerName: sheetMatch.customerName || "Customer",
-                customerEmail: sheetMatch.customerEmail || "",
-                customerPhone: sheetMatch.customerPhone || "",
-                shippingAddress: sheetMatch.shippingAddress || "",
-                items: [],
-                totalPrice: Number(String(sheetMatch.totalPrice || "0").replace(/[^\d.]/g, "")) || 0,
-                paymentMethod: sheetMatch.paymentMethod || "Cash on Delivery",
-                createdAt: sheetMatch.createdAt || new Date().toISOString(),
-                syncedToGoogleSheet: true
-              };
-            }
+            const liveOrder: Order = {
+              id: sheetMatch.id || rawParam,
+              trackingNumber: liveTrackingNum,
+              orderTrackingDetails: liveTrackingDetails,
+              trackingDetails: liveTrackingDetails,
+              status: liveStatus,
+              currentStepIndex: liveStepIndex,
+              trackingStage: liveStage,
+              customerName: sheetMatch.customerName || "Customer",
+              customerEmail: sheetMatch.customerEmail || "",
+              customerPhone: sheetMatch.customerPhone || "",
+              shippingAddress: sheetMatch.shippingAddress || "",
+              items: Array.isArray(sheetMatch.items) ? sheetMatch.items : [],
+              totalPrice: Number(String(sheetMatch.totalPrice || "0").replace(/[^\d.]/g, "")) || 0,
+              paymentMethod: sheetMatch.paymentMethod || "Cash on Delivery",
+              createdAt: sheetMatch.createdAt || new Date().toISOString(),
+              syncedToGoogleSheet: true
+            };
+
+            storeState.orders.push(liveOrder);
+            saveState();
+
+            return res.json({
+              success: true,
+              order: liveOrder
+            });
           }
         }
       }
     } catch {
-      // Graceful fallback to local storeState
+      // Sheet fetch timed out or errored
     }
   }
 
-  if (!matchedOrder) {
-    return res.status(404).json({
-      success: false,
-      message: "প্রদত্ত ট্র্যাকিং নম্বর বা অর্ডার আইডি দিয়ে কোনো অর্ডার পাওয়া যায়নি।"
-    });
-  }
-
-  const trackingNum = matchedOrder.trackingNumber || ("TRK-" + matchedOrder.id.replace(/\D/g, ""));
-  const trackingDetails = matchedOrder.orderTrackingDetails || matchedOrder.trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। ডেলিভারি এরিয়া অনুযায়ী প্যাকেজিং ও কুরিয়ারে হস্তান্তরের কাজ চলছে।";
-
-  res.json({
-    success: true,
-    order: {
-      ...matchedOrder,
-      trackingNumber: trackingNum,
-      orderTrackingDetails: trackingDetails,
-      trackingDetails: trackingDetails
-    }
+  return res.status(404).json({
+    success: false,
+    message: "প্রদত্ত ট্র্যাকিং নম্বর, অর্ডার আইডি বা ফোন নম্বর দিয়ে কোনো অর্ডার পাওয়া যায়নি। অনুগ্রহ করে আপনার অর্ডার আইডি (যেমন: TRK-765550) অথবা অর্ডার করার সময় যে ফোন নম্বর দিয়েছিলেন তা দিয়ে চেষ্টা করুন।"
   });
 });
 
@@ -1906,16 +2414,104 @@ app.put("/api/admin/orders/:id/tracking", requireAdmin, async (req, res) => {
   }
 
   saveState();
+  saveOrdersToStaticFiles(storeState.orders);
 
   // Background dispatch to Google Sheets to update the row (forceSync=true to bypass deduplication cache)
   syncOrderToGoogleSheets(order, storeState.webhookUrl, true).catch((err) => {
     console.error("Failed to sync updated tracking to Google Sheet:", err);
   });
 
+  let githubPushResult: any = null;
+  if (req.body.pushToGithub && req.body.token && req.body.repo) {
+    try {
+      const cleanRepo = String(req.body.repo)
+        .trim()
+        .replace(/^https?:\/\//i, "")
+        .replace(/^github\.com\//i, "")
+        .replace(/\.git$/i, "")
+        .replace(/\/+$/, "");
+      const cleanBranch = String(req.body.branch || "main").trim();
+      const cleanToken = String(req.body.token).trim();
+      githubPushResult = await commitOrdersAndTrackingToGithub(cleanRepo, cleanBranch, cleanToken, storeState.orders);
+    } catch (ghErr: any) {
+      console.warn("[Order Tracking] GitHub push warning:", ghErr.message);
+    }
+  }
+
   res.json({
     success: true,
-    message: "অর্ডার ট্র্যাকিং বিবরণ সফলভাবে সংরক্ষিত হয়েছে এবং গুগল শিটে পাঠানো হয়েছে!",
-    order
+    message: githubPushResult
+      ? "অর্ডার ট্র্যাকিং বিবরণ সফলভাবে সেভ হয়েছে, গুগল শিটে আপডেট হয়েছে এবং GitHub-এ সরাসরি পুশ সম্পন্ন হয়েছে!"
+      : "অর্ডার ট্র্যাকিং বিবরণ সফলভাবে সংরক্ষিত হয়েছে এবং গুগল শিটে পাঠানো হয়েছে!",
+    order,
+    githubCommitUrl: githubPushResult?.commitUrl
+  });
+});
+
+// POST /api/admin/orders/:id/tracking/reset (Reset or Clear tracking for an order - admin, sheets, and github)
+app.post("/api/admin/orders/:id/tracking/reset", requireAdmin, async (req, res) => {
+  const rawId = req.params.id;
+  const targetId = decodeURIComponent(rawId).trim().toLowerCase();
+  const cleanTargetId = targetId.replace(/^#/, "");
+
+  let order = storeState.orders.find(o => {
+    const oId = (o.id || "").trim().toLowerCase();
+    return oId === targetId || oId === cleanTargetId || oId.replace(/^#/, "") === cleanTargetId;
+  });
+
+  if (!order) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+
+  order.trackingNumber = "";
+  order.orderTrackingDetails = "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।";
+  order.trackingDetails = "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।";
+  order.currentStepIndex = 0;
+  order.trackingStage = "confirmed";
+  order.trackingSteps = [
+    {
+      id: "confirmed",
+      stepNumber: 1,
+      titleBn: "অর্ডার কনফার্মেশন",
+      titleEn: "Order Confirmed",
+      descBn: "অর্ডার গৃহীত ও ভেরিফাই সম্পন্ন",
+      descEn: "Order verified & confirmed",
+      completed: true,
+      completedAt: order.createdAt || new Date().toISOString(),
+      note: "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে।"
+    }
+  ];
+
+  saveState();
+  saveOrdersToStaticFiles(storeState.orders);
+
+  // Sync reset state to Google Sheet
+  syncOrderToGoogleSheets(order, storeState.webhookUrl, true).catch(() => {});
+
+  let githubPushResult: any = null;
+  if (req.body.pushToGithub && req.body.token && req.body.repo) {
+    try {
+      const cleanRepo = String(req.body.repo)
+        .trim()
+        .replace(/^https?:\/\//i, "")
+        .replace(/^github\.com\//i, "")
+        .replace(/\.git$/i, "")
+        .replace(/\/+$/, "");
+      const cleanBranch = String(req.body.branch || "main").trim();
+      const cleanToken = String(req.body.token).trim();
+      githubPushResult = await commitOrdersAndTrackingToGithub(cleanRepo, cleanBranch, cleanToken, storeState.orders);
+    } catch (ghErr: any) {
+      console.warn("[Tracking Reset] GitHub push warning:", ghErr.message);
+    }
+  }
+
+  res.json({
+    success: true,
+    message: githubPushResult
+      ? "অর্ডার ট্র্যাকিং তথ্য সফলভাবে রিসেট করা হয়েছে, গুগল শিট ও GitHub-এ আপডেট হয়েছে!"
+      : "অর্ডার ট্র্যাকিং তথ্য রিসেট করা হয়েছে এবং গুগল শিটে আপডেট সম্পন্ন!",
+    order,
+    githubCommitUrl: githubPushResult?.commitUrl
   });
 });
 
@@ -1939,8 +2535,8 @@ app.post("/api/admin/orders/:id/sync", requireAdmin, async (req, res) => {
   });
 });
 
-// DELETE /api/admin/orders/:id (Admin only - Deletes from store database, leaves Google Sheets intact)
-app.delete("/api/admin/orders/:id", requireAdmin, (req, res) => {
+// DELETE /api/admin/orders/:id (Admin only - Deletes from store database, leaves Google Sheets intact, syncs to GitHub if requested)
+app.delete("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   const { id } = req.params;
   const initialLength = storeState.orders.length;
   storeState.orders = storeState.orders.filter(o => o.id !== id);
@@ -1950,10 +2546,27 @@ app.delete("/api/admin/orders/:id", requireAdmin, (req, res) => {
   }
 
   saveState();
-  // Note: Per design, we intentionally DO NOT delete from Google Sheets so Sheets remains an append-only audit trail
+  saveOrdersToStaticFiles(storeState.orders);
+
+  if (req.body?.pushToGithub && req.body?.token && req.body?.repo) {
+    try {
+      const cleanRepo = String(req.body.repo)
+        .trim()
+        .replace(/^https?:\/\//i, "")
+        .replace(/^github\.com\//i, "")
+        .replace(/\.git$/i, "")
+        .replace(/\/+$/, "");
+      const cleanBranch = String(req.body.branch || "main").trim();
+      const cleanToken = String(req.body.token).trim();
+      await commitOrdersAndTrackingToGithub(cleanRepo, cleanBranch, cleanToken, storeState.orders);
+    } catch (ghErr: any) {
+      console.warn("[Order Delete] GitHub push warning:", ghErr.message);
+    }
+  }
+
   res.json({
     success: true,
-    message: `অর্ডার ${id} সফলভাবে অ্যাডমিন প্যানেল থেকে মুছে ফেলা হয়েছে (গুগল শিট রেকর্ড অক্ষত রাখা হয়েছে)।`,
+    message: `অর্ডার ${id} সফলভাবে মুছে ফেলা হয়েছে (গুগল শিট রেকর্ড অক্ষত রাখা হয়েছে)।`,
     remainingOrders: storeState.orders.length
   });
 });
@@ -2478,9 +3091,23 @@ app.post("/api/admin/discard-preview", requireAdmin, (_req, res) => {
 });
 
 // POST / DELETE /api/admin/tracking/clear (Admin clears user visitor tracking logs)
-const handleClearUserTrackingLogs = (_req: any, res: any) => {
+const handleClearUserTrackingLogs = async (req: any, res: any) => {
   storeState.userTracking = [];
   saveState();
+
+  // Also if webhook is available, tell Google Apps Script to clean/clear the user tracking tab
+  const target = req.body?.webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (target && target.startsWith("http")) {
+    try {
+      const fetchUrl = target + (target.includes("?") ? "&" : "?") + "action=clear_user_tracking";
+      await fetch(fetchUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear_user_tracking" })
+      }).catch(() => {});
+    } catch {}
+  }
+
   return res.json({
     success: true,
     message: "ভিজিটর ট্র্যাকিং হিস্ট্রি সম্পূর্ণ মুছে ফেলা হয়েছে।"

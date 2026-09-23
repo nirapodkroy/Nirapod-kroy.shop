@@ -24,6 +24,7 @@ import {
 import { useLanguage } from "../context/LanguageContext";
 import { Order } from "../types";
 import { safeGetLocalStorage } from "../utils/storage";
+import { matchOrder } from "../utils/orderMatchHelper";
 import {
   ORDER_TRACKING_STEPS_DEF,
   getStepIndexFromOrder,
@@ -69,21 +70,30 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
       }
 
       try {
-        const savedOrdersRaw = safeGetLocalStorage("auracart_orders");
-        if (savedOrdersRaw) {
-          const parsed = JSON.parse(savedOrdersRaw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const seen = new Set<string>();
-            const unique = parsed.filter((o: Order) => {
-              if (!o?.id || seen.has(o.id)) return false;
-              seen.add(o.id);
-              return true;
-            });
-            setRecentOrders(unique.slice(0, 3));
-            // If search is currently empty, prefill with most recent order
-            if (!searchKey && unique[0]?.id) {
-              setSearchKey(unique[0].id);
-            }
+        const localKeys = ["nirapod_orders", "auracart_orders", "orders"];
+        let allLocal: Order[] = [];
+        for (const k of localKeys) {
+          const raw = safeGetLocalStorage(k);
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) {
+                allLocal = [...allLocal, ...parsed];
+              }
+            } catch {}
+          }
+        }
+        if (allLocal.length > 0) {
+          const seen = new Set<string>();
+          const unique = allLocal.filter((o: Order) => {
+            if (!o?.id || seen.has(o.id)) return false;
+            seen.add(o.id);
+            return true;
+          });
+          setRecentOrders(unique.slice(0, 5));
+          // If search is currently empty, prefill with most recent order
+          if (!searchKey && unique[0]?.id) {
+            setSearchKey(unique[0].id);
           }
         }
       } catch {
@@ -102,9 +112,12 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
     setHasSearched(true);
 
     try {
-      // 1. Primary: Query the dedicated live server tracking API (with Google Sheet bidirectional lookup)
+      // 1. Primary: Query the dedicated live server tracking API
       try {
-        const res = await fetch(`/api/orders/track?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/orders/track?q=${encodeURIComponent(query)}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" }
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.order) {
@@ -120,7 +133,10 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
       // 2. Secondary fallback: check /api/orders
       let candidateOrders: Order[] = [];
       try {
-        const res = await fetch("/api/orders");
+        const res = await fetch("/api/orders", {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" }
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.orders && Array.isArray(data.orders)) {
@@ -128,37 +144,62 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
           }
         }
       } catch {
-        // Continue to local fallback
+        // Continue to fallback
       }
 
-      // 3. Tertiary fallback: localStorage orders
-      const savedOrdersRaw = safeGetLocalStorage("auracart_orders");
-      if (savedOrdersRaw) {
-        try {
-          const localParsed: Order[] = JSON.parse(savedOrdersRaw);
-          if (Array.isArray(localParsed)) {
-            candidateOrders = [...candidateOrders, ...localParsed];
-          }
-        } catch {}
+      // 3. GitHub Pages & Static orders.json / tracking.json fallback
+      try {
+        const gitRepo = (typeof window !== "undefined" ? localStorage.getItem("nirapod_gh_repo") : "") || "nirapodkroy/Nirapod-kroy.shop";
+        const cleanRepo = gitRepo.trim().replace(/^https?:\/\//i, "").replace(/^github\.com\//i, "").replace(/\.git$/i, "").replace(/\/+$/, "");
+        const gitBranch = (typeof window !== "undefined" ? localStorage.getItem("nirapod_gh_branch") : "") || "main";
+
+        const staticEndpoints = [
+          `docs/orders.json?_t=${Date.now()}`,
+          `/docs/orders.json?_t=${Date.now()}`,
+          `orders.json?_t=${Date.now()}`,
+          `/orders.json?_t=${Date.now()}`,
+          `docs/tracking.json?_t=${Date.now()}`,
+          `/docs/tracking.json?_t=${Date.now()}`,
+          `tracking.json?_t=${Date.now()}`,
+          `/tracking.json?_t=${Date.now()}`,
+          `https://raw.githubusercontent.com/${cleanRepo}/${gitBranch}/docs/orders.json?_t=${Date.now()}`,
+          `https://raw.githubusercontent.com/${cleanRepo}/${gitBranch}/orders.json?_t=${Date.now()}`
+        ];
+
+        for (const ep of staticEndpoints) {
+          try {
+            const sRes = await fetch(ep, { cache: "no-store" });
+            if (sRes.ok) {
+              const listOrMap = await sRes.json();
+              if (Array.isArray(listOrMap) && listOrMap.length > 0) {
+                candidateOrders = [...candidateOrders, ...listOrMap];
+              } else if (listOrMap && typeof listOrMap === "object") {
+                const values = Object.values(listOrMap) as Order[];
+                if (Array.isArray(values) && values.length > 0) {
+                  candidateOrders = [...candidateOrders, ...values];
+                }
+              }
+            }
+          } catch {}
+        }
+      } catch {}
+
+      // 4. Tertiary fallback: localStorage orders
+      const localKeys = ["nirapod_orders", "auracart_orders", "orders"];
+      for (const k of localKeys) {
+        const savedOrdersRaw = safeGetLocalStorage(k);
+        if (savedOrdersRaw) {
+          try {
+            const localParsed = JSON.parse(savedOrdersRaw);
+            if (Array.isArray(localParsed)) {
+              candidateOrders = [...candidateOrders, ...localParsed];
+            }
+          } catch {}
+        }
       }
 
-      const qLower = query.toLowerCase();
-      const qDigits = query.replace(/\D/g, "");
-
-      const match = candidateOrders.find((o) => {
-        const oId = (o.id || "").toLowerCase();
-        const oTrk = (o.trackingNumber || "").toLowerCase();
-        const oPhone = (o.customerPhone || "").replace(/\D/g, "");
-
-        return (
-          oId === qLower ||
-          oTrk === qLower ||
-          oId.includes(qLower) ||
-          oTrk.includes(qLower) ||
-          (qDigits.length >= 4 && (oId.replace(/\D/g, "").includes(qDigits) || oTrk.replace(/\D/g, "").includes(qDigits))) ||
-          (qDigits.length >= 6 && oPhone.includes(qDigits))
-        );
-      });
+      // Match using the robust matcher (order ID, tracking number, phone variants, customer name, email)
+      const match = candidateOrders.find((o) => matchOrder(o, query));
 
       setFoundOrder(match || null);
     } catch {
@@ -420,7 +461,7 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
                       <span>ডেলিভারি অগ্রগতি (5-Step Tracking)</span>
                     </h4>
                     <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                      ধাপ {currentStep + 1} / ৫
+                      ধাপ {currentStep + 1} / ৫ • {steps[currentStep]?.titleBn || ""}
                     </span>
                   </div>
 
@@ -438,19 +479,25 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
                     <div className="relative z-10 grid grid-cols-5 gap-1">
                       {steps.map((step, idx) => {
                         const StepIcon = step.icon;
-                        const isPassed = idx <= currentStep;
+                        const isPassed = idx < currentStep;
                         const isCurrent = idx === currentStep;
 
                         return (
                           <div key={step.id} className="flex flex-col items-center text-center">
                             <div
                               className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all ${
-                                isPassed
-                                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                                isCurrent
+                                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-4 ring-emerald-500/30 scale-110"
+                                  : isPassed
+                                  ? "bg-emerald-500 text-white shadow-sm"
                                   : "bg-white dark:bg-zinc-800 text-zinc-400 border-2 border-zinc-200 dark:border-zinc-700"
-                              } ${isCurrent ? "ring-4 ring-emerald-500/30 scale-110" : ""}`}
+                              }`}
                             >
-                              <StepIcon className="w-4 h-4" />
+                              {isPassed || (isCurrent && currentStep === 4) ? (
+                                <Check className="w-4 h-4 stroke-[3]" />
+                              ) : (
+                                <StepIcon className="w-4 h-4" />
+                              )}
                             </div>
 
                             <span
@@ -478,7 +525,7 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
                     <div className="space-y-2">
                       {detailedSteps.map((step, idx) => {
                         const StepIcon = stepIconMap[step.id] || CheckCircle2;
-                        const isCompleted = step.completed;
+                        const isPassed = idx < currentStep;
                         const isCurrent = idx === currentStep;
 
                         return (
@@ -487,30 +534,52 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
                             className={`p-3 rounded-xl border transition-all flex items-start gap-3 ${
                               isCurrent
                                 ? "bg-emerald-500/10 border-emerald-500/40 dark:bg-emerald-950/30 dark:border-emerald-500/40 shadow-sm"
-                                : isCompleted
+                                : isPassed
                                 ? "bg-emerald-50/50 border-emerald-200/60 dark:bg-zinc-800/60 dark:border-zinc-700/60"
                                 : "bg-zinc-50/40 border-zinc-200/50 dark:bg-zinc-900/40 dark:border-zinc-800/50 opacity-60"
                             }`}
                           >
                             <div
                               className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                                isCompleted
+                                isCurrent
+                                  ? "bg-emerald-600 text-white ring-2 ring-emerald-400/40 shadow-sm"
+                                  : isPassed
                                   ? "bg-emerald-600 text-white"
-                                  : isCurrent
-                                  ? "bg-emerald-500 text-white ring-2 ring-emerald-400/40"
                                   : "bg-zinc-200 dark:bg-zinc-700 text-zinc-400"
                               }`}
                             >
-                              {isCompleted ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <StepIcon className="w-3.5 h-3.5" />}
+                              {isPassed || (isCurrent && currentStep === 4) ? (
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              ) : (
+                                <StepIcon className="w-3.5 h-3.5" />
+                              )}
                             </div>
 
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center justify-between gap-1.5">
-                                <span className={`text-xs font-bold ${isCurrent ? "text-emerald-700 dark:text-emerald-300" : isCompleted ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400"}`}>
+                                <span className={`text-xs font-bold ${isCurrent ? "text-emerald-700 dark:text-emerald-300" : isPassed ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400"}`}>
                                   {language === "bn" ? `ধাপ ${step.stepNumber}: ${step.titleBn}` : `Step ${step.stepNumber}: ${step.titleEn}`}
                                 </span>
 
-                                {isCompleted ? (
+                                {isCurrent ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-500/30">
+                                    {currentStep === 4 ? (
+                                      <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                    ) : (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                    )}
+                                    <span>
+                                      {currentStep === 4
+                                        ? (language === "bn" ? "ডেলিভারি সম্পন্ন" : "Delivered")
+                                        : (language === "bn" ? "বর্তমান অবস্থান" : "Current Stage")}
+                                    </span>
+                                    {step.completedAt && (
+                                      <span className="font-normal opacity-90 pl-1 border-l border-white/40">
+                                        {formatTrackingDate(step.completedAt, language === "bn" ? "bn" : "en")}
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : isPassed ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                                     <span>সম্পন্ন</span>
@@ -520,13 +589,8 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
                                       </span>
                                     )}
                                   </span>
-                                ) : isCurrent ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500 text-white shadow-sm">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                                    <span>বর্তমান অবস্থান</span>
-                                  </span>
                                 ) : (
-                                  <span className="text-[10px] text-zinc-400">অপেক্ষমাণ</span>
+                                  <span className="text-[10px] text-zinc-400 font-medium">অপেক্ষমাণ</span>
                                 )}
                               </div>
 

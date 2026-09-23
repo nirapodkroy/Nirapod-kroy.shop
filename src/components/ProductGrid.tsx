@@ -13,7 +13,9 @@ import {
   Home,
   Share2,
   ArrowLeft,
-  CheckCircle
+  CheckCircle,
+  Search,
+  X
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
@@ -23,6 +25,7 @@ import {
   isGrocerySubcategory,
   isGroceryRelatedCategory
 } from "../data/categories";
+import { filterProductsBySearch } from "../utils/searchHelper";
 
 interface ProductGridProps {
   products: Product[];
@@ -31,6 +34,7 @@ interface ProductGridProps {
   setSelectedCategory: (cat: string) => void;
   categories: string[];
   searchQuery: string;
+  setSearchQuery?: (q: string) => void;
   onQuickView: (product: Product) => void;
   onRefreshProducts: () => void;
   onProductClick: (product: Product) => void;
@@ -45,6 +49,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
   setSelectedCategory,
   categories,
   searchQuery,
+  setSearchQuery,
   onQuickView,
   onRefreshProducts,
   onProductClick,
@@ -183,15 +188,16 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
       }
     }
 
-    // Search query filter
+    // Search query filter: Uses smart bilingual, phonetic, and alias-expanded matching
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(
-        (p) =>
-          p.title.toLowerCase().includes(q) ||
-          p.description.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q)
-      );
+      const searchMatches = filterProductsBySearch(list, searchQuery);
+      // If category filter returned 0 items but the query matches products across the catalog,
+      // fallback to searching all products so the user is never stuck with empty results!
+      if (searchMatches.length === 0 && selectedCategory && selectedCategory !== "All") {
+        list = filterProductsBySearch(products, searchQuery);
+      } else {
+        list = searchMatches;
+      }
     }
 
     // Sorting
@@ -257,7 +263,100 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
   return (
     <section id="catalog-section" className="py-8 sm:py-12 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {selectedCategory !== "All" ? (
+        {searchQuery.trim() ? (
+          /* Dedicated Search Results Header (Instantly shows search results with counts & clear actions) */
+          <div className="space-y-4 mb-8">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs pb-3 border-b border-zinc-200/80 dark:border-zinc-800/80">
+              <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (setSearchQuery) setSearchQuery("");
+                    handleCategorySelect("All");
+                  }}
+                  className="flex items-center gap-1 hover:text-emerald-600 dark:hover:text-emerald-400 font-medium transition-colors cursor-pointer"
+                >
+                  <Home className="w-3.5 h-3.5" />
+                  <span>{language === "bn" ? "হোম" : "Home"}</span>
+                </button>
+                <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  {language === "bn" ? "অনুসন্ধান ফলাফল" : "Search Results"}
+                </span>
+              </nav>
+
+              <div className="flex items-center gap-2">
+                {setSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-medium text-xs transition-colors cursor-pointer shadow-xs"
+                    title={language === "bn" ? "অনুসন্ধান মুছুন" : "Clear search"}
+                  >
+                    <X className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>{language === "bn" ? "অনুসন্ধান মুছুন" : "Clear Search"}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (setSearchQuery) setSearchQuery("");
+                    handleCategorySelect("All");
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors cursor-pointer shadow-xs"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>{language === "bn" ? "সব পণ্য দেখুন" : "All Products"}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-2">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 mb-2">
+                  <Search className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>
+                    {language === "bn"
+                      ? `অনুসন্ধান: "${searchQuery}"`
+                      : `Search: "${searchQuery}"`}
+                  </span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-black text-zinc-900 dark:text-zinc-100 tracking-tight font-display flex items-center gap-2">
+                  <span>{language === "bn" ? "অনুসন্ধানের ফলাফল" : "Search Results"}</span>
+                  <span className="text-base sm:text-lg font-bold text-zinc-500 dark:text-zinc-400">
+                    ({filteredAndSorted.length})
+                  </span>
+                </h1>
+                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                  {filteredAndSorted.length > 0
+                    ? language === "bn"
+                      ? `"${searchQuery}" এর সাথে মিল রেখে মোট ${filteredAndSorted.length}টি পণ্য পাওয়া গেছে।`
+                      : `Found ${filteredAndSorted.length} matching products for "${searchQuery}".`
+                    : language === "bn"
+                    ? `"${searchQuery}" এর জন্য কোনো পণ্য পাওয়া যায়নি। সঠিক বানান দিয়ে আবার অনুসন্ধান করুন।`
+                    : `No products matched "${searchQuery}". Please check your spelling and try again.`}
+                </p>
+              </div>
+
+              {/* Sort Selector */}
+              <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300 shadow-xs self-start sm:self-auto">
+                <ArrowUpDown className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="hidden sm:inline font-medium text-zinc-400">{t("sort_label")}</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="bg-transparent border-none focus:outline-none font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer"
+                  aria-label="Sort products"
+                >
+                  <option value="featured">{t("sort_featured")}</option>
+                  <option value="price-asc">{t("sort_price_low")}</option>
+                  <option value="price-desc">{t("sort_price_high")}</option>
+                  <option value="rating">{t("sort_rating")}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        ) : selectedCategory !== "All" ? (
           /* Single Direct Category Page Section:
              Includes breadcrumbs, title, category pills, and sorting toolbar in ONE clean section without duplicate stacked banners! */
           <div className="space-y-4 mb-8">
@@ -608,19 +707,32 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
           <div className="text-center py-16 px-4 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200/80 dark:border-zinc-800 max-w-lg mx-auto shadow-xs">
             <ShoppingBag className="w-12 h-12 text-zinc-300 dark:text-zinc-600 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
-              {language === "bn"
-                ? selectedCategory !== "All"
+              {searchQuery.trim()
+                ? language === "bn"
+                  ? `"${searchQuery}" এর জন্য কোনো পণ্য পাওয়া যায়নি`
+                  : `No products found for "${searchQuery}"`
+                : selectedCategory !== "All"
+                ? language === "bn"
                   ? `"${getCategoryName(selectedCategory)}" ক্যাটাগরিতে পণ্য পাওয়া যায়নি`
-                  : "কোনো পণ্য খুঁজে পাওয়া যায়নি"
+                  : `No products found in ${getCategoryName(selectedCategory)}`
+                : language === "bn"
+                ? "কোনো পণ্য খুঁজে পাওয়া যায়নি"
                 : "No products found"}
             </h3>
             <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-              {language === "bn"
+              {searchQuery.trim()
+                ? language === "bn"
+                  ? "বানান যাচাই করে আবার চেষ্টা করুন অথবা সম্পূর্ণ ক্যাটালগ ঘুরে দেখুন।"
+                  : "Check spelling or explore our complete catalog."
+                : language === "bn"
                 ? "খুব শীঘ্রই এই ক্যাটাগরিতে নতুন পণ্য যুক্ত করা হবে।"
                 : "New products are being added to this category soon."}
             </p>
             <button
-              onClick={() => setSelectedCategory("All")}
+              onClick={() => {
+                if (setSearchQuery) setSearchQuery("");
+                setSelectedCategory("All");
+              }}
               className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
             >
               <span>{language === "bn" ? "সকল পণ্য দেখতে ফিরে যান" : "Back to All Products"}</span>

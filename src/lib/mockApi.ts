@@ -1,5 +1,6 @@
 import { Product, Order, CustomerUser, OrderTickerItem, UserTrackingEntry } from "../types";
 import { DEFAULT_PRODUCTS } from "../data/defaultProducts";
+import { matchOrder } from "../utils/orderMatchHelper";
 
 const CUSTOMERS_KEY = "nirapod_customers";
 const ORDERS_KEY = "auracart_orders";
@@ -736,6 +737,8 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       deliveryArea: body.deliveryArea ? String(body.deliveryArea).trim() : undefined,
       paymentMethod: paymentMethod || "Cash on Delivery",
       status: "Pending",
+      currentStepIndex: 0,
+      trackingStage: "confirmed",
       createdAt: new Date().toISOString(),
       syncedToGoogleSheet: false,
       notes: notes ? String(notes).trim() : undefined,
@@ -844,47 +847,65 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     const cleanQuery = query.replace(/^#/, "");
     const digitsOnly = rawParam.replace(/\D/g, "");
 
+    // 1. Search in-memory / localStorage orders
     const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
-    let matchedOrder = orders.find(o => {
-      const oId = (o.id || "").toLowerCase();
-      const oCleanId = oId.replace(/^#/, "");
-      const oTrk = (o.trackingNumber || "").toLowerCase();
-      const oPhone = (o.customerPhone || "").replace(/\D/g, "");
+    const nirapodOrders = getSafeStorage<Order[]>("nirapod_orders", []);
+    const allLocalOrders = [...orders, ...nirapodOrders];
+    let matchedOrder = allLocalOrders.find(o => matchOrder(o, rawParam));
 
-      return (
-        oId === query ||
-        oCleanId === cleanQuery ||
-        oTrk === query ||
-        oTrk === cleanQuery ||
-        oCleanId.includes(cleanQuery) ||
-        oTrk.includes(cleanQuery) ||
-        (digitsOnly.length >= 4 && (oId.replace(/\D/g, "").includes(digitsOnly) || oTrk.replace(/\D/g, "").includes(digitsOnly))) ||
-        (digitsOnly.length >= 6 && oPhone.includes(digitsOnly))
-      );
-    });
+    // 2. Search GitHub-pushed static orders & tracking files (docs/orders.json, raw GitHub, etc.)
+    try {
+      const gitRepo = (typeof window !== "undefined" ? localStorage.getItem("nirapod_gh_repo") : "") || "nirapodkroy/Nirapod-kroy.shop";
+      const cleanRepo = gitRepo.trim().replace(/^https?:\/\//i, "").replace(/^github\.com\//i, "").replace(/\.git$/i, "").replace(/\/+$/, "");
+      const gitBranch = (typeof window !== "undefined" ? localStorage.getItem("nirapod_gh_branch") : "") || "main";
+      
+      const staticUrls = [
+        `docs/orders.json?_t=${Date.now()}`,
+        `/docs/orders.json?_t=${Date.now()}`,
+        `orders.json?_t=${Date.now()}`,
+        `/orders.json?_t=${Date.now()}`,
+        `docs/tracking.json?_t=${Date.now()}`,
+        `/docs/tracking.json?_t=${Date.now()}`,
+        `https://raw.githubusercontent.com/${cleanRepo}/${gitBranch}/docs/orders.json?_t=${Date.now()}`,
+        `https://raw.githubusercontent.com/${cleanRepo}/${gitBranch}/orders.json?_t=${Date.now()}`
+      ];
 
+      for (const sUrl of staticUrls) {
+        try {
+          const fetchFn = typeof window !== "undefined" && (window as any).__originalFetch ? (window as any).__originalFetch : fetch;
+          const res = await fetchFn(sUrl, { cache: "no-store" });
+          if (res.ok) {
+            const listOrMap = await res.json();
+            const list: any[] = Array.isArray(listOrMap) ? listOrMap : (listOrMap && typeof listOrMap === "object" ? Object.values(listOrMap) : []);
+            if (list.length > 0) {
+              const fMatch = list.find((o: any) => matchOrder(o, rawParam));
+              if (fMatch) {
+                if (matchedOrder) {
+                  matchedOrder.trackingNumber = fMatch.trackingNumber || matchedOrder.trackingNumber;
+                  matchedOrder.orderTrackingDetails = fMatch.orderTrackingDetails || fMatch.trackingDetails || matchedOrder.orderTrackingDetails;
+                  matchedOrder.trackingDetails = fMatch.trackingDetails || fMatch.orderTrackingDetails || matchedOrder.trackingDetails;
+                  matchedOrder.status = fMatch.status || matchedOrder.status;
+                  if (typeof fMatch.currentStepIndex === "number") matchedOrder.currentStepIndex = fMatch.currentStepIndex;
+                  if (fMatch.trackingStage) matchedOrder.trackingStage = fMatch.trackingStage;
+                  if (Array.isArray(fMatch.trackingSteps)) matchedOrder.trackingSteps = fMatch.trackingSteps;
+                } else {
+                  matchedOrder = fMatch;
+                }
+                break;
+              }
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+
+    // 3. Search Google Sheet live data
     const targetWebhook = resolveGoogleSheetWebhook();
     if (targetWebhook && targetWebhook.startsWith("http")) {
       try {
         const liveData = await fetchLiveGoogleSheetData(targetWebhook);
         if (liveData && Array.isArray(liveData.orders)) {
-          const sheetMatch = liveData.orders.find((so: any) => {
-            const sId = String(so.id || "").toLowerCase();
-            const sCleanId = sId.replace(/^#/, "");
-            const sTrk = String(so.trackingNumber || "").toLowerCase();
-            const sPhone = String(so.customerPhone || "").replace(/\D/g, "");
-
-            return (
-              sId === query ||
-              sCleanId === cleanQuery ||
-              sTrk === query ||
-              sTrk === cleanQuery ||
-              sCleanId.includes(cleanQuery) ||
-              sTrk.includes(cleanQuery) ||
-              (digitsOnly.length >= 4 && (sId.replace(/\D/g, "").includes(digitsOnly) || sTrk.replace(/\D/g, "").includes(digitsOnly))) ||
-              (digitsOnly.length >= 6 && sPhone.includes(digitsOnly))
-            );
-          });
+          const sheetMatch = liveData.orders.find((so: any) => matchOrder(so, rawParam));
 
           if (sheetMatch) {
             const liveTrackingDetails = sheetMatch.orderTrackingDetails || sheetMatch.trackingDetails || sheetMatch.orderTrackingDetis || "";
@@ -1650,6 +1671,25 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     setSafeStorage(USER_TRACKING_KEY, []);
     setSafeStorage(ADMIN_DATA_SAVED_KEY, false);
     setSafeStorage(REVENUE_KEY, {});
+    try {
+      const keys = [
+        USER_TRACKING_KEY,
+        "nirapod_admin_user_tracking",
+        ADMIN_DATA_SAVED_KEY,
+        "nirapod_admin_data_saved",
+        ORDERS_KEY,
+        "nirapod_orders",
+        CUSTOMERS_KEY,
+        "nirapod_admin_customers",
+        SUBSCRIBERS_KEY,
+        "nirapod_admin_subscribers",
+        REVENUE_KEY,
+        "nirapod_admin_stats"
+      ];
+      keys.forEach(k => {
+        try { localStorage.removeItem(k); } catch {}
+      });
+    } catch {}
     return createJsonResponse({
       success: true,
       message: "অ্যাডমিন প্যানেলের সংরক্ষিত ডেটা মুছে ফেলা হয়েছে (গুগল শিটের কোনো ডেটা ডিলিট হয়নি, তা অক্ষত রয়েছে)।"
@@ -1664,6 +1704,25 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     setSafeStorage(USER_TRACKING_KEY, []);
     setSafeStorage(ADMIN_DATA_SAVED_KEY, false);
     setSafeStorage(REVENUE_KEY, {});
+    try {
+      const keys = [
+        USER_TRACKING_KEY,
+        "nirapod_admin_user_tracking",
+        ADMIN_DATA_SAVED_KEY,
+        "nirapod_admin_data_saved",
+        ORDERS_KEY,
+        "nirapod_orders",
+        CUSTOMERS_KEY,
+        "nirapod_admin_customers",
+        SUBSCRIBERS_KEY,
+        "nirapod_admin_subscribers",
+        REVENUE_KEY,
+        "nirapod_admin_stats"
+      ];
+      keys.forEach(k => {
+        try { localStorage.removeItem(k); } catch {}
+      });
+    } catch {}
     return createJsonResponse({
       success: true,
       message: "প্রিভিউ ডেটা ও ট্র্যাকিং সম্পূর্ণ বাতিল করা হয়েছে।"
@@ -1673,6 +1732,26 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
   // POST /api/admin/tracking/clear or DELETE /api/admin/tracking
   if (((path === "/api/admin/tracking/clear" && method === "POST") || (path === "/api/admin/tracking" && method === "DELETE"))) {
     setSafeStorage(USER_TRACKING_KEY, []);
+    try {
+      localStorage.removeItem(USER_TRACKING_KEY);
+      localStorage.removeItem("nirapod_admin_user_tracking");
+      sessionStorage.removeItem("_nirapod_user_geo");
+    } catch {}
+
+    // Also notify Google Apps Script to clear the user tracking tab if webhook is provided
+    const targetUrl = resolveGoogleSheetWebhook(body?.webhookUrl);
+    if (targetUrl && targetUrl.startsWith("http")) {
+      try {
+        const fetchUrl = targetUrl + (targetUrl.includes("?") ? "&" : "?") + "action=clear_user_tracking";
+        fetch(fetchUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "clear_user_tracking" }),
+          mode: "no-cors"
+        }).catch(() => {});
+      } catch {}
+    }
+
     return createJsonResponse({
       success: true,
       message: "ভিজিটর ট্র্যাকিং হিস্ট্রি সম্পূর্ণ মুছে ফেলা হয়েছে।"
@@ -1681,6 +1760,14 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
 
   // --- USER TRACKING ROUTES ---
   if (path === "/api/track" && method === "POST") {
+    // Check if admin is currently active to avoid tracking admin actions
+    try {
+      const adminToken = sessionStorage.getItem("nirapod_admin_token") || localStorage.getItem("nirapod_admin_token");
+      if (adminToken) {
+        return createJsonResponse({ success: true, ignored: true });
+      }
+    } catch {}
+
     const page = String(body.page || "হোমপেজ (Home)").trim();
     const sessionId = String(body.sessionId || `v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}_root`).trim();
     const isHeartbeat = Boolean(body.isHeartbeat);

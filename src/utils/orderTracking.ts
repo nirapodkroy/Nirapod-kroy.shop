@@ -97,21 +97,34 @@ export function getStepIndexFromOrder(order?: Partial<Order> | null): number {
     return order.currentStepIndex;
   }
 
-  const stage = String(order.trackingStage || '').toLowerCase();
+  const stage = String(order.trackingStage || '').toLowerCase().trim();
   if (stage === 'delivered') return 4;
   if (stage === 'out_for_delivery' || stage === 'out') return 3;
   if (stage === 'dispatched' || stage === 'shipped') return 2;
   if (stage === 'processing' || stage === 'packed') return 1;
-  if (stage === 'confirmed') return 0;
+  if (stage === 'confirmed' || stage === 'pending') return 0;
 
-  const status = String(order.status || '').toLowerCase();
+  const status = String(order.status || '').toLowerCase().trim();
+  // An order with Pending or Cancelled status MUST NOT default to Delivered!
+  if (status === 'pending' || status === 'cancelled') return 0;
+  if (status === 'processing') return 1;
+  if (status === 'shipped') return 2;
+  if (status === 'delivered') return 4;
+
   const details = String(order.orderTrackingDetails || order.trackingDetails || '').toLowerCase();
 
-  const combined = `${status} ${details}`;
-  if (combined.includes('deliver') || combined.includes('সম্পন্ন') || combined.includes('হস্তান্তরিত')) return 4;
-  if (combined.includes('out') || combined.includes('পথে') || combined.includes('transit') || combined.includes('রওনা')) return 3;
-  if (combined.includes('ship') || combined.includes('dispatch') || combined.includes('কুরিয়ার') || combined.includes('কুরিয়ারে') || combined.includes('courier')) return 2;
-  if (combined.includes('process') || combined.includes('প্যাকেজিং') || combined.includes('প্রসেসিং')) return 1;
+  // If details mention order confirmation / pending / received, it is Step 0 (Confirmed)
+  if (details.includes('কনফার্মেশন') || details.includes('গৃহীত') || details.includes('ভেরিফাই') || details.includes('নিশ্চিত')) {
+    if (!details.includes('ডেলিভারি সম্পন্ন') && !details.includes('হস্তান্তরিত')) {
+      return 0;
+    }
+  }
+
+  // Delivery completed checks must be explicit! NOT the solitary word "সম্পন্ন" which matches "কনফার্মেশন সম্পন্ন"
+  if (details.includes('ডেলিভারি সম্পন্ন') || details.includes('হস্তান্তরিত') || details.includes('হস্তান্তর সম্পন্ন') || details.includes('delivered')) return 4;
+  if (details.includes('ডেলিভারির পথে') || details.includes('রাইডার') || details.includes('out for delivery') || details.includes('transit')) return 3;
+  if (details.includes('কুরিয়ার') || details.includes('কুরিয়ারে') || details.includes('courier') || details.includes('shipped') || details.includes('dispatched') || details.includes('হস্তান্তর হয়েছে') || details.includes('হস্তান্তর করা হয়েছে')) return 2;
+  if (details.includes('প্যাকেজিং') || details.includes('প্রসেসিং') || details.includes('মান যাচাই') || details.includes('processing') || details.includes('packaging')) return 1;
 
   return 0;
 }
