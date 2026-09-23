@@ -23,7 +23,15 @@ export const DEFAULT_PRODUCTS: Product[] = [
     "isActive": true,
     "isAffiliate": false,
     "isOfferZone": true,
-    "offerDiscountNote": "30% off"
+    "offerDiscountNote": "30% off",
+    "hasSizes": true,
+    "sizes": [
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ]
   },
   {
     "id": "prod-mucfvuwe",
