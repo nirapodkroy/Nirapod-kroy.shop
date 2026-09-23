@@ -24,7 +24,99 @@ export const DEFAULT_PRODUCTS: Product[] = [
     "isActive": true,
     "isAffiliate": false,
     "isOfferZone": true,
-    "offerDiscountNote": "30% OFF"
+    "offerDiscountNote": "30% OFF",
+    "hasSizes": true,
+    "sizes": [
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "sizeChart": {
+      "title": "শার্ট / পাঞ্জাবি সাইজ চার্ট (Shirt/Panjabi Size Chart)",
+      "unit": "ইঞ্চি (Inches)",
+      "columns": [
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL"
+      ],
+      "rows": [
+        {
+          "name": "গলা (Neck)",
+          "values": {
+            "S": "14.5\"",
+            "M": "15\"",
+            "L": "15.5\"",
+            "XL": "16\"",
+            "XXL": "16.5\""
+          }
+        },
+        {
+          "name": "বুক (Chest)",
+          "values": {
+            "S": "36\"",
+            "M": "38\"",
+            "L": "40\"",
+            "XL": "42\"",
+            "XXL": "44\""
+          }
+        },
+        {
+          "name": "কাঁধ (Shoulder)",
+          "values": {
+            "S": "16\"",
+            "M": "17\"",
+            "L": "18\"",
+            "XL": "19\"",
+            "XXL": "20\""
+          }
+        },
+        {
+          "name": "লম্বা (Length)",
+          "values": {
+            "S": "27\"",
+            "M": "28\"",
+            "L": "29\"",
+            "XL": "30\"",
+            "XXL": "31\""
+          }
+        },
+        {
+          "name": "হাতা (Sleeve)",
+          "values": {
+            "S": "23\"",
+            "M": "24\"",
+            "L": "24.5\"",
+            "XL": "25\"",
+            "XXL": "25.5\""
+          }
+        },
+        {
+          "name": "হাতার প্রস্থ",
+          "values": {
+            "S": "7\"",
+            "M": "7.5\"",
+            "L": "8\"",
+            "XL": "8.5\"",
+            "XXL": "9\""
+          }
+        },
+        {
+          "name": "নিচের প্রস্থ",
+          "values": {
+            "S": "18\"",
+            "M": "19\"",
+            "L": "20\"",
+            "XL": "21\"",
+            "XXL": "22\""
+          }
+        }
+      ],
+      "note": "* সকল মাপ প্রস্তুতকারক নির্দেশিকা অনুযায়ী প্রদান করা হয়েছে।"
+    }
   },
   {
     "id": "prod-mucfvuwe",
