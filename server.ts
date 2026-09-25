@@ -37,7 +37,7 @@ app.use((req, res, next) => {
     url.endsWith(".gz") ||
     url.endsWith(".map") ||
     url.endsWith("server.cjs") ||
-    (url.endsWith(".json") && !url.endsWith("products.json") && !url.endsWith("manifest.json") && !url.endsWith("site.webmanifest") && !url.startsWith("/api/"))
+    (url.endsWith(".json") && !url.endsWith("products.json") && !url.endsWith("manifest.json") && !url.endsWith("site.webmanifest") && !url.endsWith("firebase-applet-config.json") && !url.startsWith("/api/"))
   ) {
     return res.status(403).json({ error: "Access Forbidden: Protected Resource" });
   }
@@ -79,6 +79,7 @@ interface Product {
   stock: number;
   imageUrl: string;
   images?: string[];
+  imageCodes?: string[];
   rating: number;
   ratingCount: number;
   badge?: string;
@@ -417,6 +418,10 @@ function loadState() {
       return { ...p, images: imgs };
     });
 
+    if (!storeState.customers || !Array.isArray(storeState.customers) || storeState.customers.length === 0) {
+      storeState.customers = INITIAL_CUSTOMERS;
+    }
+
     if (!storeState.webhookUrl || storeState.webhookUrl.includes("AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4")) {
       storeState.webhookUrl = DEFAULT_GOOGLE_SHEET_WEBHOOK;
     }
@@ -608,13 +613,15 @@ async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string, forceS
   try {
     const itemsList = order.items && Array.isArray(order.items) ? order.items : [];
     const trackingNum = order.trackingNumber || ("TRK-" + cleanOrderId.replace(/\D/g, ""));
-    const productCodesText = order.productCodes || itemsList.map(i => {
-      const parts: string[] = [];
-      if (i.productCode) parts.push(i.productCode);
-      if (i.selectedImageCode) parts.push(`ছবি কোড: ${i.selectedImageCode}`);
-      if (i.selectedSize) parts.push(`সাইজ: ${i.selectedSize}`);
-      return parts.length > 0 ? parts.join(" / ") : (i.title || "Product");
-    }).join(", ");
+    const productCodesText = (order.productCodes && !order.productCodes.includes("@") && !order.productCodes.includes(" @ ৳"))
+      ? order.productCodes
+      : itemsList.map(i => {
+          const parts: string[] = [];
+          const code = i.selectedImageCode || i.productCode || "P-01";
+          parts.push(`ছবি কোড: ${code}`);
+          if (i.selectedSize) parts.push(`সাইজ: ${i.selectedSize}`);
+          return parts.join(" / ");
+        }).join(", ");
 
     const itemsFormatted = itemsList.length > 0
       ? itemsList.map(i => {
@@ -1145,6 +1152,56 @@ app.post("/api/auth/register", (req, res) => {
       phone: newCustomer.phone,
       address: newCustomer.address,
       createdAt: newCustomer.createdAt
+    }
+  });
+});
+
+// POST /api/auth/google-sync - Sync Google Sign-In users to Admin Customers and Google Sheets
+app.post("/api/auth/google-sync", async (req, res) => {
+  const { id, name, email, phone, address } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "Email is required" });
+  }
+
+  const normalizedEmail = String(email).trim().toLowerCase();
+  let cust = storeState.customers.find(c => c.email.toLowerCase() === normalizedEmail);
+  if (!cust) {
+    cust = {
+      id: id || "cust-" + Date.now().toString(36),
+      name: (name || "Customer").trim(),
+      email: normalizedEmail,
+      passwordHash: "GOOGLE_AUTH",
+      phone: phone ? phone.trim() : "",
+      address: address ? address.trim() : "",
+      createdAt: new Date().toISOString()
+    };
+    storeState.customers.push(cust);
+  } else {
+    if (name) cust.name = name.trim();
+    if (phone) cust.phone = phone.trim();
+    if (address) cust.address = address.trim();
+  }
+  saveState();
+
+  // Sync to Google Sheets customers sheet
+  let syncedToSheet = false;
+  try {
+    syncedToSheet = await syncCustomerToGoogleSheets(cust, "GOOGLE_AUTH");
+    console.log(`[Google Sheets] Customer ${cust.email} synced to Customers tab: ${syncedToSheet}`);
+  } catch (err) {
+    console.warn("[Google Sheets] Google user sync warning:", err);
+  }
+
+  res.json({
+    success: true,
+    syncedToGoogleSheet: syncedToSheet,
+    customer: {
+      id: cust.id,
+      name: cust.name,
+      email: cust.email,
+      phone: cust.phone,
+      address: cust.address,
+      createdAt: cust.createdAt
     }
   });
 });
@@ -2047,15 +2104,18 @@ app.post("/api/orders", async (req, res) => {
       prod.stock = Math.max(0, prod.stock - qty);
     }
 
+    const code = item.selectedImageCode || item.productCode || prod?.productCode || (prod?.imageCodes && prod.imageCodes[0]) || "P-01";
+    const sz = item.selectedSize || (prod?.sizes && prod.sizes.length > 0 ? prod.sizes[0] : undefined);
+
     processedItems.push({
       productId: prod ? prod.id : item.productId,
       title,
       price,
       quantity: qty,
       imageUrl,
-      selectedImageCode: item.selectedImageCode,
-      selectedSize: item.selectedSize,
-      productCode: item.productCode || prod?.productCode
+      selectedImageCode: code,
+      selectedSize: sz,
+      productCode: code
     });
   }
 
@@ -2075,13 +2135,15 @@ app.post("/api/orders", async (req, res) => {
   const clientTotal = Number(req.body.totalPrice);
   const finalOrderTotal = (!isNaN(clientTotal) && clientTotal > 0) ? clientTotal : (computedTotal + shippingFee);
 
-  const productCodesStr = req.body.productCodes || processedItems.map(i => {
-    const parts = [];
-    if (i.productCode) parts.push(i.productCode);
-    if (i.selectedImageCode) parts.push(`ছবি কোড: ${i.selectedImageCode}`);
-    if (i.selectedSize) parts.push(`সাইজ: ${i.selectedSize}`);
-    return parts.length > 0 ? parts.join(" / ") : i.title;
-  }).join(", ");
+  const productCodesStr = (req.body.productCodes && !req.body.productCodes.includes("@") && !req.body.productCodes.includes(" @ ৳"))
+    ? req.body.productCodes
+    : processedItems.map(i => {
+        const parts = [];
+        const code = i.selectedImageCode || i.productCode || "P-01";
+        parts.push(`ছবি কোড: ${code}`);
+        if (i.selectedSize) parts.push(`সাইজ: ${i.selectedSize}`);
+        return parts.join(" / ");
+      }).join(", ");
 
   const trackingNum = req.body.trackingNumber || ("TRK-" + orderId.replace(/\D/g, ""));
 
@@ -2573,7 +2635,7 @@ app.delete("/api/admin/orders/:id", requireAdmin, async (req, res) => {
 
 // GET /api/admin/customers (Admin only)
 app.get("/api/admin/customers", requireAdmin, (_req, res) => {
-  if (!storeState.isDataSaved) {
+  if (!storeState.isDataSaved && (!storeState.customers || storeState.customers.length === 0)) {
     return res.json({ customers: [], total: 0, isSaved: false });
   }
 

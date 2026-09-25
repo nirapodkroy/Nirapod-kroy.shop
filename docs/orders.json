@@ -18,7 +18,11 @@
     "paymentMethod": "Cash on Delivery",
     "status": "Pending",
     "createdAt": "Muhammad Tarif",
-    "syncedToGoogleSheet": true
+    "syncedToGoogleSheet": true,
+    "currentStepIndex": 0,
+    "trackingStage": "confirmed",
+    "orderTrackingDetails": "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
+    "trackingDetails": "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।"
   },
   {
     "id": "TRK-585755",
@@ -39,7 +43,11 @@
     "paymentMethod": "Cash on Delivery",
     "status": "deliverd",
     "createdAt": "Muhammad Tarif",
-    "syncedToGoogleSheet": true
+    "syncedToGoogleSheet": true,
+    "currentStepIndex": 0,
+    "trackingStage": "confirmed",
+    "orderTrackingDetails": "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।",
+    "trackingDetails": "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে। শীঘ্রই প্যাকেজিং শুরু হবে।"
   },
   {
     "id": "TRK-613159",

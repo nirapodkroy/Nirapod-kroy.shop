@@ -1,0 +1,137 @@
+{
+  "entities": {
+    "userProfile": {
+      "title": "UserProfile",
+      "description": "User profile information and saved addresses",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User contact email"
+        },
+        "name": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "phone": {
+          "type": "string",
+          "description": "User contact phone number"
+        },
+        "address": {
+          "type": "string",
+          "description": "User delivery address"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User avatar photo URL"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Account registration ISO timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Profile last updated ISO timestamp"
+        }
+      },
+      "required": ["userId", "email", "name"]
+    },
+    "userWishlist": {
+      "title": "UserWishlist",
+      "description": "Customer wishlist of product IDs",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "productIds": {
+          "type": "array",
+          "description": "Array of product IDs saved by user"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Wishlist last updated timestamp"
+        }
+      },
+      "required": ["userId", "productIds"]
+    },
+    "userOrder": {
+      "title": "UserOrder",
+      "description": "Customer placed order",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique Order ID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of customer"
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Customer full name"
+        },
+        "customerEmail": {
+          "type": "string",
+          "description": "Customer contact email"
+        },
+        "customerPhone": {
+          "type": "string",
+          "description": "Customer phone number"
+        },
+        "shippingAddress": {
+          "type": "string",
+          "description": "Shipping address"
+        },
+        "totalPrice": {
+          "type": "number",
+          "description": "Total order amount in BDT"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Selected payment method"
+        },
+        "status": {
+          "type": "string",
+          "description": "Order status"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Order placement timestamp"
+        },
+        "trackingNumber": {
+          "type": "string",
+          "description": "Tracking number"
+        }
+      },
+      "required": ["id", "userId", "customerName", "customerPhone", "shippingAddress", "totalPrice", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/userProfile"
+      },
+      "description": "Stores user profile data accessible by the owner or admin"
+    },
+    "/users/{userId}/wishlist/default": {
+      "schema": {
+        "$ref": "#/entities/userWishlist"
+      },
+      "description": "Stores user saved wishlist items"
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": {
+        "$ref": "#/entities/userOrder"
+      },
+      "description": "Stores customer order history"
+    }
+  }
+}

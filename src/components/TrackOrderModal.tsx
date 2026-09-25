@@ -437,6 +437,15 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
                     গ্রাহক: <strong className="text-zinc-800 dark:text-zinc-200">{foundOrder.customerName}</strong>
                   </div>
                 </div>
+
+                {foundOrder.productCodes && (
+                  <div className="mt-2 pt-2 border-t border-zinc-200/60 dark:border-zinc-700/60 flex flex-wrap items-center justify-between gap-1.5 text-xs">
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium">প্রোডাক্ট / ছবি কোড ও সাইজ:</span>
+                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                      {foundOrder.productCodes}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* 2. Cancelled Banner (if status is Cancelled) */}

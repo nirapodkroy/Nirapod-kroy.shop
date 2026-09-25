@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Product } from "../types";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
+import { saveUserOrderToFirestore } from "../lib/firestorePersistence";
 import { useToast } from "../context/ToastContext";
 import { useLanguage } from "../context/LanguageContext";
 import { handleLocalApi } from "../lib/mockApi";
@@ -180,23 +181,30 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       const clientOrderId = orderPreviewId;
       const trackingNumber = "TRK-" + clientOrderId.replace(/\D/g, "");
 
-      const orderedItemList = activeItems.map(item => ({
-        productId: item.product.id,
-        title: item.product.title,
-        price: item.product.price,
-        quantity: item.quantity,
-        imageUrl: item.selectedImageUrl || item.product.imageUrl,
-        selectedImageCode: item.selectedImageCode,
-        selectedSize: item.selectedSize,
-        productCode: item.productCode || item.product.productCode
-      }));
+      const orderedItemList = activeItems.map(item => {
+        const productImagesWithCodes = getProductImagesWithCodes(item.product);
+        const code = item.selectedImageCode || productImagesWithCodes[0]?.code || item.productCode || item.product.productCode || "P-01";
+        const sz = item.selectedSize || (item.product.sizes && item.product.sizes.length > 0 ? item.product.sizes[0] : undefined);
+        return {
+          productId: item.product.id,
+          title: item.product.title,
+          price: item.product.price,
+          quantity: item.quantity,
+          imageUrl: item.selectedImageUrl || item.product.imageUrl,
+          selectedImageCode: code,
+          selectedSize: sz,
+          productCode: code
+        };
+      });
 
       const productCodesText = orderedItemList.map(i => {
         const parts: string[] = [];
-        if (i.productCode) parts.push(i.productCode);
-        if (i.selectedImageCode) parts.push(`ছবি কোড: ${i.selectedImageCode}`);
-        if (i.selectedSize) parts.push(`সাইজ: ${i.selectedSize}`);
-        return parts.length > 0 ? parts.join(" / ") : i.title;
+        const code = i.selectedImageCode || i.productCode || "P-01";
+        parts.push(`ছবি কোড: ${code}`);
+        if (i.selectedSize) {
+          parts.push(`সাইজ: ${i.selectedSize}`);
+        }
+        return parts.join(" / ");
       }).join(", ");
 
       const fullShippingAddress = `${shippingAddress.trim()}, ${city.trim()} (${deliveryArea === "inside_dhaka" ? "ঢাকার ভেতরে" : "ঢাকার বাইরে"})`;
@@ -323,6 +331,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         }
       } catch (e) {
         console.warn("[Checkout] Failed to save order to localStorage:", e);
+      }
+
+      // Persist order in Firestore for authenticated user
+      if (currentUser?.id) {
+        saveUserOrderToFirestore(currentUser.id, finalConfirmedOrder).catch((err) => {
+          console.warn("[Checkout] Firestore order sync error:", err);
+        });
       }
 
       setConfirmedOrder(finalConfirmedOrder);

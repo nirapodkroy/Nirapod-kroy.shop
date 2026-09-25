@@ -176,7 +176,15 @@ export async function syncOrderToGoogleSheets(order: Order, webhookUrl?: string,
     : new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
 
   const userEmail = (order.customerEmail || "").trim();
-  const productCodesVal = order.productCodes || "";
+  const productCodesVal = (order.productCodes && !order.productCodes.includes("@") && !order.productCodes.includes(" @ ৳"))
+    ? order.productCodes
+    : itemsList.map(i => {
+        const parts: string[] = [];
+        const code = i.selectedImageCode || i.productCode || "P-01";
+        parts.push(`ছবি কোড: ${code}`);
+        if (i.selectedSize) parts.push(`সাইজ: ${i.selectedSize}`);
+        return parts.join(" / ");
+      }).join(", ");
   const deliveryAreaVal = order.deliveryArea || (Number(order.shippingFee) === 100 ? "ঢাকার বাইরে" : "ঢাকার ভেতরে");
   const shippingFeeVal = order.shippingFee ? `৳${order.shippingFee}` : (deliveryAreaVal.includes("100") || deliveryAreaVal.includes("বাইরে") ? "৳100" : "৳60");
   const trackingDetailsText = (order as any).orderTrackingDetails || (order as any).trackingDetails || "অর্ডার কনফার্মেশন সম্পন্ন হয়েছে";
@@ -687,14 +695,18 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       if (prod) {
         prod.stock = Math.max(0, prod.stock - qty);
       }
+      const code = item.selectedImageCode || item.productCode || prod?.productCode || (prod?.imageCodes && prod.imageCodes[0]) || "P-01";
+      const sz = item.selectedSize || (prod?.sizes && prod.sizes.length > 0 ? prod.sizes[0] : undefined);
+
       processedItems.push({
         productId: prod ? prod.id : item.productId,
         title,
         price,
         quantity: qty,
         imageUrl,
-        selectedImageCode: item.selectedImageCode,
-        productCode: item.productCode || prod?.productCode
+        selectedImageCode: code,
+        selectedSize: sz,
+        productCode: code
       });
     }
     setSafeStorage(PRODUCTS_KEY, products);
@@ -714,12 +726,15 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     const clientTotal = Number(body.totalPrice);
     const finalOrderTotal = (!isNaN(clientTotal) && clientTotal > 0) ? clientTotal : (computedTotal + shippingFee);
 
-    const productCodesStr = body.productCodes || processedItems.map(i => {
-      const parts = [];
-      if (i.productCode) parts.push(i.productCode);
-      if (i.selectedImageCode) parts.push(`ছবি কোড: ${i.selectedImageCode}`);
-      return parts.length > 0 ? parts.join(" / ") : i.title;
-    }).join(", ");
+    const productCodesStr = (body.productCodes && !body.productCodes.includes("@") && !body.productCodes.includes(" @ ৳"))
+      ? body.productCodes
+      : processedItems.map(i => {
+          const parts = [];
+          const code = i.selectedImageCode || i.productCode || "P-01";
+          parts.push(`ছবি কোড: ${code}`);
+          if (i.selectedSize) parts.push(`সাইজ: ${i.selectedSize}`);
+          return parts.join(" / ");
+        }).join(", ");
 
     const trackingNum = body.trackingNumber || ("TRK-" + orderId.replace(/\D/g, ""));
 

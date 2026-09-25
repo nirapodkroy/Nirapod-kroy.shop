@@ -56,6 +56,7 @@ export interface CustomerUser {
   email: string;
   phone?: string;
   address?: string;
+  photoURL?: string;
   createdAt: string;
 }
 

@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "adib1234w@gmail.com" ||
+        request.auth.token.email == "mtarifprodhan@gmail.com"
+      ) && request.auth.token.email_verified == true;
+    }
+
+    // Validation for User Profile
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['userId', 'email', 'name']) &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.email is string && data.email.size() <= 128 &&
+        data.name is string && data.name.size() <= 100 &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+        (!('address' in data) || (data.address is string && data.address.size() <= 500)) &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000));
+    }
+
+    // Validation for Wishlist
+    function isValidWishlist(data) {
+      return data.keys().hasAll(['userId', 'productIds']) &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.productIds is list && data.productIds.size() <= 200;
+    }
+
+    // Validation for Order
+    function isValidOrder(data) {
+      return data.keys().hasAll(['id', 'userId', 'customerName', 'customerPhone', 'shippingAddress', 'totalPrice', 'status']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.customerName is string && data.customerName.size() <= 100 &&
+        data.customerPhone is string && data.customerPhone.size() <= 30 &&
+        data.shippingAddress is string && data.shippingAddress.size() <= 500 &&
+        data.totalPrice is number && data.totalPrice >= 0 &&
+        data.status is string && data.status.size() <= 50;
+    }
+
+    // Connection validation document
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // User Profile Document
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(userId) && isValidUserProfile(incoming());
+      allow update: if isSignedIn() && isOwner(userId) && isValidUserProfile(incoming()) && incoming().userId == existing().userId;
+      allow delete: if isAdmin();
+
+      // User Wishlist Subcollection
+      match /wishlist/{docId} {
+        allow get, list: if isSignedIn() && isOwner(userId);
+        allow create, update: if isSignedIn() && isOwner(userId) && isValidWishlist(incoming());
+        allow delete: if isSignedIn() && isOwner(userId);
+      }
+
+      // User Orders Subcollection
+      match /orders/{orderId} {
+        allow get, list: if isSignedIn() && (isOwner(userId) || isAdmin());
+        allow create: if isSignedIn() && isOwner(userId) && isValidOrder(incoming());
+        allow update: if (isSignedIn() && isOwner(userId) && isValidOrder(incoming()) && incoming().id == existing().id) || isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+  }
+}

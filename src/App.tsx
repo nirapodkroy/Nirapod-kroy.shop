@@ -28,6 +28,10 @@ import { Footer } from "./components/Footer";
 import { ToastContainer } from "./components/ToastContainer";
 import { BASE_CATEGORIES, getDynamicCategories } from "./data/categories";
 import { trackPageView } from "./utils/tracker";
+import {
+  fetchUserWishlistFromFirestore,
+  saveUserWishlistToFirestore
+} from "./lib/firestorePersistence";
 
 const PRODUCTS_CACHE_KEY = "nirapod_products_cache_v6";
 const WISHLIST_CACHE_KEY = "nirapod_wishlist_ids";
@@ -77,7 +81,7 @@ const StoreContent: React.FC = () => {
   });
 
   const { language, getCategoryName } = useLanguage();
-  const { setIsAdminModalOpen } = useAuth();
+  const { currentUser, setIsAdminModalOpen } = useAuth();
   const { addToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -221,6 +225,23 @@ const StoreContent: React.FC = () => {
       return [];
     }
   });
+
+  // Sync wishlist from Cloud Firestore on login
+  useEffect(() => {
+    if (currentUser?.id) {
+      fetchUserWishlistFromFirestore(currentUser.id)
+        .then((remoteIds) => {
+          if (Array.isArray(remoteIds) && remoteIds.length > 0) {
+            setWishlistIds((prev) => {
+              const combined = Array.from(new Set([...prev, ...remoteIds]));
+              safeSetLocalStorage(WISHLIST_CACHE_KEY, JSON.stringify(combined));
+              return combined;
+            });
+          }
+        })
+        .catch((e) => console.warn("Could not fetch remote wishlist:", e));
+    }
+  }, [currentUser?.id]);
 
   const { isCheckoutOpen, setIsCheckoutOpen } = useCart();
 
@@ -456,6 +477,11 @@ const StoreContent: React.FC = () => {
       const exists = prev.includes(product.id);
       const next = exists ? prev.filter((id) => id !== product.id) : [...prev, product.id];
       safeSetLocalStorage(WISHLIST_CACHE_KEY, JSON.stringify(next));
+      if (currentUser?.id) {
+        saveUserWishlistToFirestore(currentUser.id, next).catch((err) => {
+          console.warn("Could not save wishlist to Firestore:", err);
+        });
+      }
       if (exists) {
         addToast(`"${product.title}" পছন্দের তালিকা থেকে সরানো হয়েছে`, "info");
       } else {
@@ -469,6 +495,11 @@ const StoreContent: React.FC = () => {
     setWishlistIds((prev) => {
       const next = prev.filter((id) => id !== productId);
       safeSetLocalStorage(WISHLIST_CACHE_KEY, JSON.stringify(next));
+      if (currentUser?.id) {
+        saveUserWishlistToFirestore(currentUser.id, next).catch((err) => {
+          console.warn("Could not save wishlist to Firestore:", err);
+        });
+      }
       return next;
     });
   };

@@ -54,13 +54,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     selectedImageUrl?: string,
     selectedSize?: string
   ) => {
+    const imageItems = getProductImagesWithCodes(product);
+    const chosenCode = selectedImageCode || imageItems[0]?.code || product.productCode || "P-01";
     const finalSize = selectedSize || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
     setItems(prev => {
       // Find matching item by product.id, selectedImageCode, and selectedSize
       const existingIdx = prev.findIndex(
         item =>
           item.product.id === product.id &&
-          (!selectedImageCode || item.selectedImageCode === selectedImageCode) &&
+          (!chosenCode || item.selectedImageCode === chosenCode) &&
           (item.selectedSize === finalSize)
       );
       if (existingIdx > -1) {
@@ -69,10 +71,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updated[existingIdx] = {
           ...updated[existingIdx],
           quantity: newQty,
-          selectedImageCode: selectedImageCode || updated[existingIdx].selectedImageCode,
+          selectedImageCode: chosenCode || updated[existingIdx].selectedImageCode,
           selectedImageUrl: selectedImageUrl || updated[existingIdx].selectedImageUrl,
           selectedSize: finalSize || updated[existingIdx].selectedSize,
-          productCode: product.productCode
+          productCode: product.productCode || chosenCode
         };
         return updated;
       } else {
@@ -81,16 +83,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           {
             product,
             quantity,
-            selectedImageCode,
+            selectedImageCode: chosenCode,
             selectedImageUrl: selectedImageUrl || product.imageUrl,
             selectedSize: finalSize,
-            productCode: product.productCode
+            productCode: product.productCode || chosenCode
           }
         ];
       }
     });
     const sizeNote = finalSize ? ` (সাইজ: ${finalSize})` : "";
-    addToast(`Added "${product.title}" ${selectedImageCode ? `[${selectedImageCode}]` : ""}${sizeNote} to cart!`, "success");
+    addToast(`Added "${product.title}" [${chosenCode}]${sizeNote} to cart!`, "success");
   };
 
   const updateItemCode = (productId: string, code: string, imageUrl?: string) => {

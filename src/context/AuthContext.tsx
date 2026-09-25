@@ -2,6 +2,12 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { CustomerUser } from "../types";
 import { useToast } from "./ToastContext";
 import { handleLocalApi, syncCustomerToGoogleSheets } from "../lib/mockApi";
+import { auth, googleProvider } from "../lib/firebase";
+import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import {
+  syncUserProfileToFirestore,
+  fetchUserProfileFromFirestore
+} from "../lib/firestorePersistence";
 import {
   safeGetLocalStorage,
   safeSetLocalStorage,
@@ -14,7 +20,9 @@ interface AuthContextType {
   currentUser: CustomerUser | null;
   customerToken: string | null;
   loginCustomer: (email: string, password: string) => Promise<boolean>;
+  loginWithGoogle: () => Promise<boolean>;
   registerCustomer: (name: string, email: string, password: string, phone?: string, address?: string) => Promise<boolean>;
+  updateUserProfile: (data: Partial<CustomerUser>) => Promise<boolean>;
   logoutCustomer: () => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
@@ -53,6 +61,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<"signin" | "signup">("signin");
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  const syncUserToGoogleSheetAndAdmin = useCallback(async (customer: CustomerUser) => {
+    if (!customer?.email) return;
+    try {
+      await fetch("/api/auth/google-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: customer.id,
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          address: customer.address
+        })
+      });
+    } catch (err) {
+      console.warn("[AuthContext] Sync customer to backend/sheet warning:", err);
+    }
+  }, []);
+
+  // Sync Firebase Auth state listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
+      if (fbUser) {
+        try {
+          const profile = await fetchUserProfileFromFirestore(fbUser.uid);
+          const mappedUser: CustomerUser = {
+            id: fbUser.uid,
+            name: profile?.name || fbUser.displayName || fbUser.email?.split("@")[0] || "Customer",
+            email: fbUser.email || "",
+            phone: profile?.phone || "",
+            address: profile?.address || "",
+            photoURL: fbUser.photoURL || undefined,
+            createdAt: profile?.createdAt || new Date().toISOString()
+          };
+          setCurrentUser(mappedUser);
+          setCustomerToken("fb_" + fbUser.uid);
+          safeSetLocalStorage("auracart_customer", JSON.stringify(mappedUser));
+          safeSetLocalStorage("auracart_customer_token", "fb_" + fbUser.uid);
+
+          // Auto-sync authenticated Google user to Google Sheets and Admin store
+          syncUserToGoogleSheetAndAdmin(mappedUser);
+        } catch (e) {
+          console.warn("Could not sync Firebase user profile:", e);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [syncUserToGoogleSheetAndAdmin]);
 
   // Secret Admin state
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -261,7 +319,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async (): Promise<boolean> => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        const u = result.user;
+        let existing = await fetchUserProfileFromFirestore(u.uid);
+        const customer: CustomerUser = {
+          id: u.uid,
+          name: existing?.name || u.displayName || u.email?.split("@")[0] || "Customer",
+          email: u.email || "",
+          phone: existing?.phone || "",
+          address: existing?.address || "",
+          photoURL: u.photoURL || undefined,
+          createdAt: existing?.createdAt || new Date().toISOString()
+        };
+        setCurrentUser(customer);
+        setCustomerToken("fb_" + u.uid);
+        safeSetLocalStorage("auracart_customer", JSON.stringify(customer));
+        safeSetLocalStorage("auracart_customer_token", "fb_" + u.uid);
+        await syncUserProfileToFirestore(customer, u.photoURL || undefined);
+
+        // Sync to Admin Customers list and Google Sheets
+        await syncUserToGoogleSheetAndAdmin(customer);
+
+        addToast(`স্বাগতম, ${customer.name}! Google দিয়ে সফলভাবে সাইন ইন হয়েছে।`, "success");
+        setIsAuthModalOpen(false);
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      console.error("Google sign in failed:", err);
+      if (err.code !== "auth/popup-closed-by-user") {
+        addToast(err.message || "Google সাইন ইন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।", "error");
+      }
+      return false;
+    }
+  };
+
+  const updateUserProfile = async (data: Partial<CustomerUser>): Promise<boolean> => {
+    if (!currentUser) return false;
+    const updated: CustomerUser = {
+      ...currentUser,
+      ...data
+    };
+    setCurrentUser(updated);
+    safeSetLocalStorage("auracart_customer", JSON.stringify(updated));
+    try {
+      await syncUserProfileToFirestore(updated);
+      await syncUserToGoogleSheetAndAdmin(updated);
+      addToast("প্রোফাইল তথ্য সফলভাবে সেভ হয়েছে", "success");
+      return true;
+    } catch (e) {
+      console.warn("Failed to sync profile to Firestore:", e);
+      return true;
+    }
+  };
+
   const logoutCustomer = useCallback(() => {
+    signOut(auth).catch(() => {});
     setCurrentUser(null);
     setCustomerToken(null);
     safeRemoveLocalStorage("auracart_customer");
@@ -343,7 +459,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentUser,
         customerToken,
         loginCustomer,
+        loginWithGoogle,
         registerCustomer,
+        updateUserProfile,
         logoutCustomer,
         isAuthModalOpen,
         setIsAuthModalOpen,
