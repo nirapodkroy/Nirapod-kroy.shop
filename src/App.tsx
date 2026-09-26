@@ -552,7 +552,7 @@ const StoreContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-emerald-500 selection:text-white transition-colors duration-200">
+    <div className="min-h-screen flex flex-col bg-[#f2f7f4] bg-[radial-gradient(rgba(234,88,12,0.16)_1.5px,transparent_1.5px)] [background-size:26px_26px] dark:bg-zinc-950 dark:bg-[radial-gradient(rgba(249,115,22,0.10)_1.5px,transparent_1.5px)] text-zinc-900 dark:text-zinc-100 selection:bg-orange-500 selection:text-white transition-colors duration-200">
       {/* Toast Notification Layer */}
       <ToastContainer />
 

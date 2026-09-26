@@ -1105,7 +1105,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   className={`w-full mt-3 flex items-center justify-center gap-2 py-4 px-4 rounded-2xl font-extrabold text-sm sm:text-base shadow-lg transition-all active:scale-[0.98] cursor-pointer ${
                     paymentMethod === "bKash / Mobile Wallet"
                       ? "bg-[#0052cc] hover:bg-[#0047b3] text-white shadow-blue-600/25"
-                      : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25"
+                      : "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:from-orange-700 active:to-amber-700 text-white shadow-lg shadow-orange-500/30"
                   } disabled:opacity-50`}
                 >
                   {isSubmitting ? (

@@ -2,19 +2,39 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Golden Olive Oil tone extracted from image */
+/* Official Nirapod Kroy Brand Palette:
+   Pale Green Background: #f2f7f4 (Extracted from 1st user image)
+   Warm Orange Dot Texture: radial-gradient(#f97316 1.5px) (Extracted from 2nd user image)
+   Vibrant Orange CTA Buttons: #ea580c / #f97316 (From 2nd user image) */
 :root {
+  --kroy-orange: #ea580c;
+  --kroy-orange-hover: #c2410c;
+  --kroy-orange-active: #9a3412;
+  --kroy-orange-light: #fff7ed;
+  --kroy-orange-shadow: rgba(234, 88, 12, 0.35);
+
+  --bg-pale-green: #f2f7f4;
+  --bg-dot-texture: rgba(234, 88, 12, 0.16);
+
   --color-oil-gold: #846F15;
   --color-oil-gold-hover: #967F19;
   --color-oil-gold-active: #6E5C0E;
 }
 
-.bg-oil-gold {
-  background-color: #846F15;
+.bg-kroy-orange {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
 }
 
-.hover\:bg-oil-gold-hover:hover {
-  background-color: #967F19;
+.hover\:bg-kroy-orange-hover:hover {
+  background: linear-gradient(135deg, #fb923c 0%, #c2410c 100%);
+}
+
+.text-kroy-orange {
+  color: #ea580c;
+}
+
+.border-kroy-orange {
+  border-color: #ea580c;
 }
 
 /* Cross-Platform Device Optimizations: Phone, Tablet, PC (Windows, Mac) */
@@ -25,12 +45,18 @@ html {
 }
 
 html, body {
-  background-color: #ffffff;
+  background-color: #f2f7f4;
+  background-image: radial-gradient(rgba(234, 88, 12, 0.16) 1.5px, transparent 1.5px);
+  background-size: 26px 26px;
+  background-position: 0 0;
   color: #18181b;
 }
 
 html.dark, html.dark body {
   background-color: #09090b;
+  background-image: radial-gradient(rgba(249, 115, 22, 0.10) 1.5px, transparent 1.5px);
+  background-size: 26px 26px;
+  background-position: 0 0;
   color: #f4f4f5;
 }
 

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
-import { X, Mail, Lock, User, Phone, MapPin, ArrowRight, ShieldCheck } from "lucide-react";
+import { X, Mail, Lock, User, Phone, MapPin, ArrowRight, ShieldCheck, AlertCircle, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export const CustomerAuthModal: React.FC = () => {
@@ -29,6 +29,7 @@ export const CustomerAuthModal: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [domainNotice, setDomainNotice] = useState(false);
 
   if (!isAuthModalOpen) return null;
 
@@ -161,7 +162,11 @@ export const CustomerAuthModal: React.FC = () => {
                 disabled={isGoogleLoading || isLoading}
                 onClick={async () => {
                   setIsGoogleLoading(true);
-                  await loginWithGoogle();
+                  setDomainNotice(false);
+                  const success = await loginWithGoogle();
+                  if (!success) {
+                    setDomainNotice(true);
+                  }
                   setIsGoogleLoading(false);
                 }}
                 className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs sm:text-sm font-semibold shadow-xs hover:shadow transition-all cursor-pointer disabled:opacity-50"
@@ -190,6 +195,55 @@ export const CustomerAuthModal: React.FC = () => {
                     : (language === "bn" ? "Google দিয়ে সাইন ইন করুন" : "Continue with Google")}
                 </span>
               </button>
+
+              {/* Domain Authorization Notice for nirapodkroy.shop */}
+              {domainNotice && (
+                <div className="mt-2.5 p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-800/80 text-[11px] text-zinc-800 dark:text-zinc-200 text-left">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-1">
+                      <p className="font-bold text-amber-900 dark:text-amber-200">
+                        {language === "bn"
+                          ? "ডোমেইন অনুমোদন প্রয়োজন (auth/unauthorized-domain)"
+                          : "Domain Authorization Required"}
+                      </p>
+                      <p className="text-[10px] leading-relaxed text-zinc-600 dark:text-zinc-400">
+                        {language === "bn"
+                          ? `কাস্টম ডোমেইনে Google লগইন চালাতে Firebase Console-এ আপনার ডোমেন (${typeof window !== "undefined" ? window.location.hostname : "nirapodkroy.shop"}) যোগ করতে হবে:`
+                          : `To enable Google sign-in on your custom domain, add (${typeof window !== "undefined" ? window.location.hostname : "nirapodkroy.shop"}) in Firebase Console:`}
+                      </p>
+                      <ol className="list-decimal list-inside text-[10px] text-zinc-600 dark:text-zinc-400 space-y-0.5 pt-0.5">
+                        <li>Firebase Console &gt; Authentication &gt; Settings</li>
+                        <li><strong>Authorized domains</strong> ট্যাবে গিয়ে <strong>Add domain</strong> ক্লিক করুন</li>
+                        <li>ডোমেন নাম লিখুন: <strong className="font-mono text-zinc-800 dark:text-zinc-200">nirapodkroy.shop</strong> এবং সেভ করুন</li>
+                      </ol>
+                      <div className="pt-1.5 flex items-center justify-between">
+                        <a
+                          href="https://console.firebase.google.com/project/pioneering-cargo-w1ttq/authentication/settings"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-bold text-xs text-orange-600 hover:text-orange-700 dark:text-orange-400 underline"
+                        >
+                          {language === "bn" ? "Firebase Settings খুলুন" : "Open Firebase Settings"}
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => setDomainNotice(false)}
+                          className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+                        >
+                          {language === "bn" ? "বন্ধ করুন" : "Dismiss"}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold pt-1">
+                        {language === "bn"
+                          ? "💡 তাৎক্ষণিকভাবে লগইন করতে নিচের ইমেইল ও পাসওয়ার্ড ফর্ম ব্যবহার করুন।"
+                          : "💡 Tip: You can also sign in or register instantly with email & password below."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="relative my-3 flex items-center justify-center">

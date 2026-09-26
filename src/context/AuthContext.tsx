@@ -351,7 +351,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       console.error("Google sign in failed:", err);
       if (err.code !== "auth/popup-closed-by-user") {
-        addToast(err.message || "Google সাইন ইন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।", "error");
+        if (err.code === "auth/unauthorized-domain") {
+          const currentHost = typeof window !== "undefined" ? window.location.hostname : "nirapodkroy.shop";
+          addToast(
+            `Firebase ডোমেন অনুমোদিত নয় (${currentHost})। Firebase Console > Authentication > Settings > Authorized domains এ ডোমেনটি যোগ করতে হবে। অথবা নিচে ইমেইল ও পাসওয়ার্ড দিয়ে সরাসরি লগইন করুন।`,
+            "error"
+          );
+        } else {
+          addToast(err.message || "Google সাইন ইন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।", "error");
+        }
       }
       return false;
     }

@@ -140,7 +140,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       <nav
         id="mobile-bottom-navigation"
         aria-label="Mobile Navigation"
-        className="fixed bottom-0 inset-x-0 z-40 lg:hidden bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800/80 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
+        className="fixed bottom-0 inset-x-0 z-40 lg:hidden bg-[#f2f7f4]/95 dark:bg-zinc-950/95 backdrop-blur-md border-t border-emerald-900/10 dark:border-zinc-800/80 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
       >
         <div className="grid grid-cols-5 items-center h-15 px-1 max-w-xl mx-auto">
           {/* 1. Home Button */}
@@ -221,16 +221,16 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             className="flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-xl text-zinc-700 dark:text-zinc-200 hover:text-emerald-600 transition-colors cursor-pointer select-none active:scale-95 relative"
           >
             <div className="relative">
-              <div className="p-1 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+              <div className="p-1 rounded-lg bg-[#d38f18]/15 text-[#d38f18] dark:text-amber-400">
                 <ShoppingCart className="w-5 h-5 stroke-[2.2]" />
               </div>
               {itemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-emerald-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center shadow-md animate-bounce animate-once">
+                <span className="absolute -top-1 -right-1 bg-[#d38f18] text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center shadow-md animate-bounce animate-once">
                   {itemCount > 99 ? "99+" : itemCount}
                 </span>
               )}
             </div>
-            <span className="text-[10px] leading-none font-bold text-emerald-600 dark:text-emerald-400">
+            <span className="text-[10px] leading-none font-bold text-[#d38f18] dark:text-amber-400">
               {itemCount > 0 ? formatPrice(subtotal) : (language === "bn" ? "কার্ট" : "Cart")}
             </span>
           </button>

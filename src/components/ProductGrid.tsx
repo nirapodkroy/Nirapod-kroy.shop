@@ -23,7 +23,11 @@ import {
   GROCERIES_PARENT,
   GROCERY_SUBCATEGORIES,
   isGrocerySubcategory,
-  isGroceryRelatedCategory
+  isGroceryRelatedCategory,
+  FASHION_PARENT,
+  FASHION_SUBCATEGORIES,
+  isFashionSubcategory,
+  isFashionRelatedCategory
 } from "../data/categories";
 import { filterProductsBySearch } from "../utils/searchHelper";
 
@@ -118,12 +122,53 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
         const isShareeFilter = catLower === "sharee" || catLower === "saree" || catLower === "shari" || catLower === "sari" || catLower === "শাড়ি" || catLower === "শাড়ী";
         const isPanjabiFilter = catLower === "panjabi" || catLower === "punjabi" || catLower === "পাঞ্জাবি" || catLower === "পাঞ্জাবী";
         const isShirtFilter = catLower === "shirt" || catLower === "shart" || catLower === "shirts" || catLower === "শার্ট";
-        const isFashionParent = catLower === "fashion" || catLower === "পোশাক" || catLower === "পোশাক-ও-ফ্যাশন";
+        const isHoodieFilter =
+          catLower === "ladies hoodie" ||
+          catLower === "ladies  hoodie" ||
+          catLower === "ladies-hoodie" ||
+          catLower === "hoodie" ||
+          catLower === "hoodies" ||
+          catLower === "hudie" ||
+          catLower === "hudies" ||
+          catLower === "ladies-hudie" ||
+          catLower === "লেডিস হুডি" ||
+          catLower === "লেডিস-হুডি" ||
+          catLower === "হুডি" ||
+          catLower.includes("hoodie") ||
+          catLower.includes("hudie") ||
+          catLower.includes("হুডি");
+        const isThreePieceFilter =
+          catLower === "three piece" ||
+          catLower === "three-piece" ||
+          catLower === "three_piece" ||
+          catLower === "থ্রি-পিস" ||
+          catLower === "থ্রি পিস";
+        const isGownFilter =
+          catLower === "one piece gown" ||
+          catLower === "one-piece-gown" ||
+          catLower === "gown" ||
+          catLower === "পরী গাউন" ||
+          catLower === "গাউন";
+        const isFashionParent = catLower === "fashion" || catLower === "পোশাক" || catLower === "পোশাক-ও-ফ্যাশন" || catLower === "পোশাক ও ফ্যাশন";
 
         list = list.filter((p) => {
           const pCat = p.category.toLowerCase().trim();
+          const normCat = pCat.replace(/\s+/g, " ");
           const pParent = (p.parentCategory || "").toLowerCase().trim();
           const pTitle = (p.title || "").toLowerCase();
+
+          if (isHoodieFilter) {
+            return (
+              normCat === "ladies hoodie" ||
+              normCat === "hoodie" ||
+              normCat.includes("hoodie") ||
+              normCat.includes("hudie") ||
+              normCat.includes("হুডি") ||
+              pTitle.includes("hoodie") ||
+              pTitle.includes("hudie") ||
+              pTitle.includes("হুডি")
+            );
+          }
 
           if (isShirtFilter) {
             return (
@@ -165,25 +210,55 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
             );
           }
 
+          if (isThreePieceFilter) {
+            return (
+              normCat === "three piece" ||
+              normCat.includes("three") ||
+              normCat.includes("piece") ||
+              normCat.includes("থ্রি") ||
+              pTitle.includes("three piece") ||
+              pTitle.includes("থ্রি-পিস") ||
+              pTitle.includes("থ্রি পিস")
+            );
+          }
+
+          if (isGownFilter) {
+            return (
+              normCat === "one piece gown" ||
+              normCat.includes("gown") ||
+              normCat.includes("গাউন") ||
+              pTitle.includes("gown") ||
+              pTitle.includes("গাউন")
+            );
+          }
+
           if (isFashionParent) {
             return (
               pParent === "fashion" ||
-              pCat === "fashion" ||
-              pCat === "shirt" ||
-              pCat === "shart" ||
-              pCat === "sharee" ||
-              pCat === "panjabi" ||
-              pCat === "women hijab" ||
+              normCat === "fashion" ||
+              normCat === "shirt" ||
+              normCat === "shart" ||
+              normCat === "sharee" ||
+              normCat === "panjabi" ||
+              normCat === "ladies hoodie" ||
+              normCat === "three piece" ||
+              normCat === "one piece gown" ||
+              normCat === "women hijab" ||
+              normCat.includes("hoodie") ||
               pTitle.includes("shirt") ||
               pTitle.includes("shart") ||
               pTitle.includes("শার্ট") ||
               pTitle.includes("sharee") ||
               pTitle.includes("শাড়ি") ||
-              pTitle.includes("panjabi")
+              pTitle.includes("panjabi") ||
+              pTitle.includes("hoodie") ||
+              pTitle.includes("hudie") ||
+              pTitle.includes("হুডি")
             );
           }
 
-          return pCat === catLower || pParent === catLower;
+          const normSelected = catLower.replace(/\s+/g, " ");
+          return normCat === normSelected || pParent === catLower;
         });
       }
     }
@@ -496,8 +571,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
                       selectedCategory.toLowerCase() === GROCERIES_PARENT.toLowerCase() ||
                       selectedCategory.toLowerCase() === "groceries"
-                        ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/30 font-bold"
-                        : "bg-white dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:border-emerald-500 hover:text-emerald-600"
+                        ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm ring-2 ring-orange-500/30 font-bold"
+                        : "bg-white dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:border-orange-500 hover:text-orange-600"
                     }`}
                   >
                     <span>{language === "bn" ? "সকল মুদি ও খাদ্য" : "All Groceries"}</span>
@@ -516,8 +591,86 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                         onClick={() => handleCategorySelect(sub)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
                           isCurrent
-                            ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/30 font-bold"
-                            : "bg-white dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:border-emerald-500 hover:text-emerald-600"
+                            ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm ring-2 ring-orange-500/30 font-bold"
+                            : "bg-white dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:border-orange-500 hover:text-orange-600"
+                        }`}
+                      >
+                        <span>{getCategoryName(sub)}</span>
+                        {subCount > 0 && (
+                          <span
+                            className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                              isCurrent
+                                ? "bg-white/25 text-white"
+                                : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400"
+                            }`}
+                          >
+                            {subCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* If inside Fashion or any fashion subcategory, show interactive Fashion Subcategories Strip */}
+            {isFashionRelatedCategory(selectedCategory) && (
+              <div className="pt-3 border-t border-zinc-200/80 dark:border-zinc-800/80">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 category-scrollbar select-none">
+                  <div className="flex items-center gap-1 text-xs font-bold text-zinc-600 dark:text-zinc-300 shrink-0 mr-1">
+                    <Filter className="w-3.5 h-3.5 text-[#d38f18] dark:text-amber-400" />
+                    <span>{language === "bn" ? "সাব-ক্যাটাগরি:" : "Sub-categories:"}</span>
+                  </div>
+
+                  {/* All Fashion Parent Pill */}
+                  <button
+                    type="button"
+                    onClick={() => handleCategorySelect(FASHION_PARENT)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
+                      selectedCategory.toLowerCase() === FASHION_PARENT.toLowerCase() ||
+                      selectedCategory.toLowerCase() === "fashion"
+                        ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm ring-2 ring-orange-500/30 font-bold"
+                        : "bg-white dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:border-orange-500 hover:text-orange-600"
+                    }`}
+                  >
+                    <span>{language === "bn" ? "সকল পোশাক ও ফ্যাশন" : "All Fashion"}</span>
+                  </button>
+
+                  {/* Fashion Subcategory Pills */}
+                  {FASHION_SUBCATEGORIES.map((sub) => {
+                    const normSelected = selectedCategory.toLowerCase().replace(/\s+/g, " ");
+                    const normSub = sub.toLowerCase().replace(/\s+/g, " ");
+                    const isCurrent =
+                      normSelected === normSub ||
+                      (normSub === "ladies hoodie" &&
+                        (normSelected === "hoodie" ||
+                          normSelected === "hudie" ||
+                          normSelected === "hoodies" ||
+                          normSelected === "হুডি" ||
+                          normSelected === "ladies-hoodie" ||
+                          normSelected === "ladies  hoodie"));
+                    const subCount = products.filter((p) => {
+                      const pCatNorm = (p.category || "").toLowerCase().replace(/\s+/g, " ");
+                      if (normSub === "ladies hoodie") {
+                        return (
+                          pCatNorm === "ladies hoodie" ||
+                          pCatNorm.includes("hoodie") ||
+                          pCatNorm.includes("hudie") ||
+                          pCatNorm.includes("হুডি")
+                        );
+                      }
+                      return pCatNorm === normSub;
+                    }).length;
+                    return (
+                      <button
+                        key={sub}
+                        type="button"
+                        onClick={() => handleCategorySelect(sub)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
+                          isCurrent
+                            ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm ring-2 ring-orange-500/30 font-bold"
+                            : "bg-white dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:border-orange-500 hover:text-orange-600"
                         }`}
                       >
                         <span>{getCategoryName(sub)}</span>
@@ -600,8 +753,8 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                     onClick={() => handleCategorySelect("All")}
                     className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
                       selectedCategory === "All"
-                        ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20 ring-2 ring-emerald-500/20"
-                        : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200/90 dark:border-zinc-800 hover:border-emerald-500/50 hover:text-emerald-600"
+                        ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/25 ring-2 ring-orange-500/20"
+                        : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200/90 dark:border-zinc-800 hover:border-orange-500/50 hover:text-orange-600"
                     }`}
                     title={language === "bn" ? "সকল পণ্য" : "All Products"}
                   >
@@ -659,10 +812,10 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
                             isSelected
                               ? isOfferZoneCat
                                 ? "bg-amber-600 text-white font-bold shadow-md shadow-amber-600/30 ring-1 ring-amber-400"
-                                : "bg-emerald-600 text-white font-bold shadow-md shadow-emerald-600/20"
+                                : "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-md shadow-orange-500/25"
                               : isOfferZoneCat
                                 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 font-bold"
-                                : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200/80 dark:border-zinc-800 hover:border-emerald-500/50 hover:text-emerald-600"
+                                : "bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200/80 dark:border-zinc-800 hover:border-orange-500/50 hover:text-orange-600"
                           }`}
                         >
                           <span>{getCategoryName(cat)}</span>

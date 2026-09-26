@@ -544,7 +544,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           buyNow(product, activeImageItem?.code, activeImageItem?.url, quantity, selectedSize);
                           onClose();
                         }}
-                        className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#846F15] hover:bg-[#967F19] active:bg-[#6E5C0E] text-white font-bold text-xs sm:text-sm shadow-md shadow-[#846F15]/30 transition-all hover:shadow-lg active:scale-[0.98] cursor-pointer"
+                        className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:from-orange-700 active:to-amber-700 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-orange-500/30 transition-all hover:shadow-lg active:scale-[0.98] cursor-pointer"
                       >
                         <Zap className="w-4 h-4 fill-current" />
                         <span>{t("buy_now")}</span>

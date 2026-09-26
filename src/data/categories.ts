@@ -20,6 +20,19 @@ export const GROCERY_SUBCATEGORIES: string[] = [
   "Flours & Lentils"
 ];
 
+export const FASHION_PARENT = "Fashion";
+
+// Subcategories under Fashion
+export const FASHION_SUBCATEGORIES: string[] = [
+  "Ladies Hoodie",
+  "Shirt",
+  "Sharee",
+  "Panjabi",
+  "Three Piece",
+  "One Piece Gown",
+  "Women Hijab"
+];
+
 // Main top-level navigation categories
 export const MAIN_CATEGORIES: string[] = [
   "All",
@@ -118,6 +131,34 @@ export function isGroceryRelatedCategory(category: string): boolean {
 }
 
 /**
+ * Checks whether a category is one of the subcategories of Fashion
+ */
+export function isFashionSubcategory(category: string): boolean {
+  if (!category) return false;
+  const lower = category.toLowerCase().replace(/\s+/g, " ").trim();
+  return (
+    FASHION_SUBCATEGORIES.some((sub) => sub.toLowerCase() === lower) ||
+    lower === "hoodie" ||
+    lower === "hudie" ||
+    lower === "হুডি" ||
+    lower === "ladies-hoodie" ||
+    lower === "ladies  hoodie"
+  );
+}
+
+/**
+ * Checks whether a category is either Fashion itself OR any of its subcategories
+ */
+export function isFashionRelatedCategory(category: string): boolean {
+  if (!category) return false;
+  const lower = category.toLowerCase().replace(/\s+/g, " ").trim();
+  if (lower === "fashion" || lower === "পোশাক" || lower === "পোশাক ও ফ্যাশন" || lower === "পোশাক-ও-ফ্যাশন" || lower === "clothing") {
+    return true;
+  }
+  return isFashionSubcategory(category);
+}
+
+/**
  * Returns the parent category if the category is a subcategory, otherwise null
  */
 export function getParentCategory(
@@ -127,6 +168,9 @@ export function getParentCategory(
   if (!category) return null;
   if (isGrocerySubcategory(category)) {
     return GROCERIES_PARENT;
+  }
+  if (isFashionSubcategory(category)) {
+    return FASHION_PARENT;
   }
   if (Array.isArray(productList)) {
     const found = productList.find(
@@ -224,7 +268,7 @@ export function formatCategoryDisplayLabel(cat: string, lang: string = "bn"): st
     return lang === "bn" ? "থ্রি-পিস (Three Piece)" : "Three Piece";
   if (c === "one piece gown" || c === "one-piece-gown" || c === "gown" || c === "পরী গাউন" || c === "গাউন")
     return lang === "bn" ? "পরী গাউন (Gown)" : "One Piece Gown";
-  if (c === "ladies  hoodie" || c === "ladies hoodie" || c === "ladies-hoodie" || c === "hoodie" || c === "হুডি")
+  if (c === "ladies  hoodie" || c === "ladies hoodie" || c === "ladies-hoodie" || c === "hoodie" || c === "hoodies" || c === "hudie" || c === "hudies" || c === "ladies-hudie" || c === "হুডি" || c === "লেডিস হুডি" || c === "লেডিস-হুডি")
     return lang === "bn" ? "লেডিস হুডি (Hoodie)" : "Ladies Hoodie";
   if (c === "women hijab" || c === "women-hijab" || c === "hijab" || c === "হিজাব")
     return lang === "bn" ? "হিজাব ও বোরকা (Hijab)" : "Women Hijab";
@@ -434,6 +478,36 @@ export const SLUG_ALIASES: Record<string, string> = {
   "punjabi": "Panjabi",
   "পাঞ্জাবি": "Panjabi",
   "পাঞ্জাবী": "Panjabi",
+
+  // Ladies Hoodie & Hoodies
+  "ladies-hoodie": "Ladies Hoodie",
+  "ladies-hoodies": "Ladies Hoodie",
+  "hoodie": "Ladies Hoodie",
+  "hoodies": "Ladies Hoodie",
+  "hudie": "Ladies Hoodie",
+  "hudies": "Ladies Hoodie",
+  "ladies-hudie": "Ladies Hoodie",
+  "ladieshoodie": "Ladies Hoodie",
+  "হুডি": "Ladies Hoodie",
+  "লেডিস-হুডি": "Ladies Hoodie",
+  "লেডিস-হুডি-কালেকশন": "Ladies Hoodie",
+  "লেডিসহুডি": "Ladies Hoodie",
+  "hoodie-collection": "Ladies Hoodie",
+
+  // Three Piece
+  "three-piece": "Three Piece",
+  "three-pieces": "Three Piece",
+  "threepiece": "Three Piece",
+  "থ্রি-পিস": "Three Piece",
+  "থ্রিপিস": "Three Piece",
+
+  // One Piece Gown
+  "one-piece-gown": "One Piece Gown",
+  "onepiecegown": "One Piece Gown",
+  "gown": "One Piece Gown",
+  "gowns": "One Piece Gown",
+  "পরী-গাউন": "One Piece Gown",
+  "গাউন": "One Piece Gown",
 
   // Women Hijab
   "women-hijab": "Women Hijab",

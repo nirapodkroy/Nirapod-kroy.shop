@@ -186,6 +186,7 @@ export const Header: React.FC<HeaderProps> = ({
     if (c === "beverage" || c === "tea") return lang === "bn" ? "চা ও পানীয় (Beverage)" : "Beverage";
     if (c === "rice") return lang === "bn" ? "প্রিমিয়াম চাল (Rice)" : "Rice";
     if (c === "flours & lentils" || c === "lentils") return lang === "bn" ? "আটা ও ডাল (Flours & Lentils)" : "Flours & Lentils";
+    if (c === "ladies  hoodie" || c === "ladies hoodie" || c === "ladies-hoodie" || c === "hoodie" || c === "hudie" || c === "হুডি" || c === "লেডিস হুডি") return lang === "bn" ? "লেডিস হুডি (Hoodie)" : "Ladies Hoodie";
     return getCategoryName(cat);
   };
 
@@ -289,7 +290,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Main Header Row */}
-      <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200/80 dark:border-zinc-800 transition-colors">
+      <div className="bg-[#f2f7f4]/95 dark:bg-zinc-900/95 backdrop-blur-md border-b border-emerald-900/10 dark:border-zinc-800 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-18 sm:h-20 gap-3 sm:gap-6">
             {/* Left: Official Nirapod Kroy Logo with Handshake Emblem */}
@@ -382,8 +383,8 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={() => setIsSearchCatDropdownOpen(prev => !prev)}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-zinc-100/90 dark:bg-zinc-800/80 border transition-all cursor-pointer ${
                     isSearchCatDropdownOpen
-                      ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/20 bg-white dark:bg-zinc-900"
-                      : "border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:border-emerald-500/50"
+                      ? "border-[#d38f18] text-[#d38f18] dark:text-amber-400 ring-2 ring-[#d38f18]/20 bg-white dark:bg-zinc-900"
+                      : "border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:border-[#d38f18]/50"
                   }`}
                   aria-expanded={isSearchCatDropdownOpen}
                 >
@@ -640,8 +641,8 @@ export const Header: React.FC<HeaderProps> = ({
                 title="View Cart"
               >
                 <div className="relative">
-                  <ShoppingCart className="w-5 h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-emerald-600 transition-colors" />
-                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 bg-emerald-600 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md">
+                  <ShoppingCart className="w-5 h-5 text-zinc-700 dark:text-zinc-200 group-hover:text-[#d38f18] transition-colors" />
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 bg-[#d38f18] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md">
                     {itemCount}
                   </span>
                 </div>

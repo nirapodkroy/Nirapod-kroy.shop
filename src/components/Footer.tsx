@@ -91,7 +91,7 @@ export const Footer: React.FC<FooterProps> = ({
   };
 
   return (
-    <footer id="about-us-section" className="border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
+    <footer id="about-us-section" className="border-t border-emerald-900/10 dark:border-zinc-800/80 bg-[#f2f7f4]/90 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
       {/* Newsletter / Value Bar */}
       <div className="border-b border-zinc-200/80 dark:border-zinc-800/80 py-8 sm:py-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -122,7 +122,7 @@ export const Footer: React.FC<FooterProps> = ({
                 id="footer-subscribe-btn"
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-70 text-white font-bold text-xs shadow-md transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-3 rounded-xl bg-[#d38f18] hover:bg-[#be7e12] active:bg-[#a86e0c] disabled:opacity-70 text-white font-bold text-xs shadow-md shadow-[#d38f18]/25 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
               >
                 {isSubmitting ? (
                   <>

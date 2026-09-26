@@ -282,7 +282,7 @@ export const CartDrawer: React.FC = () => {
                   onClick={() => {
                     openCartCheckout();
                   }}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-md shadow-emerald-600/25 transition-all hover:shadow-lg active:scale-[0.98] cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:from-orange-700 active:to-amber-700 text-white font-extrabold text-sm shadow-md shadow-orange-500/30 transition-all hover:shadow-lg active:scale-[0.98] cursor-pointer"
                 >
                   <span>{t("proceed_to_checkout")}</span>
                   <ArrowRight className="w-4 h-4" />
