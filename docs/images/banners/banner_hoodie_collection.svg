@@ -1,0 +1,181 @@
+
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+      
+  <defs>
+    <!-- Drop Shadow Filter -->
+    <filter id="shadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="3" dy="6" stdDeviation="8" flood-opacity="0.25"/>
+    </filter>
+    <filter id="shadow-soft" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-opacity="0.15"/>
+    </filter>
+    <filter id="shadow-deep" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="6" dy="10" stdDeviation="12" flood-opacity="0.35"/>
+    </filter>
+
+    <!-- Wood Texture Gradient -->
+    <linearGradient id="woodPlank" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7c5335"/>
+      <stop offset="25%" stop-color="#694328"/>
+      <stop offset="50%" stop-color="#5a381f"/>
+      <stop offset="75%" stop-color="#6f482d"/>
+      <stop offset="100%" stop-color="#4d2e18"/>
+    </linearGradient>
+
+    <!-- Kraft Paper Gradient -->
+    <linearGradient id="kraftPaper" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8d9c2"/>
+      <stop offset="40%" stop-color="#decaa7"/>
+      <stop offset="80%" stop-color="#d4bf9c"/>
+      <stop offset="100%" stop-color="#c9b28b"/>
+    </linearGradient>
+
+    <!-- Fabric Stitch Pattern -->
+    <pattern id="stitch" width="12" height="12" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="6" y2="0" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" stroke-dasharray="3,3"/>
+    </pattern>
+
+    <!-- Pin Head Gradient -->
+    <radialGradient id="silverPin" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#c0c0c0"/>
+      <stop offset="100%" stop-color="#555555"/>
+    </radialGradient>
+    <radialGradient id="brassPin" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fff2a8"/>
+      <stop offset="50%" stop-color="#d4af37"/>
+      <stop offset="100%" stop-color="#664d03"/>
+    </radialGradient>
+    <radialGradient id="redPin" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ff8585"/>
+      <stop offset="50%" stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#7f1d1d"/>
+    </radialGradient>
+  </defs>
+
+      
+      <!-- Modern Light Cyan-Blue Background -->
+      <rect width="1920" height="1080" fill="#dbe9ee" />
+
+      <!-- Floating Playful Line-Art Doodles -->
+      <g stroke="#9abec9" stroke-width="3" fill="none" opacity="0.6">
+        <!-- Hangers -->
+        <path d="M 150 140 L 190 100 Q 200 90 195 75 Q 185 60 170 75 M 150 140 L 250 140 L 190 100" />
+        <path d="M 1360 80 L 1400 40 Q 1410 30 1405 15 Q 1395 0 1380 15 M 1360 80 L 1460 80 L 1400 40" />
+        <!-- Sale tags -->
+        <path d="M 80 620 L 140 560 L 180 600 L 120 660 Z M 160 585 A 8 8 0 1 1 160 584" />
+        <path d="M 1780 120 L 1840 60 L 1880 100 L 1820 160 Z M 1860 85 A 8 8 0 1 1 1860 84" />
+        <path d="M 780 940 L 840 880 L 880 920 L 820 980 Z" />
+        <!-- Gift Boxes & Stars -->
+        <rect x="70" y="840" width="70" height="70" rx="6" />
+        <line x1="70" y1="875" x2="140" y2="875" />
+        <line x1="105" y1="840" x2="105" y2="910" />
+        <path d="M 700 890 L 710 865 L 735 860 L 715 845 L 720 820 L 700 835 L 680 820 L 685 845 L 665 860 L 690 865 Z" />
+        <!-- Shopping Bags -->
+        <path d="M 1750 820 L 1850 820 L 1870 950 L 1730 950 Z M 1775 820 A 25 35 0 0 1 1825 820" />
+        <path d="M 900 500 L 980 500 L 995 620 L 885 620 Z M 925 500 A 20 30 0 0 1 955 500" />
+      </g>
+
+      <!-- Left Column Content -->
+      <g transform="translate(100, 110)">
+        <!-- Top Pill Badge -->
+        <g filter="url(#shadow-soft)">
+          <rect x="0" y="0" width="370" height="75" rx="37" fill="#0f454d" />
+          <text x="185" y="48" font-family="'Noto Sans Bengali', sans-serif" font-weight="700" font-size="34" fill="#ffffff" text-anchor="middle">প্রিমিয়াম কোয়ালিটি</text>
+        </g>
+
+        <!-- Brand Title & Category -->
+        <text x="5" y="180" font-family="'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="78" fill="#133d45" letter-spacing="-0.5">Nirapod Kroy</text>
+        <text x="5" y="275" font-family="'Noto Sans Bengali', sans-serif" font-weight="800" font-size="70" fill="#133d45">(নিরাপদ ক্রয়)</text>
+        <text x="5" y="375" font-family="'Noto Sans Bengali', sans-serif" font-weight="900" font-size="74" fill="#09252c">স্টাইলিশ হুডি কালেকশন</text>
+
+        <!-- Discount Card: ৩০% ছাড়! -->
+        <g transform="translate(0, 420)" filter="url(#shadow)">
+          <rect x="0" y="0" width="410" height="105" rx="14" fill="#ffffff" />
+          <text x="35" y="76" font-family="'Noto Sans Bengali', sans-serif" font-weight="900" font-size="70" fill="#e17812">৩০% ছাড়!</text>
+        </g>
+
+        <!-- Subtitle -->
+        <text x="5" y="585" font-family="'Noto Sans Bengali', sans-serif" font-weight="700" font-size="34" fill="#09252c">সেরা ডিজাইনের আরামদায়ক হুডি এখন</text>
+        <text x="5" y="635" font-family="'Noto Sans Bengali', sans-serif" font-weight="700" font-size="34" fill="#09252c">আকর্ষণীয় ডিসকাউন্টে।</text>
+
+        <!-- Action CTA Buttons -->
+        <g transform="translate(0, 685)" filter="url(#shadow)">
+          <!-- Teal "কিনুন (Shop Now) ->" -->
+          <g>
+            <rect x="0" y="0" width="480" height="98" rx="49" fill="#00a89d" />
+            <text x="220" y="62" font-family="'Noto Sans Bengali', sans-serif" font-weight="800" font-size="36" fill="#ffffff" text-anchor="middle">কিনুন (Shop Now)</text>
+            <path d="M 400 52 L 430 52 M 420 42 L 432 52 L 420 62" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+          </g>
+
+          <!-- Dark "হট ডিলস" Button -->
+          <g transform="translate(510, 0)">
+            <rect x="0" y="0" width="240" height="98" rx="49" fill="#1e293b" />
+            <text x="120" y="62" font-family="'Noto Sans Bengali', sans-serif" font-weight="800" font-size="34" fill="#ffffff" text-anchor="middle">হট ডিলস</text>
+          </g>
+        </g>
+
+        <!-- Website Link Footer -->
+        <text x="680" y="865" font-family="'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="36" fill="#0f3b43" text-anchor="middle">nirapodkroy.shop</text>
+      </g>
+
+      <!-- Right 2x2 Grid of 4 Black Stylish Hoodies -->
+      <g transform="translate(1040, 80)" filter="url(#shadow-deep)">
+        <!-- 1. Top-Left: Queen Crown Hoodie -->
+        <g transform="translate(0, 0)">
+          <!-- Hoodie Silhouette -->
+          <path d="M 90 120 C 60 70 140 10 170 10 C 200 10 280 70 250 120 L 320 220 L 260 250 L 230 190 L 230 400 L 110 400 L 110 190 L 80 250 L 20 220 Z" fill="#1e2229" stroke="#000" stroke-width="4" />
+          <!-- Hood Collar & Drawstrings -->
+          <path d="M 140 110 Q 170 140 200 110" fill="#2d333f" stroke="#000" stroke-width="2" />
+          <line x1="155" y1="130" x2="155" y2="180" stroke="#ffffff" stroke-width="3" />
+          <line x1="185" y1="130" x2="185" y2="180" stroke="#ffffff" stroke-width="3" />
+          <!-- Gold Crown Graphic -->
+          <path d="M 145 200 L 155 180 L 170 200 L 185 180 L 195 200 Z" fill="#f59e0b" stroke="#d97706" stroke-width="1.5" />
+          <text x="170" y="240" font-family="'Brush Script MT', cursive, sans-serif" font-size="40" font-weight="bold" fill="#ffffff" text-anchor="middle">Queen</text>
+        </g>
+
+        <!-- 2. Top-Right: Coffee Aesthetic Hoodie -->
+        <g transform="translate(420, 0)">
+          <path d="M 90 120 C 60 70 140 10 170 10 C 200 10 280 70 250 120 L 320 220 L 260 250 L 230 190 L 230 400 L 110 400 L 110 190 L 80 250 L 20 220 Z" fill="#1e2229" stroke="#000" stroke-width="4" />
+          <path d="M 140 110 Q 170 140 200 110" fill="#2d333f" stroke="#000" stroke-width="2" />
+          <line x1="155" y1="130" x2="155" y2="180" stroke="#ffffff" stroke-width="3" />
+          <line x1="185" y1="130" x2="185" y2="180" stroke="#ffffff" stroke-width="3" />
+          <!-- Coffee Cups Graphic -->
+          <rect x="135" y="195" width="20" height="30" rx="3" fill="#d97706" />
+          <rect x="160" y="190" width="22" height="35" rx="3" fill="#ffffff" />
+          <rect x="185" y="195" width="20" height="30" rx="3" fill="#78350f" />
+        </g>
+
+        <!-- 3. Bottom-Left: Cute Smiling Cat with Hearts Hoodie -->
+        <g transform="translate(10, 420)">
+          <rect x="0" y="0" width="310" height="320" rx="16" fill="#1e2229" stroke="#000" stroke-width="4" />
+          <!-- Cat Peeking Graphic -->
+          <ellipse cx="155" cy="220" rx="80" ry="70" fill="#ffffff" />
+          <!-- Cat ears -->
+          <path d="M 90 180 L 105 130 L 140 165 Z" fill="#ffffff" />
+          <path d="M 220 180 L 205 130 L 170 165 Z" fill="#ffffff" />
+          <path d="M 96 172 L 108 140 L 132 165 Z" fill="#f472b6" />
+          <path d="M 214 172 L 202 140 L 178 165 Z" fill="#f472b6" />
+          <!-- Smiling Eyes & Whiskers -->
+          <path d="M 115 200 Q 130 190 140 200 M 170 200 Q 180 190 195 200" stroke="#111827" stroke-width="4" stroke-linecap="round" fill="none"/>
+          <circle cx="155" cy="215" r="5" fill="#f472b6" />
+          <!-- Floating Pink Hearts -->
+          <path d="M 140 130 C 135 115, 115 115, 125 135 L 140 150 L 155 135 C 165 115, 145 115, 140 130 Z" fill="#ec4899" />
+          <path d="M 175 120 C 170 110, 155 110, 162 125 L 175 135 L 188 125 C 195 110, 180 110, 175 120 Z" fill="#ec4899" transform="scale(0.8) translate(50, 20)" />
+        </g>
+
+        <!-- 4. Bottom-Right: Red Roses Floral Graphic Hoodie -->
+        <g transform="translate(410, 420)">
+          <rect x="0" y="0" width="310" height="320" rx="16" fill="#1e2229" stroke="#000" stroke-width="4" />
+          <!-- Red Roses Graphic -->
+          <circle cx="130" cy="180" r="35" fill="#e11d48" />
+          <circle cx="175" cy="170" r="42" fill="#be123c" />
+          <circle cx="160" cy="205" r="38" fill="#9f1239" />
+          <!-- Leaves -->
+          <path d="M 95 160 C 70 140, 110 130, 120 150 Z" fill="#15803d" />
+          <path d="M 210 160 C 235 140, 205 130, 195 150 Z" fill="#15803d" />
+          <path d="M 150 240 C 140 270, 180 260, 170 230 Z" fill="#16a34a" />
+        </g>
+      </g>
+    </svg>
+  

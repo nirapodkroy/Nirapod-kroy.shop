@@ -1,0 +1,210 @@
+
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+      
+  <defs>
+    <!-- Drop Shadow Filter -->
+    <filter id="shadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="3" dy="6" stdDeviation="8" flood-opacity="0.25"/>
+    </filter>
+    <filter id="shadow-soft" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-opacity="0.15"/>
+    </filter>
+    <filter id="shadow-deep" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="6" dy="10" stdDeviation="12" flood-opacity="0.35"/>
+    </filter>
+
+    <!-- Wood Texture Gradient -->
+    <linearGradient id="woodPlank" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7c5335"/>
+      <stop offset="25%" stop-color="#694328"/>
+      <stop offset="50%" stop-color="#5a381f"/>
+      <stop offset="75%" stop-color="#6f482d"/>
+      <stop offset="100%" stop-color="#4d2e18"/>
+    </linearGradient>
+
+    <!-- Kraft Paper Gradient -->
+    <linearGradient id="kraftPaper" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8d9c2"/>
+      <stop offset="40%" stop-color="#decaa7"/>
+      <stop offset="80%" stop-color="#d4bf9c"/>
+      <stop offset="100%" stop-color="#c9b28b"/>
+    </linearGradient>
+
+    <!-- Fabric Stitch Pattern -->
+    <pattern id="stitch" width="12" height="12" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="6" y2="0" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" stroke-dasharray="3,3"/>
+    </pattern>
+
+    <!-- Pin Head Gradient -->
+    <radialGradient id="silverPin" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#c0c0c0"/>
+      <stop offset="100%" stop-color="#555555"/>
+    </radialGradient>
+    <radialGradient id="brassPin" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fff2a8"/>
+      <stop offset="50%" stop-color="#d4af37"/>
+      <stop offset="100%" stop-color="#664d03"/>
+    </radialGradient>
+    <radialGradient id="redPin" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ff8585"/>
+      <stop offset="50%" stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#7f1d1d"/>
+    </radialGradient>
+  </defs>
+
+      
+      <!-- Background Kraft Paper -->
+      <rect width="1920" height="1080" fill="url(#kraftPaper)" />
+      
+      <!-- Subtle Paper Creases & Vignette -->
+      <rect width="1920" height="1080" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="40" />
+
+      <!-- Left Content -->
+      
+    <!-- Top Pinned Fabric Tags -->
+    <g filter="url(#shadow)">
+      <!-- Tag 1 -->
+      <g transform="rotate(-1 100 110)">
+        <rect x="90" y="105" width="410" height="92" rx="4" fill="#b84768" />
+        <rect x="94" y="109" width="402" height="84" rx="3" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2" stroke-dasharray="6,4" />
+        <text x="295" y="165" font-family="'Noto Sans Bengali', 'Hind Siliguri', sans-serif" font-weight="700" font-size="34" fill="#ffffff" text-anchor="middle">প্রিমিয়াম কোয়ালিটি</text>
+        <!-- Pin -->
+        <circle cx="106" cy="120" r="9" fill="url(#silverPin)" filter="url(#shadow-soft)" />
+        <line x1="106" y1="120" x2="114" y2="132" stroke="#333" stroke-width="2" />
+      </g>
+
+      <!-- Tag 2 -->
+      <g transform="rotate(1.5 530 110)">
+        <rect x="525" y="112" width="420" height="88" rx="4" fill="#e5ab37" />
+        <rect x="529" y="116" width="412" height="80" rx="3" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="2" stroke-dasharray="6,4" />
+        <text x="735" y="168" font-family="'Noto Sans Bengali', 'Hind Siliguri', sans-serif" font-weight="700" font-size="32" fill="#2d1f05" text-anchor="middle">নতুন কালেকশন ২০২৬</text>
+        <!-- Pin -->
+        <circle cx="929" cy="126" r="9" fill="url(#brassPin)" filter="url(#shadow-soft)" />
+        <line x1="929" y1="126" x2="937" y2="138" stroke="#333" stroke-width="2" />
+      </g>
+    </g>
+
+    <!-- Main Typography -->
+    <g>
+      <text x="95" y="320" font-family="'Noto Sans Bengali', 'Hind Siliguri', sans-serif" font-weight="900" font-size="76" fill="#0d2847" letter-spacing="-1">স্টাইলিশ ফ্যাশন, পোশাক</text>
+      <text x="95" y="415" font-family="'Noto Sans Bengali', 'Hind Siliguri', sans-serif" font-weight="900" font-size="76" fill="#0d2847" letter-spacing="-1">ও লাইফস্টাইল</text>
+      <text x="95" y="505" font-family="'Segoe UI', Roboto, Helvetica, sans-serif" font-weight="800" font-size="54" fill="#0284c7" letter-spacing="0.5">Fashion &amp; Lifestyle Wear</text>
+      
+      <!-- Description Paragraph -->
+      <text x="95" y="590" font-family="'Noto Sans Bengali', 'Hind Siliguri', sans-serif" font-weight="600" font-size="28" fill="#1e293b" opacity="0.95">অভিজাতপূর্ণ কটন পাঞ্জাবি, ঐতিহ্যবাহী সুতি শাড়ি, জেনুইন</text>
+      <text x="95" y="635" font-family="'Noto Sans Bengali', 'Hind Siliguri', sans-serif" font-weight="600" font-size="28" fill="#1e293b" opacity="0.95">লেদার ওয়ালেট &amp; আরামদায়ক ক্যাজুয়াল পোশাক।</text>
+    </g>
+
+    <!-- Interactive Buttons on Kraft Paper -->
+    <g transform="translate(95, 720)" filter="url(#shadow)">
+      <!-- Green Stitched Fabric CTA Button -->
+      <g>
+        <rect x="0" y="0" width="410" height="98" rx="8" fill="#3b7a57" />
+        <rect x="4" y="4" width="402" height="90" rx="6" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" stroke-dasharray="8,5" />
+        <text x="180" y="62" font-family="'Noto Sans Bengali', 'Hind Siliguri', sans-serif" font-weight="700" font-size="33" fill="#ffffff" text-anchor="middle">ফ্যাশন কালেকশন</text>
+        <path d="M 330 52 L 360 52 M 350 42 L 362 52 L 350 62" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <!-- Stitch String Tag on left -->
+        <circle cx="22" cy="49" r="6" fill="#2d5e43" stroke="#fff" stroke-width="1.5" />
+      </g>
+
+      <!-- Parchment Paper "হট ডিলস দেখুন" Button -->
+      <g transform="translate(450, 6)">
+        <rect x="0" y="0" width="280" height="86" rx="6" fill="#fdfaf3" stroke="#cfba9a" stroke-width="1.5" />
+        <text x="140" y="55" font-family="'Noto Sans Bengali', 'Hind Siliguri', sans-serif" font-weight="700" font-size="30" fill="#1e293b" text-anchor="middle">হট ডিলস দেখুন</text>
+        <!-- Mini Pushpin -->
+        <circle cx="20" cy="18" r="4.5" fill="url(#brassPin)" />
+      </g>
+    </g>
+
+    <!-- Wooden Crate Stamp Logo at Bottom Center -->
+    <g transform="translate(880, 770)" filter="url(#shadow-soft)">
+      <!-- Wooden Crate Border Box -->
+      <rect x="0" y="0" width="560" height="230" rx="10" fill="#a47551" stroke="#684729" stroke-width="8" />
+      <!-- Planks inner lines -->
+      <line x1="0" y1="75" x2="560" y2="75" stroke="#684729" stroke-width="4" />
+      <line x1="0" y1="155" x2="560" y2="155" stroke="#684729" stroke-width="4" />
+      <!-- Bolts -->
+      <circle cx="20" cy="20" r="5" fill="#3e2723" />
+      <circle cx="540" cy="20" r="5" fill="#3e2723" />
+      <circle cx="20" cy="210" r="5" fill="#3e2723" />
+      <circle cx="540" cy="210" r="5" fill="#3e2723" />
+      <!-- Engraved/Burned Brand Text -->
+      <text x="280" y="145" font-family="'Noto Sans Bengali', 'Hind Siliguri', sans-serif" font-weight="900" font-size="70" fill="#2c1a0e" text-anchor="middle" letter-spacing="2">নিরাপদ ক্রয়</text>
+    </g>
+
+    <!-- Wooden Craft Accessories (Beads, Arrows, Strings) on Bottom Right -->
+    <g transform="translate(1520, 760)">
+      <!-- Beads necklace -->
+      <ellipse cx="60" cy="60" rx="20" ry="24" fill="#a8c599" stroke="#5d8a4e" stroke-width="2" />
+      <ellipse cx="105" cy="40" rx="22" ry="26" fill="#e8d8b8" stroke="#aa8855" stroke-width="2" />
+      <ellipse cx="150" cy="65" rx="20" ry="24" fill="#2d7a57" stroke="#1d4d37" stroke-width="2" />
+      <!-- Wooden Craft Arrows -->
+      <path d="M 120 140 L 260 80 M 230 65 L 262 80 L 245 105" stroke="#a47551" stroke-width="6" stroke-linecap="round" fill="none"/>
+      <path d="M 120 180 L 260 140 M 235 125 L 262 140 L 245 160" stroke="#a47551" stroke-width="6" stroke-linecap="round" fill="none"/>
+    </g>
+  
+
+      <!-- Right Side Wooden Board with Fashion Products -->
+      <g filter="url(#shadow-deep)">
+        <!-- Rustic Wood Board Platform -->
+        <rect x="1100" y="55" width="760" height="660" rx="8" fill="url(#woodPlank)" stroke="#3e2723" stroke-width="6" />
+        <!-- Wood grain details -->
+        <line x1="1100" y1="220" x2="1860" y2="220" stroke="rgba(0,0,0,0.25)" stroke-width="3" />
+        <line x1="1100" y1="440" x2="1860" y2="440" stroke="rgba(0,0,0,0.25)" stroke-width="3" />
+        
+        <!-- Folded Textured Cotton Panjabi (Left of Wood Board) -->
+        <g transform="translate(1135, 75)" filter="url(#shadow)">
+          <path d="M 40 40 L 140 10 L 240 40 L 320 180 L 260 210 L 230 140 L 230 520 L 50 520 L 50 140 L 20 210 L -40 180 Z" fill="#d2baa2" stroke="#a4886f" stroke-width="2" />
+          <!-- Mandarin Collar -->
+          <path d="M 100 40 Q 140 70 180 40" fill="none" stroke="#8a6c54" stroke-width="4" />
+          <!-- Panjabi Placket & Buttons -->
+          <rect x="130" y="65" width="22" height="260" fill="#c4aa91" stroke="#9a7f67" stroke-width="1.5" />
+          <circle cx="141" cy="95" r="5" fill="#5c4431" />
+          <circle cx="141" cy="155" r="5" fill="#5c4431" />
+          <circle cx="141" cy="215" r="5" fill="#5c4431" />
+          <circle cx="141" cy="275" r="5" fill="#5c4431" />
+          <!-- Fabric Texture Print Lines -->
+          <path d="M 60 200 L 220 200 M 60 280 L 220 280 M 60 360 L 220 360 M 60 440 L 220 440" stroke="rgba(110,80,60,0.15)" stroke-dasharray="4,6" stroke-width="2"/>
+        </g>
+
+        <!-- Folded Traditional Artisan Saree/Cloth (Top Right of Wood Board) -->
+        <g transform="translate(1500, 75)" filter="url(#shadow-soft)">
+          <rect x="0" y="0" width="270" height="340" rx="6" fill="#f5ebe0" stroke="#b08d72" stroke-width="3" />
+          <!-- Traditional Motifs & Borders -->
+          <rect x="15" y="15" width="240" height="40" fill="#9e3a3a" />
+          <text x="135" y="42" font-family="'Noto Sans Bengali', sans-serif" font-size="18" fill="#ffffff" text-anchor="middle">ঐতিহ্যবাহী সুতি শাড়ি</text>
+          <!-- Geometric Block Print Motifs -->
+          <g fill="#9e3a3a" opacity="0.8">
+            <path d="M 50 90 L 70 70 L 90 90 L 70 110 Z"/>
+            <path d="M 130 90 L 150 70 L 170 90 L 150 110 Z"/>
+            <path d="M 210 90 L 230 70 L 250 90 L 230 110 Z"/>
+            <path d="M 50 170 L 70 150 L 90 170 L 70 190 Z"/>
+            <path d="M 130 170 L 150 150 L 170 170 L 150 190 Z"/>
+            <path d="M 210 170 L 230 150 L 250 170 L 230 190 Z"/>
+            <path d="M 50 250 L 70 230 L 90 250 L 70 270 Z"/>
+            <path d="M 130 250 L 150 230 L 170 250 L 150 270 Z"/>
+            <path d="M 210 250 L 230 230 L 250 250 L 230 270 Z"/>
+          </g>
+          <rect x="15" y="295" width="240" height="30" fill="#9e3a3a" />
+        </g>
+
+        <!-- Genuine Brown Leather Bi-fold Wallet (Bottom Right of Wood Board) -->
+        <g transform="translate(1520, 445)" filter="url(#shadow)">
+          <rect x="0" y="0" width="230" height="190" rx="14" fill="#a45318" stroke="#632f0c" stroke-width="4" />
+          <!-- Leather Stitching around edges -->
+          <rect x="8" y="8" width="214" height="174" rx="10" fill="none" stroke="#d49257" stroke-width="2" stroke-dasharray="6,4" />
+          <!-- Wallet Fold line & shine -->
+          <line x1="20" y1="95" x2="210" y2="95" stroke="#783a0e" stroke-width="3" />
+          <path d="M 10 10 Q 80 50 200 20" stroke="rgba(255,255,255,0.2)" stroke-width="8" fill="none"/>
+        </g>
+
+        <!-- Artist Paintbrush -->
+        <g transform="translate(1820, 280) rotate(10)" filter="url(#shadow-soft)">
+          <rect x="0" y="0" width="12" height="360" rx="4" fill="#b08d72" stroke="#684729" stroke-width="1.5" />
+          <rect x="-2" y="320" width="16" height="30" fill="#94a3b8" />
+          <path d="M -2 350 C -4 380, 16 380, 14 350 Z" fill="#1e293b" />
+        </g>
+      </g>
+    </svg>
+  

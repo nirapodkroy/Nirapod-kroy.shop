@@ -1,45 +1,121 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#10b981"/>
-      <stop offset="50%" stop-color="#059669"/>
-      <stop offset="100%" stop-color="#047857"/>
-    </linearGradient>
-    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fef08a"/>
-      <stop offset="50%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#d97706"/>
-    </linearGradient>
-    <linearGradient id="bagGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#f8fafc"/>
-    </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#022c22" flood-opacity="0.35"/>
+    <!-- Subtle drop shadow for depth -->
+    <filter id="softGlow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0f5132" flood-opacity="0.12"/>
     </filter>
   </defs>
 
-  <!-- Background Squircle -->
-  <rect x="24" y="24" width="464" height="464" rx="120" fill="url(#bgGrad)" />
-  
-  <!-- Subtle Inner Border Accent -->
-  <rect x="36" y="36" width="440" height="440" rx="108" fill="none" stroke="url(#goldGrad)" stroke-width="8" opacity="0.5" />
+  <!-- Background circular badge in soft mint-white tint -->
+  <circle cx="250" cy="250" r="235" fill="#f4fbf6" />
 
-  <g filter="url(#shadow)">
-    <!-- Bag Handle -->
-    <path d="M206 180 V150 C206 122 228 100 256 100 C284 100 306 122 306 150 V180" 
-          fill="none" stroke="url(#goldGrad)" stroke-width="28" stroke-linecap="round"/>
+  <!-- Main Handshake & Enclosing Circular Ring Group -->
+  <g id="handshake-emblem" filter="url(#softGlow)">
+    <!-- 1. Upper Emerald Green Arc & Sweeping Hand (#1b8a4f) -->
+    <!-- The swooping top arc starts from bottom left, swings high in a smooth circle to top right -->
+    <path
+      d="M 172 208
+         C 160 170, 185 110, 255 102
+         C 335 94, 385 145, 412 186
+         C 390 148, 340 120, 275 124
+         C 200 128, 172 182, 160 216
+         Z"
+      fill="#1b8a4f"
+    />
 
-    <!-- Bag Main Body -->
-    <path d="M150 180 H362 L382 370 C385 392 368 410 346 410 H166 C144 410 127 392 130 370 L150 180 Z" 
-          fill="url(#bagGrad)"/>
+    <!-- The upper hand arm & wrist flowing downwards to form the handshake clasp -->
+    <path
+      d="M 160 216
+         C 145 250, 140 288, 148 322
+         C 155 352, 175 378, 204 395
+         C 222 368, 206 338, 200 310
+         C 192 278, 200 256, 222 254
+         C 235 253, 246 262, 248 274
+         C 250 284, 242 294, 235 298
+         C 224 304, 220 314, 226 322
+         L 242 342
+         C 248 350, 258 354, 268 348
+         C 278 342, 280 330, 274 322
+         L 258 300
+         Z"
+      fill="#1b8a4f"
+    />
 
-    <!-- Security Shield in Center -->
-    <path d="M256 225 C295 235 318 252 318 288 C318 332 278 360 256 372 C234 360 194 332 194 288 C194 252 217 235 256 225 Z" 
-          fill="#059669"/>
-    
-    <!-- Bold White Checkmark -->
-    <path d="M230 295 L248 314 L284 274" 
-          fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- The 4 Clasping Green Fingers & Hand Grip (interlocking with yellow hand) -->
+    <!-- Finger 1 -->
+    <rect x="206" y="340" width="16" height="42" rx="8" fill="#1b8a4f" transform="rotate(18 214 361)"/>
+    <!-- Finger 2 -->
+    <rect x="226" y="346" width="16" height="42" rx="8" fill="#1b8a4f" transform="rotate(18 234 367)"/>
+    <!-- Finger 3 -->
+    <rect x="246" y="348" width="16" height="40" rx="8" fill="#1b8a4f" transform="rotate(18 254 368)"/>
+    <!-- Finger 4 -->
+    <rect x="264" y="344" width="16" height="38" rx="8" fill="#1b8a4f" transform="rotate(18 272 363)"/>
+
+    <!-- 2. Lower Yellow-Amber Hand (#d98218) with Four Finger Knuckles on Left and Sweeping Thumb & Wing on Right -->
+    <!-- Four rounded knuckles/fingertips protruding on left -->
+    <ellipse cx="178" cy="336" rx="14" ry="10" fill="#d98218" transform="rotate(-15 178 336)" />
+    <ellipse cx="180" cy="355" rx="14" ry="10" fill="#d98218" transform="rotate(-15 180 355)" />
+    <ellipse cx="184" cy="374" rx="14" ry="10" fill="#d98218" transform="rotate(-15 184 374)" />
+    <ellipse cx="192" cy="392" rx="13" ry="9" fill="#d98218" transform="rotate(-15 192 392)" />
+
+    <!-- Main Yellow-Amber Palm & Clasping Thumb -->
+    <path
+      d="M 215 304
+         C 210 292, 222 284, 235 284
+         L 280 286
+         C 292 287, 302 298, 298 312
+         C 285 348, 260 374, 225 385
+         C 205 391, 192 384, 190 376
+         C 188 368, 195 360, 206 352
+         C 225 340, 235 325, 230 312
+         C 226 302, 218 304, 215 304
+         Z"
+      fill="#d98218"
+    />
+
+    <!-- Yellow-Amber Wing / Right Palm Extension curving gracefully upward -->
+    <path
+      d="M 275 320
+         C 310 372, 360 370, 395 315
+         C 415 282, 428 245, 432 242
+         C 434 240, 425 258, 412 286
+         C 388 335, 342 352, 298 340
+         C 285 336, 276 328, 275 320
+         Z"
+      fill="#d98218"
+    />
+    <!-- Additional inner upward flick on right -->
+    <path
+      d="M 370 295
+         C 390 260, 400 230, 403 234
+         C 405 238, 395 272, 380 305
+         Z"
+      fill="#d98218"
+    />
   </g>
+
+  <!-- Centered Brand Typography: NIRAPOD (Green) & KROY (Amber) -->
+  <!-- Line 1: NIRAPOD -->
+  <text
+    x="250"
+    y="226"
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Montserrat', sans-serif"
+    font-size="44"
+    font-weight="900"
+    letter-spacing="2.5"
+    fill="#1b8a4f"
+    text-anchor="middle"
+  >NIRAPOD</text>
+
+  <!-- Line 2: KROY -->
+  <text
+    x="250"
+    y="266"
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Montserrat', sans-serif"
+    font-size="34"
+    font-weight="900"
+    letter-spacing="4"
+    fill="#d98218"
+    text-anchor="middle"
+  >KROY</text>
 </svg>
