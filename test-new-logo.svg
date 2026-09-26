@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <linearGradient id="amberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f0fdf4" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#064e3b" flood-opacity="0.15" />
+    </filter>
+    <filter id="bannerShadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#0f172a" flood-opacity="0.12" />
+    </filter>
+  </defs>
+
+  <!-- Circular Outer Frame & Badge Background -->
+  <circle cx="250" cy="250" r="240" fill="url(#bgGrad)" stroke="#10b981" stroke-width="8" />
+  <circle cx="250" cy="250" r="228" fill="none" stroke="#d97706" stroke-width="2.5" stroke-dasharray="6 4" opacity="0.7" />
+
+  <!-- Top Trust Arch Banner -->
+  <path id="trustArch" d="M 95 160 A 180 180 0 0 1 405 160" fill="none" />
+  <text font-family="'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="14.5" font-weight="800" letter-spacing="3.5" fill="#047857">
+    <textPath href="#trustArch" startOffset="50%" text-anchor="middle">
+      ★ 100% GENUINE &amp; SAFE STORE ★
+    </textPath>
+  </text>
+
+  <!-- Main Handshake Group (Large & Highly Recognizable) -->
+  <g id="handshake" filter="url(#shadow)">
+    <!-- Golden Amber Hand (Right Person reaching in from right) -->
+    <!-- Lower Forearm & Wrist -->
+    <path
+      d="M 425 240
+         C 385 242, 335 235, 290 220
+         C 260 210, 240 205, 220 205
+         C 200 205, 185 215, 178 228
+         C 172 238, 175 252, 188 262
+         C 205 275, 225 285, 255 292
+         C 290 300, 345 295, 420 275
+         Z"
+      fill="url(#amberGrad)"
+      stroke="#ffffff"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+
+    <!-- Amber Thumb wrapping gracefully over the green wrist -->
+    <path
+      d="M 215 208
+         C 215 182, 235 168, 260 170
+         C 280 172, 292 185, 288 198
+         C 284 210, 268 214, 250 212
+         C 235 210, 222 212, 215 208
+         Z"
+      fill="url(#amberGrad)"
+      stroke="#ffffff"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+
+    <!-- Emerald Green Hand (Left Person reaching in from left) -->
+    <!-- Upper Forearm & Wrist -->
+    <path
+      d="M 80 235
+         C 120 215, 160 198, 205 195
+         C 225 194, 245 200, 255 212
+         C 260 218, 258 228, 248 238
+         C 230 255, 205 265, 170 270
+         C 135 275, 105 268, 80 258
+         Z"
+      fill="url(#emeraldGrad)"
+      stroke="#ffffff"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+
+    <!-- Clasping Interlocking Fingers (Emerald Green fingers gripping the amber palm) -->
+    <!-- Finger 1 -->
+    <path
+      d="M 248 218
+         C 255 218, 264 225, 262 236
+         L 256 266
+         C 254 274, 244 278, 236 274
+         C 228 270, 226 260, 228 252
+         L 234 226
+         C 236 220, 242 218, 248 218
+         Z"
+      fill="url(#emeraldGrad)"
+      stroke="#ffffff"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+    <!-- Finger 2 -->
+    <path
+      d="M 268 216
+         C 276 216, 284 223, 282 234
+         L 276 268
+         C 274 276, 264 280, 256 276
+         C 248 272, 246 262, 248 254
+         L 254 224
+         C 256 218, 262 216, 268 216
+         Z"
+      fill="url(#emeraldGrad)"
+      stroke="#ffffff"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+    <!-- Finger 3 -->
+    <path
+      d="M 288 216
+         C 296 216, 304 223, 302 234
+         L 296 266
+         C 294 274, 284 278, 276 274
+         C 268 270, 266 260, 268 252
+         L 274 224
+         C 276 218, 282 216, 288 216
+         Z"
+      fill="url(#emeraldGrad)"
+      stroke="#ffffff"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+    <!-- Finger 4 -->
+    <path
+      d="M 308 218
+         C 316 218, 323 225, 321 236
+         L 315 260
+         C 313 268, 304 272, 296 268
+         C 289 264, 288 256, 290 248
+         L 295 226
+         C 297 220, 302 218, 308 218
+         Z"
+      fill="url(#emeraldGrad)"
+      stroke="#ffffff"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+
+    <!-- Trust Shield Heart Accent at Center of Clasp -->
+    <circle cx="250" cy="202" r="7" fill="#10b981" stroke="#ffffff" stroke-width="2" />
+  </g>
+
+  <!-- Bottom Brand Cartouche / Premium Banner -->
+  <g filter="url(#bannerShadow)">
+    <rect
+      x="55"
+      y="318"
+      width="390"
+      height="112"
+      rx="28"
+      fill="#ffffff"
+      stroke="#10b981"
+      stroke-width="3.5"
+    />
+    <!-- Subtle Inner Amber Accent Line -->
+    <rect
+      x="62"
+      y="325"
+      width="376"
+      height="98"
+      rx="22"
+      fill="none"
+      stroke="#f59e0b"
+      stroke-width="1.5"
+      opacity="0.6"
+    />
+
+    <!-- Brand Typography Line 1: NIRAPOD (Green) KROY (Amber) -->
+    <text
+      x="250"
+      y="364"
+      font-family="'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+      font-size="35"
+      font-weight="900"
+      letter-spacing="3"
+      text-anchor="middle"
+    >
+      <tspan fill="#047857">NIRAPOD </tspan>
+      <tspan fill="#d97706">KROY</tspan>
+    </text>
+
+    <!-- Brand Typography Line 2: Bengali Slogan -->
+    <text
+      x="250"
+      y="402"
+      font-family="'Hind Siliguri', 'Segoe UI', Roboto, sans-serif"
+      font-size="18"
+      font-weight="700"
+      letter-spacing="1.5"
+      fill="#065f46"
+      text-anchor="middle"
+    >
+      নিরাপদ ও বিশ্বস্ত কেনাকাটা
+    </text>
+  </g>
+</svg>

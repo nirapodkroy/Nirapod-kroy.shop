@@ -394,8 +394,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           {confirmedOrder ? (
             /* Order Placed Success Confirmation Screen */
             <div className="p-6 sm:p-8 text-center space-y-6 overflow-y-auto">
-              <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-10 h-10" />
+              <div className="relative w-20 h-20 mx-auto">
+                <div className="w-20 h-20 rounded-full overflow-hidden bg-white shadow-lg border-2 border-emerald-500/30 flex items-center justify-center p-1">
+                  <img
+                    src="/logo.png"
+                    alt="Nirapod Kroy Logo"
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (target.src.endsWith(".png")) {
+                        target.src = "/logo.svg";
+                      }
+                    }}
+                  />
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
               </div>
 
               <div>
@@ -499,13 +514,29 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <form onSubmit={handleSubmitOrder} className="p-6 sm:p-8 overflow-y-auto space-y-6">
               {/* Header Title */}
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <Truck className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-full overflow-hidden bg-white shadow-sm border border-emerald-100 dark:border-emerald-900/40 flex items-center justify-center shrink-0">
+                  <img
+                    src="/logo.png"
+                    alt="Nirapod Kroy Logo"
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (target.src.endsWith(".png")) {
+                        target.src = "/logo.svg";
+                      }
+                    }}
+                  />
                 </div>
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-zinc-100 font-display">
-                    {language === "bn" ? "অর্ডার সম্পন্ন করুন" : "Complete Your Order"}
-                  </h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-zinc-100 font-display">
+                      {language === "bn" ? "অর্ডার সম্পন্ন করুন" : "Complete Your Order"}
+                    </h2>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[11px] font-extrabold font-display">
+                      <span className="text-[#1e9454] dark:text-[#34d399]">{language === "bn" ? "নিরাপদ" : "NIRAPOD"}</span>
+                      <span className="text-[#d38f18] dark:text-[#fbbf24]">{language === "bn" ? "ক্রয়" : "KROY"}</span>
+                    </span>
+                  </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
                     {language === "bn"
                       ? "পছন্দের ছবি কোড এবং ডেলিভারি ঠিকানা দিয়ে সরাসরি অর্ডার করুন"

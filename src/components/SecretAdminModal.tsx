@@ -4092,8 +4092,18 @@ function cleanAndFixOrderSheetRows() {
           {/* Top Admin Header Bar */}
           <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 shrink-0 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
-                <Lock className="w-4 h-4" />
+              <div className="w-11 h-11 shrink-0 rounded-full overflow-hidden bg-white border border-emerald-500/40 shadow-sm flex items-center justify-center">
+                <img
+                  src="/logo.png"
+                  alt="Nirapod Kroy Logo"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.src.endsWith(".png")) {
+                      target.src = "/logo.svg";
+                    }
+                  }}
+                />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">

@@ -292,7 +292,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200/80 dark:border-zinc-800 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-18 sm:h-20 gap-3 sm:gap-6">
-            {/* Left: Original Nirapod Kroy Logo with Emerald Shield */}
+            {/* Left: Official Nirapod Kroy Logo with Handshake Emblem */}
             <a
               href="#"
               onClick={(e) => {
@@ -302,23 +302,33 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-2.5 sm:gap-3 group shrink-0"
               title="Nirapod Kroy - Home"
             >
-              {/* Original Emerald Shield Logo Badge */}
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-500/25 group-hover:scale-105 transition-transform">
-                <ShieldCheck className="w-6 h-6 text-white" />
+              {/* Official Nirapod Kroy Handshake Logo Badge */}
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden flex items-center justify-center shadow-md bg-white border-2 border-emerald-100 dark:border-emerald-900/50 group-hover:scale-105 transition-transform shrink-0">
+                <img
+                  src="/logo.png"
+                  alt="Nirapod Kroy Logo"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.src.endsWith(".png")) {
+                      target.src = "/logo.svg";
+                    }
+                  }}
+                />
               </div>
 
-              {/* Original Brand Typography */}
-              <div className="flex flex-col leading-none">
+              {/* Brand Typography */}
+              <div className="flex flex-col leading-tight">
                 <div className="flex items-baseline gap-1">
-                  <span className="font-extrabold text-lg sm:text-xl tracking-tight text-zinc-900 dark:text-white uppercase font-display">
+                  <span className="font-extrabold text-xl sm:text-2xl tracking-tight text-[#1e9454] dark:text-[#34d399] uppercase font-display drop-shadow-xs">
                     {language === "bn" ? "নিরাপদ" : "NIRAPOD"}
                   </span>
-                  <span className="font-extrabold text-lg sm:text-xl tracking-tight text-emerald-600 dark:text-emerald-400 uppercase font-display">
+                  <span className="font-extrabold text-xl sm:text-2xl tracking-tight text-[#d38f18] dark:text-[#fbbf24] uppercase font-display drop-shadow-xs">
                     {language === "bn" ? "ক্রয়" : "KROY"}
                   </span>
                   <span className="text-[10px] font-bold text-zinc-400">®</span>
                 </div>
-                <span className="text-[9px] sm:text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 tracking-wider">
+                <span className="text-[10px] sm:text-xs font-semibold text-zinc-500 dark:text-zinc-400 tracking-wider">
                   {language === "bn" ? "১০০% আসল ও নিরাপদ পণ্য" : "100% GENUINE & SAFE STORE"}
                 </span>
               </div>
@@ -853,9 +863,17 @@ export const Header: React.FC<HeaderProps> = ({
                     <ShieldCheck className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-extrabold text-sm sm:text-base text-zinc-900 dark:text-white leading-none">
-                      {language === "bn" ? "নিরাপদ ক্রয় মেনু" : "Nirapod Menu"}
-                    </span>
+                    <div className="flex items-center gap-1 font-extrabold text-sm sm:text-base leading-none">
+                      <span className="text-[#1e9454] dark:text-[#34d399]">
+                        {language === "bn" ? "নিরাপদ" : "NIRAPOD"}
+                      </span>
+                      <span className="text-[#d38f18] dark:text-[#fbbf24]">
+                        {language === "bn" ? "ক্রয়" : "KROY"}
+                      </span>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-bold ml-0.5">
+                        {language === "bn" ? "মেনু" : "Menu"}
+                      </span>
+                    </div>
                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium mt-0.5">
                       {language === "bn" ? "সকল সার্ভিস ও অপশন" : "All Services & Options"}
                     </span>

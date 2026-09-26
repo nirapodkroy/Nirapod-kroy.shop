@@ -151,13 +151,29 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
           {/* Brand Info */}
           <div className="col-span-2">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
-                <ShieldCheck className="w-5 h-5" />
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center shadow-md bg-white border border-emerald-100 dark:border-emerald-900/40 shrink-0">
+                <img
+                  src="/logo.png"
+                  alt="Nirapod Kroy Logo"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.src.endsWith(".png")) {
+                      target.src = "/logo.svg";
+                    }
+                  }}
+                />
               </div>
-              <span className="font-display font-bold text-xl text-zinc-900 dark:text-white">
-                {language === "bn" ? "নিরাপদ ক্রয়" : "Nirapod Kroy"}
-              </span>
+              <div className="flex items-center gap-1 font-display font-black text-xl sm:text-2xl tracking-tight">
+                <span className="text-[#1e9454] dark:text-[#34d399]">
+                  {language === "bn" ? "নিরাপদ" : "NIRAPOD"}
+                </span>
+                <span className="text-[#d38f18] dark:text-[#fbbf24]">
+                  {language === "bn" ? "ক্রয়" : "KROY"}
+                </span>
+                <span className="text-[10px] font-bold text-zinc-400">®</span>
+              </div>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-3 leading-relaxed max-w-sm">
               {t("footer_about")}

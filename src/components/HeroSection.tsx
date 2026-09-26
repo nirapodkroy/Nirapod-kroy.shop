@@ -1,89 +1,103 @@
-import React, { useState, useEffect } from "react";
-import { ArrowRight, ShieldCheck, Truck, Clock, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ShieldCheck,
+  Truck,
+  Clock,
+  RefreshCw
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../context/LanguageContext";
+import { handleProductImageError } from "../utils/imageHelper";
 
 interface HeroSectionProps {
   onSelectCategory?: (category: string) => void;
   onExploreClick?: (category?: string) => void;
   onDealsClick?: (dealsCategory?: string) => void;
+  onOpenProductDetail?: (productId: string) => void;
   onOpenReturnPolicy?: () => void;
   onOpenPrivacyPolicy?: () => void;
   onOpenDeliveryPolicy?: () => void;
 }
 
-const SLIDES = [
+export interface UserBannerSlide {
+  id: number;
+  name: string;
+  category: string;
+  dealsCategory: string;
+  title: { bn: string; en: string };
+  image: string;
+  fallbackImage: string;
+  altText: string;
+}
+
+// 100% exact, unmodified 5 user-provided custom banner designs (16:9 HD / 2K)
+const BANNER_SLIDES: UserBannerSlide[] = [
   {
     id: 1,
-    category: "Electronics",
-    badge: { bn: "অফিশিয়াল ওয়ারেন্টি", en: "Official Warranty" },
-    badgeColor: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
-    title: { bn: "স্মার্ট ইলেকট্রনিক্স ও টেক গ্যাজেটস", en: "Smart Tech & Electronics" },
-    highlight: { bn: "Gadgets & Accessories", en: "Gadgets & Accessories" },
-    subtitle: {
-      bn: "স্মার্টওয়াচ, প্রিমিয়াম নয়েজ ক্যানসেলিং হেডফোন, মেকানিক্যাল কীবোর্ড এবং হাই-স্পিড ফাস্ট চার্জার।",
-      en: "Smartwatches, active noise-cancelling headphones, mechanical keyboards, and 65W fast chargers."
-    },
-    discountBadge: { bn: "ব্র্যান্ড ওয়ারেন্টি সহ", en: "Brand Warranty Included" },
-    cta: { bn: "ইলেকট্রনিক্স এক্সপ্লোর করুন", en: "Explore Electronics" },
-    dealsCta: { bn: "হট ডিলস দেখুন", en: "View Hot Deals" },
+    name: "all_products",
+    category: "All",
     dealsCategory: "Offer Zone",
-    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=85",
-    accent: "from-indigo-500/25 to-sky-500/10"
+    title: {
+      bn: "সব ধরনের পণ্যের বিশ্বস্ত বাজার - Nirapod Kroy (নিরাপদ ক্রয়)",
+      en: "Your Ultimate Everything Store - Nirapod Kroy"
+    },
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790400891/Gemini_Generated_Image_vxjgo9vxjgo9vxjg.jpg",
+    fallbackImage: "/images/banners/Gemini_Generated_Image_vxjgo9vxjgo9vxjg.jpg",
+    altText: "সব ধরনের পণ্যের বিশ্বস্ত বাজার - নিরাপদ ক্রয়"
   },
   {
     id: 2,
-    category: "All",
-    badge: { bn: "নিরাপদ কেনাকাটা", en: "Safe & Trusted" },
-    badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-    title: { bn: "সব ধরনের পণ্যের বিশ্বস্ত বাজার", en: "Your Ultimate Everything Store" },
-    highlight: { bn: "Nirapod Kroy (নিরাপদ ক্রয়)", en: "Nirapod Kroy Marketplace" },
-    subtitle: {
-      bn: "মুদি ও অর্গানিক খাদ্যপণ্য, লেটেস্ট গ্যাজেট, পোশাক, রূপচর্চা থেকে গৃহস্থালি সামগ্রী — আসল পণ্যের ১০০% নিশ্চয়তা।",
-      en: "From pure organic groceries and smart gadgets to fashion apparel and home essentials — 100% genuine quality guarantee."
-    },
-    discountBadge: { bn: "ক্যাশ অন ডেলিভারি সুবিধা", en: "Cash on Delivery Available" },
-    cta: { bn: "সব পণ্য দেখুন (Shop All)", en: "Explore All Products" },
-    dealsCta: { bn: "হট ডিলস দেখুন", en: "View Hot Deals" },
+    name: "fashion_lifestyle",
+    category: "Fashion",
     dealsCategory: "Offer Zone",
-    image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=85",
-    accent: "from-emerald-500/25 to-teal-500/10"
+    title: {
+      bn: "স্টাইলিশ ফ্যাশন, পোশাক ও লাইফস্টাইল - Fashion & Lifestyle Wear",
+      en: "Stylish Fashion, Clothing & Lifestyle Wear"
+    },
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790400845/AI_creating_handmade_look_design_2K_20260926100408.jpg",
+    fallbackImage: "/images/banners/AI_creating_handmade_look_design_2K_20260926100408.jpg",
+    altText: "স্টাইলিশ ফ্যাশন, পোশাক ও লাইফস্টাইল - নিরাপদ ক্রয়"
   },
   {
     id: 3,
-    category: "Groceries & Food",
-    badge: { bn: "১০০% খাঁটি ও অর্গানিক", en: "100% Pure & Organic" },
-    badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-    title: { bn: "স্বাস্থ্যসম্মত খাঁটি খাদ্য ও মুদি পণ্য", en: "Healthy Groceries & Pure Food" },
-    highlight: { bn: "Pure Groceries & Essentials", en: "Farm-Fresh Essentials" },
-    subtitle: {
-      bn: "ঘানি-ভাঙা খাঁটি সরিষার তেল, সুন্দরবনের প্রাকৃতিক চাকের মধু, সুগন্ধি চিনিগুঁড়া চাল ও আসল গাওয়া ঘি।",
-      en: "Cold-pressed mustard oil, natural Sundarbans honey, aromatic Chinigura rice, and pure artisan ghee."
-    },
-    discountBadge: { bn: "ন্যায্য মূল্য ও টাটকা", en: "Fresh & Fair Price" },
-    cta: { bn: "মুদি পণ্য দেখুন", en: "Browse Groceries" },
-    dealsCta: { bn: "হট ডিলস দেখুন", en: "View Hot Deals" },
+    name: "hoodie_collection",
+    category: "Ladies Hoodie",
     dealsCategory: "Offer Zone",
-    image: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=85",
-    accent: "from-amber-500/25 to-orange-500/10"
+    title: {
+      bn: "Nirapod Kroy (নিরাপদ ক্রয়) - স্টাইলিশ হুডি কালেকশন (৩০% ছাড়)",
+      en: "Nirapod Kroy - Stylish Hoodie Collection (30% Off)"
+    },
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790400892/Gemini_Generated_Image_8nkgr78nkgr78nkg.jpg",
+    fallbackImage: "/images/banners/Gemini_Generated_Image_8nkgr78nkgr78nkg.jpg",
+    altText: "স্টাইলিশ হুডি কালেকশন ব্যানার - নিরাপদ ক্রয়"
   },
   {
     id: 4,
-    category: "Fashion",
-    badge: { bn: "প্রিমিয়াম কোয়ালিটি", en: "Premium Quality" },
-    badgeColor: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
-    title: { bn: "স্টাইলিশ ফ্যাশন, পোশাক ও লাইফস্টাইল", en: "Stylish Fashion & Lifestyle" },
-    highlight: { bn: "Fashion & Lifestyle Wear", en: "Apparel & Accessories" },
-    subtitle: {
-      bn: "আভিজাত্যপূর্ণ কটন পাঞ্জাবি, ঐতিহ্যবাহী সুতি শাড়ি, জেনুইন লেদার ওয়ালেট ও আরামদায়ক ক্যাজুয়াল পোশাক।",
-      en: "Artisan cotton Panjabi, heritage Tangail cotton saree, genuine leather wallets, and casual comfort."
-    },
-    discountBadge: { bn: "নতুন কালেকশন ২০২৬", en: "New Collection 2026" },
-    cta: { bn: "ফ্যাশন কালেকশন", en: "Shop Fashion" },
-    dealsCta: { bn: "হট ডিলস দেখুন", en: "View Hot Deals" },
+    name: "electronics_gadgets",
+    category: "Electronics",
     dealsCategory: "Offer Zone",
-    image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=85",
-    accent: "from-rose-500/25 to-pink-500/10"
+    title: {
+      bn: "স্মার্ট ইলেকট্রনিক্স ও টেক গ্যাজেটস - Gadgets & Accessories",
+      en: "Smart Tech & Electronics - Gadgets & Accessories"
+    },
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790400890/Gemini_Generated_Image_b7a3agb7a3agb7a3.jpg",
+    fallbackImage: "/images/banners/Gemini_Generated_Image_b7a3agb7a3agb7a3.jpg",
+    altText: "স্মার্ট ইলেকট্রনিক্স ও টেক গ্যাজেটস ব্যানার - নিরাপদ ক্রয়"
+  },
+  {
+    id: 5,
+    name: "groceries_essentials",
+    category: "Groceries & Food",
+    dealsCategory: "Offer Zone",
+    title: {
+      bn: "স্বাস্থ্যসম্মত খাঁটি খাদ্য ও মুদি পণ্য - Pure Groceries & Essentials",
+      en: "Healthy Groceries & Pure Essentials"
+    },
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790400892/Gemini_Generated_Image_p2tss3p2tss3p2ts.jpg",
+    fallbackImage: "/images/banners/Gemini_Generated_Image_p2tss3p2tss3p2ts.jpg",
+    altText: "স্বাস্থ্যসম্মত খাঁটি খাদ্য ও মুদি পণ্য ব্যানার - নিরাপদ ক্রয়"
   }
 ];
 
@@ -97,15 +111,20 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 }) => {
   const { language } = useLanguage();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
 
+  // Auto rotation every 6 seconds, pauses when user hovers or touches
   useEffect(() => {
+    if (isPaused) return;
     const timer = setInterval(() => {
-      setCurrentSlide(prev => (prev + 1) % SLIDES.length);
+      setCurrentSlide((prev) => (prev + 1) % BANNER_SLIDES.length);
     }, 6000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isPaused]);
 
-  const slide = SLIDES[currentSlide];
+  const slide = BANNER_SLIDES[currentSlide];
 
   const handleCtaClick = (category: string) => {
     if (category && category !== "All") {
@@ -123,125 +142,135 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     }
   };
 
-  const handleDealsClick = (dealsCategory: string = "Offer Zone") => {
-    if (onSelectCategory) {
-      onSelectCategory(dealsCategory);
-    } else if (onDealsClick) {
-      onDealsClick(dealsCategory);
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % BANNER_SLIDES.length);
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev === 0 ? BANNER_SLIDES.length - 1 : prev - 1));
+  };
+
+  // Touch swipe support for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsPaused(true);
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    setIsPaused(false);
+    if (!touchStartX.current || !touchEndX.current) return;
+    const distance = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 45;
+    if (distance > minSwipeDistance) {
+      nextSlide();
+    } else if (distance < -minSwipeDistance) {
+      prevSlide();
     }
+    touchStartX.current = null;
+    touchEndX.current = null;
   };
 
   return (
-    <section className="relative overflow-hidden pt-4 pb-8 sm:pt-6 sm:pb-12">
+    <section className="relative overflow-hidden pt-2 pb-6 sm:pt-4 sm:pb-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Main Banner Slide Container */}
-        <div className="relative rounded-3xl overflow-hidden border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-900 text-white min-h-[440px] sm:min-h-[500px] flex items-center shadow-xl">
-          {/* Background Image with Overlay */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={slide.id}
-              initial={{ opacity: 0, scale: 1.05 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.6 }}
-              className="absolute inset-0 z-0"
-            >
-              <img
-                src={slide.image}
-                alt={slide.title[language]}
-                className="w-full h-full object-cover object-center opacity-40 dark:opacity-30 filter brightness-90"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/80 to-transparent" />
-              <div className={`absolute inset-0 bg-gradient-to-t ${slide.accent} pointer-events-none`} />
-            </motion.div>
-          </AnimatePresence>
+        {/* Main Banner Slide Container - 100% Unaltered Banner Design */}
+        <div
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={() => setIsPaused(false)}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="group relative w-full rounded-2xl sm:rounded-3xl overflow-hidden border border-zinc-200/90 dark:border-zinc-800/90 bg-stone-900 shadow-xl transition-all select-none"
+        >
+          {/* Exact 16:9 Aspect Ratio Wrapper (1920x1080 banner format) - Zero cropping, Zero distortion */}
+          <div
+            className="relative w-full aspect-video overflow-hidden bg-stone-950 flex items-center justify-center cursor-pointer"
+            style={{ aspectRatio: "16 / 9" }}
+            onClick={() => handleCtaClick(slide.category)}
+            title={language === "bn" ? `${slide.title.bn} - ক্লিক করে ব্রাউজ করুন` : `${slide.title.en} - Click to explore`}
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={slide.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.4, ease: "easeInOut" }}
+                className="absolute inset-0 w-full h-full"
+              >
+                {/* 100% Original User Banner Graphic without any filters, darkening or modification */}
+                <img
+                  src={slide.image}
+                  alt={slide.altText}
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (!target.dataset.fallbackTried && slide.fallbackImage) {
+                      target.dataset.fallbackTried = "true";
+                      target.src = slide.fallbackImage;
+                    }
+                  }}
+                  className="w-full h-full object-cover block"
+                  loading="eager"
+                  decoding="async"
+                />
+              </motion.div>
+            </AnimatePresence>
 
-          {/* Slide Content */}
-          <div className="relative z-10 max-w-2xl px-6 sm:px-12 py-12 flex flex-col justify-center">
-            <div className="flex flex-wrap items-center gap-2.5 mb-4">
+            {/* Slide Navigation Left/Right Arrows - visible on desktop hover, touchable on mobile */}
+            <div className="absolute inset-y-0 left-0 right-0 z-20 flex items-center justify-between px-2 sm:px-4 pointer-events-none">
               <button
                 type="button"
-                onClick={() => handleCtaClick(slide.category)}
-                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border backdrop-blur-md transition-all hover:scale-105 cursor-pointer ${slide.badgeColor}`}
-                title={language === "bn" ? `${slide.title.bn} দেখুন` : `View ${slide.title.en}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  prevSlide();
+                }}
+                className="pointer-events-auto p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 transition-all hover:scale-110 active:scale-95 cursor-pointer opacity-80 sm:opacity-0 sm:group-hover:opacity-100 shadow-lg"
+                aria-label="Previous banner"
               >
-                {slide.badge[language]}
+                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
+
               <button
                 type="button"
-                onClick={() => handleDealsClick(slide.dealsCategory || "Offer Zone")}
-                className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30 hover:bg-amber-400/30 transition-all hover:scale-105 cursor-pointer"
-                title={language === "bn" ? "হট ডিলস দেখুন" : "View Hot Deals"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  nextSlide();
+                }}
+                className="pointer-events-auto p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 transition-all hover:scale-110 active:scale-95 cursor-pointer opacity-80 sm:opacity-0 sm:group-hover:opacity-100 shadow-lg"
+                aria-label="Next banner"
               >
-                {slide.discountBadge[language]}
-              </button>
-            </div>
-
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight font-display text-white leading-tight">
-              {slide.title[language]}
-              <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300">
-                {slide.highlight[language]}
-              </span>
-            </h1>
-
-            <p className="mt-4 text-zinc-300 text-sm sm:text-base leading-relaxed line-clamp-3">
-              {slide.subtitle[language]}
-            </p>
-
-            {/* CTA Buttons */}
-            <div className="mt-8 flex flex-wrap items-center gap-3.5">
-              <button
-                type="button"
-                onClick={() => handleCtaClick(slide.category)}
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-sm tracking-wide shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              >
-                {slide.cta[language]}
-                <ArrowRight className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDealsClick(slide.dealsCategory || "Offer Zone")}
-                className="inline-flex items-center px-5 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-sm backdrop-blur-md border border-white/20 transition-colors cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-              >
-                {slide.dealsCta ? slide.dealsCta[language] : (language === "bn" ? "হট ডিলস দেখুন" : "View Hot Deals")}
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
-          </div>
 
-          {/* Slide Navigation Controls */}
-          <div className="absolute right-4 bottom-4 z-20 flex items-center gap-2">
-            <button
-              onClick={() => setCurrentSlide((prev) => (prev === 0 ? SLIDES.length - 1 : prev - 1))}
-              className="p-2.5 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md border border-white/10 transition-colors cursor-pointer"
-              aria-label="Previous slide"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="flex items-center gap-1.5 px-2">
-              {SLIDES.map((_, i) => (
+            {/* Bottom Slide Indicator Pills - subtle and positioned cleanly */}
+            <div className="absolute bottom-2 sm:bottom-3.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10 pointer-events-auto">
+              {BANNER_SLIDES.map((_, i) => (
                 <button
                   key={i}
-                  onClick={() => setCurrentSlide(i)}
-                  className={`h-2 rounded-full transition-all cursor-pointer ${
-                    currentSlide === i ? "w-6 bg-emerald-400" : "w-2 bg-white/40 hover:bg-white/70"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentSlide(i);
+                  }}
+                  className={`h-1.5 sm:h-2 rounded-full transition-all cursor-pointer ${
+                    currentSlide === i
+                      ? "w-5 sm:w-6 bg-emerald-400 shadow-xs"
+                      : "w-1.5 sm:w-2 bg-white/40 hover:bg-white/75"
                   }`}
                   aria-label={`Go to slide ${i + 1}`}
                 />
               ))}
             </div>
-            <button
-              onClick={() => setCurrentSlide((prev) => (prev + 1) % SLIDES.length)}
-              className="p-2.5 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md border border-white/10 transition-colors cursor-pointer"
-              aria-label="Next slide"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
         {/* Value Proposition Highlights Bar */}
-        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div className="mt-4 sm:mt-5 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <div
             onClick={onOpenDeliveryPolicy}
             role="button"
@@ -322,4 +351,3 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     </section>
   );
 };
-

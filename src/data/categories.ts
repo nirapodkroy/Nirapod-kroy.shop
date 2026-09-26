@@ -55,6 +55,9 @@ export const BASE_CATEGORIES: string[] = [
   "Shirt",
   "Sharee",
   "Panjabi",
+  "Three Piece",
+  "One Piece Gown",
+  "Ladies Hoodie",
   "Women Hijab",
   "Health & Beauty",
   "Home & Kitchen",
@@ -83,6 +86,9 @@ export const CATEGORY_SLUG_MAP: Record<string, string> = {
   "Shirt": "shirt",
   "Sharee": "sharee",
   "Panjabi": "panjabi",
+  "Three Piece": "three-piece",
+  "One Piece Gown": "one-piece-gown",
+  "Ladies Hoodie": "ladies-hoodie",
   "Women Hijab": "women-hijab",
   "Health & Beauty": "health-and-beauty",
   "Home & Kitchen": "home-and-kitchen",
@@ -214,6 +220,12 @@ export function formatCategoryDisplayLabel(cat: string, lang: string = "bn"): st
     return lang === "bn" ? "শাড়ি (Sharee)" : "Sharee";
   if (c === "panjabi" || c === "punjabi" || c === "পাঞ্জাবি" || c === "পাঞ্জাবী")
     return lang === "bn" ? "পাঞ্জাবি (Panjabi)" : "Panjabi";
+  if (c === "three piece" || c === "three-piece" || c === "three_piece" || c === "থ্রি-পিস" || c === "থ্রি পিস")
+    return lang === "bn" ? "থ্রি-পিস (Three Piece)" : "Three Piece";
+  if (c === "one piece gown" || c === "one-piece-gown" || c === "gown" || c === "পরী গাউন" || c === "গাউন")
+    return lang === "bn" ? "পরী গাউন (Gown)" : "One Piece Gown";
+  if (c === "ladies  hoodie" || c === "ladies hoodie" || c === "ladies-hoodie" || c === "hoodie" || c === "হুডি")
+    return lang === "bn" ? "লেডিস হুডি (Hoodie)" : "Ladies Hoodie";
   if (c === "women hijab" || c === "women-hijab" || c === "hijab" || c === "হিজাব")
     return lang === "bn" ? "হিজাব ও বোরকা (Hijab)" : "Women Hijab";
   if (c === "health & beauty" || c === "beauty")

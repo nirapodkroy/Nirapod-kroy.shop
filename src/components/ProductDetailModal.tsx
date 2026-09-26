@@ -6,6 +6,7 @@ import { getProductImagesWithCodes } from "../utils/productCodeHelper";
 import { handleProductImageError } from "../utils/imageHelper";
 import { SizeSelector } from "./SizeSelector";
 import { SizeChartModal } from "./SizeChartModal";
+import { ProductImageZoomModal } from "./ProductImageZoomModal";
 import {
   X,
   Star,
@@ -20,7 +21,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Images,
-  Tag
+  Tag,
+  ZoomIn,
+  Maximize2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -48,6 +51,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     return product?.sizes && product.sizes.length > 0 ? product.sizes[0] : "";
   });
   const [isSizeChartOpen, setIsSizeChartOpen] = useState(false);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [isHoverZooming, setIsHoverZooming] = useState(false);
+  const [zoomPosition, setZoomPosition] = useState({ x: 50, y: 50 });
 
   // Extract all gallery images with their assigned/auto-generated codes
   const imageItems = getProductImagesWithCodes(product);
@@ -127,19 +133,57 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 overflow-y-auto">
             {/* Image Gallery Column */}
             <div className="flex flex-col bg-zinc-100 dark:bg-zinc-800/60 border-b md:border-b-0 md:border-r border-zinc-200 dark:border-zinc-800">
-              {/* Main Photo Display */}
-              <div className="relative aspect-square w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800/60">
+              {/* Main Photo Display with Hover Loupe & Click-to-Zoom */}
+              <div
+                className="relative aspect-square w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800/60 cursor-zoom-in group select-none"
+                onClick={() => setIsLightboxOpen(true)}
+                onMouseEnter={() => setIsHoverZooming(true)}
+                onMouseLeave={() => setIsHoverZooming(false)}
+                onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) / rect.width) * 100;
+                  const y = ((e.clientY - rect.top) / rect.height) * 100;
+                  setZoomPosition({
+                    x: Math.max(0, Math.min(100, x)),
+                    y: Math.max(0, Math.min(100, y))
+                  });
+                }}
+              >
                 <motion.img
                   key={currentImageIndex}
                   initial={{ opacity: 0.4 }}
                   animate={{ opacity: 1 }}
-                  transition={{ duration: 0.25 }}
+                  transition={{ duration: 0.2 }}
                   src={galleryImages[currentImageIndex] || product.imageUrl}
                   alt={`${product.title} - photo ${currentImageIndex + 1}`}
-                  className="w-full h-full object-cover object-center"
+                  className={`w-full h-full object-cover object-center transition-transform duration-100 ease-out will-change-transform ${
+                    isHoverZooming ? "scale-[2.4]" : "scale-100"
+                  }`}
+                  style={
+                    isHoverZooming
+                      ? {
+                          transformOrigin: `${zoomPosition.x}% ${zoomPosition.y}%`
+                        }
+                      : undefined
+                  }
                   referrerPolicy="no-referrer"
                   onError={(e) => handleProductImageError(e, galleryImages[currentImageIndex] || product.imageUrl)}
                 />
+
+                {/* Click to Zoom Lightbox Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsLightboxOpen(true);
+                  }}
+                  className="absolute bottom-3 left-3 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md text-white border border-white/20 text-xs font-semibold shadow-lg transition-all active:scale-95 cursor-pointer group-hover:border-emerald-400 group-hover:text-emerald-300"
+                  title={language === "bn" ? "বড় করে দেখতে ক্লিক করুন" : "Click for Fullscreen Zoom"}
+                  aria-label="Zoom image"
+                >
+                  <ZoomIn className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{language === "bn" ? "জুম করুন" : "Zoom"}</span>
+                </button>
 
                 {/* Badges */}
                 <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 pointer-events-none">
@@ -521,6 +565,17 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           sizeChart={product.sizeChart}
           selectedSize={selectedSize}
           onSelectSize={(sz) => setSelectedSize(sz)}
+        />
+
+        {/* Fullscreen Product Image Zoom Lightbox Modal */}
+        <ProductImageZoomModal
+          isOpen={isLightboxOpen}
+          onClose={() => setIsLightboxOpen(false)}
+          images={galleryImages.length > 0 ? galleryImages : [product.imageUrl]}
+          imageCodes={imageItems}
+          initialIndex={currentImageIndex}
+          productTitle={product.title}
+          language={language}
         />
       </div>
     </AnimatePresence>

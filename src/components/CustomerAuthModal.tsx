@@ -81,11 +81,36 @@ export const CustomerAuthModal: React.FC = () => {
 
           {/* Modal Header & Tabs */}
           <div className="p-5 sm:p-8 pb-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                {language === "bn" ? "কাস্টমার পোর্টাল" : "Customer Portal"}
-              </span>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center bg-white shadow-sm border border-emerald-100 dark:border-emerald-900/40 shrink-0">
+                  <img
+                    src="/logo.png"
+                    alt="Nirapod Kroy Logo"
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (target.src.endsWith(".png")) {
+                        target.src = "/logo.svg";
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1 font-extrabold text-sm tracking-tight font-display">
+                    <span className="text-[#1e9454] dark:text-[#34d399]">
+                      {language === "bn" ? "নিরাপদ" : "NIRAPOD"}
+                    </span>
+                    <span className="text-[#d38f18] dark:text-[#fbbf24]">
+                      {language === "bn" ? "ক্রয়" : "KROY"}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    {language === "bn" ? "কাস্টমার পোর্টাল" : "Customer Portal"}
+                  </span>
+                </div>
+              </div>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             </div>
 
             <h2 className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-100 font-display">

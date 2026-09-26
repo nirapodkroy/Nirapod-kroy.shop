@@ -275,8 +275,18 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
         <div className="relative px-6 py-5 border-b border-zinc-100 dark:border-zinc-800 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
-                <Truck className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center bg-white shadow-md border border-white/20 shrink-0">
+                <img
+                  src="/logo.png"
+                  alt="Nirapod Kroy Logo"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.src.endsWith(".png")) {
+                      target.src = "/logo.svg";
+                    }
+                  }}
+                />
               </div>
               <div>
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 text-[11px] font-semibold tracking-wide uppercase">

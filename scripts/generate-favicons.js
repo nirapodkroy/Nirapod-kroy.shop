@@ -3,14 +3,18 @@ import path from 'path';
 import sharp from 'sharp';
 
 const root = process.cwd();
+const logoPngPath = path.join(root, 'public', 'logo.png');
 const svgPath = path.join(root, 'favicon.svg');
 
-if (!fs.existsSync(svgPath)) {
-  console.error('favicon.svg not found at', svgPath);
+let sourceBuffer;
+if (fs.existsSync(logoPngPath)) {
+  sourceBuffer = fs.readFileSync(logoPngPath);
+} else if (fs.existsSync(svgPath)) {
+  sourceBuffer = fs.readFileSync(svgPath);
+} else {
+  console.error('Source icon not found at logo.png or favicon.svg');
   process.exit(1);
 }
-
-const svgBuffer = fs.readFileSync(svgPath);
 
 // Target dimensions required by Google Search and modern browsers
 const SIZES = [
@@ -22,17 +26,16 @@ const SIZES = [
   { name: 'favicon-192x192.png', size: 192 }, // Android & Google PWA
   { name: 'favicon-512x512.png', size: 512 }, // Schema.org Organization Logo
   { name: 'apple-touch-icon.png', size: 180 }, // Apple iOS & Google Knowledge
-  { name: 'favicon.png', size: 96 },
-  { name: 'logo.png', size: 512 }
+  { name: 'favicon.png', size: 96 }
 ];
 
 async function generateFavicons() {
-  console.log('[Favicon Generator] Generating Google-compliant PNG icons from SVG...');
+  console.log('[Favicon Generator] Generating Google-compliant PNG icons from official logo...');
   
   const pngBuffers = {};
 
   for (const item of SIZES) {
-    const buffer = await sharp(svgBuffer)
+    const buffer = await sharp(sourceBuffer)
       .resize(item.size, item.size, {
         fit: 'contain',
         background: { r: 0, g: 0, b: 0, alpha: 0 }

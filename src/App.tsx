@@ -575,6 +575,12 @@ const StoreContent: React.FC = () => {
             onSelectCategory={handleSelectCategoryFromHero}
             onExploreClick={handleExploreClick}
             onDealsClick={handleDealsClick}
+            onOpenProductDetail={(prodId) => {
+              const matched = products.find((p) => p.id === prodId);
+              if (matched) {
+                handleProductClick(matched);
+              }
+            }}
             onOpenReturnPolicy={openReturnPolicy}
             onOpenPrivacyPolicy={openPrivacyPolicy}
             onOpenDeliveryPolicy={openDeliveryPolicy}
