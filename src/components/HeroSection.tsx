@@ -32,72 +32,72 @@ export interface UserBannerSlide {
   altText: string;
 }
 
-// 100% exact, unmodified 5 user-provided custom banner designs (16:9 HD / 2K)
+// 100% exact 5 user-provided custom banner designs (8:3 Aspect Ratio HD / 2K)
 const BANNER_SLIDES: UserBannerSlide[] = [
   {
     id: 1,
-    name: "all_products",
+    name: "shop_1",
     category: "All",
     dealsCategory: "Offer Zone",
     title: {
-      bn: "সব ধরনের পণ্যের বিশ্বস্ত বাজার - Nirapod Kroy (নিরাপদ ক্রয়)",
-      en: "Your Ultimate Everything Store - Nirapod Kroy"
+      bn: "Nirapod Kroy (নিরাপদ ক্রয়) - সব ধরনের পণ্যের বিশ্বস্ত বাজার",
+      en: "Nirapod Kroy - Your Trusted Shopping Destination"
     },
-    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790400891/Gemini_Generated_Image_vxjgo9vxjgo9vxjg.jpg",
-    fallbackImage: "/images/banners/Gemini_Generated_Image_vxjgo9vxjgo9vxjg.jpg",
-    altText: "সব ধরনের পণ্যের বিশ্বস্ত বাজার - নিরাপদ ক্রয়"
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432289/shop_1.jpg",
+    fallbackImage: "/images/banners/shop_1.jpg",
+    altText: "নিরাপদ ক্রয় ব্যানার ১ - সব পণ্যের বিশ্বস্ত অনলাইন শপ"
   },
   {
     id: 2,
-    name: "fashion_lifestyle",
-    category: "Fashion",
+    name: "ss_banner",
+    category: "Offer Zone",
     dealsCategory: "Offer Zone",
     title: {
-      bn: "স্টাইলিশ ফ্যাশন, পোশাক ও লাইফস্টাইল - Fashion & Lifestyle Wear",
-      en: "Stylish Fashion, Clothing & Lifestyle Wear"
+      bn: "বিশেষ আকর্ষণীয় অফার ও ডিসকাউন্ট - Special Deals & Offers",
+      en: "Special Deals & Mega Discounts - Nirapod Kroy"
     },
-    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790400845/AI_creating_handmade_look_design_2K_20260926100408.jpg",
-    fallbackImage: "/images/banners/AI_creating_handmade_look_design_2K_20260926100408.jpg",
-    altText: "স্টাইলিশ ফ্যাশন, পোশাক ও লাইফস্টাইল - নিরাপদ ক্রয়"
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432292/ss.jpg",
+    fallbackImage: "/images/banners/ss.jpg",
+    altText: "নিরাপদ ক্রয় ব্যানার ২ - আকর্ষণীয় অফার"
   },
   {
     id: 3,
-    name: "hoodie_collection",
-    category: "Ladies Hoodie",
+    name: "shop_4",
+    category: "Fashion",
     dealsCategory: "Offer Zone",
     title: {
-      bn: "Nirapod Kroy (নিরাপদ ক্রয়) - স্টাইলিশ হুডি কালেকশন (৩০% ছাড়)",
-      en: "Nirapod Kroy - Stylish Hoodie Collection (30% Off)"
+      bn: "প্রিমিয়াম ফ্যাশন ও পোশাক কালেকশন - Fashion & Lifestyle",
+      en: "Premium Fashion & Lifestyle Collection"
     },
-    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790400892/Gemini_Generated_Image_8nkgr78nkgr78nkg.jpg",
-    fallbackImage: "/images/banners/Gemini_Generated_Image_8nkgr78nkgr78nkg.jpg",
-    altText: "স্টাইলিশ হুডি কালেকশন ব্যানার - নিরাপদ ক্রয়"
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432293/shop_4.jpg",
+    fallbackImage: "/images/banners/shop_4.jpg",
+    altText: "নিরাপদ ক্রয় ব্যানার ৩ - প্রিমিয়াম ফ্যাশন"
   },
   {
     id: 4,
-    name: "electronics_gadgets",
+    name: "shop_3",
     category: "Electronics",
     dealsCategory: "Offer Zone",
     title: {
-      bn: "স্মার্ট ইলেকট্রনিক্স ও টেক গ্যাজেটস - Gadgets & Accessories",
-      en: "Smart Tech & Electronics - Gadgets & Accessories"
+      bn: "স্মার্ট টেক ও ইলেকট্রনিক্স গ্যাজেটস - Smart Electronics",
+      en: "Smart Electronics & Tech Accessories"
     },
-    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790400890/Gemini_Generated_Image_b7a3agb7a3agb7a3.jpg",
-    fallbackImage: "/images/banners/Gemini_Generated_Image_b7a3agb7a3agb7a3.jpg",
-    altText: "স্মার্ট ইলেকট্রনিক্স ও টেক গ্যাজেটস ব্যানার - নিরাপদ ক্রয়"
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432294/shop_3.jpg",
+    fallbackImage: "/images/banners/shop_3.jpg",
+    altText: "নিরাপদ ক্রয় ব্যানার ৪ - স্মার্ট গ্যাজেটস"
   },
   {
     id: 5,
-    name: "groceries_essentials",
+    name: "shop_2",
     category: "Groceries & Food",
     dealsCategory: "Offer Zone",
     title: {
-      bn: "স্বাস্থ্যসম্মত খাঁটি খাদ্য ও মুদি পণ্য - Pure Groceries & Essentials",
-      en: "Healthy Groceries & Pure Essentials"
+      bn: "স্বাস্থ্যসম্মত খাঁটি খাদ্য ও মুদি পণ্য - Pure Groceries & Food",
+      en: "Healthy Groceries & Pure Food Essentials"
     },
-    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790400892/Gemini_Generated_Image_p2tss3p2tss3p2ts.jpg",
-    fallbackImage: "/images/banners/Gemini_Generated_Image_p2tss3p2tss3p2ts.jpg",
-    altText: "স্বাস্থ্যসম্মত খাঁটি খাদ্য ও মুদি পণ্য ব্যানার - নিরাপদ ক্রয়"
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432294/shop_2.jpg",
+    fallbackImage: "/images/banners/shop_2.jpg",
+    altText: "নিরাপদ ক্রয় ব্যানার ৫ - খাঁটি খাদ্য ও মুদি পণ্য"
   }
 ];
 
@@ -186,10 +186,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           onTouchEnd={handleTouchEnd}
           className="group relative w-full rounded-2xl sm:rounded-3xl overflow-hidden border border-zinc-200/90 dark:border-zinc-800/90 bg-stone-900 shadow-xl transition-all select-none"
         >
-          {/* Exact 16:9 Aspect Ratio Wrapper (1920x1080 banner format) - Zero cropping, Zero distortion */}
+          {/* Exact 8:3 Aspect Ratio Wrapper as requested */}
           <div
-            className="relative w-full aspect-video overflow-hidden bg-stone-950 flex items-center justify-center cursor-pointer"
-            style={{ aspectRatio: "16 / 9" }}
+            className="relative w-full aspect-[8/3] overflow-hidden bg-stone-950 flex items-center justify-center cursor-pointer"
+            style={{ aspectRatio: "8 / 3" }}
             onClick={() => handleCtaClick(slide.category)}
             title={language === "bn" ? `${slide.title.bn} - ক্লিক করে ব্রাউজ করুন` : `${slide.title.en} - Click to explore`}
           >
@@ -213,7 +213,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       target.src = slide.fallbackImage;
                     }
                   }}
-                  className="w-full h-full object-cover block"
+                  className="w-full h-full object-cover object-center block"
                   loading="eager"
                   decoding="async"
                 />

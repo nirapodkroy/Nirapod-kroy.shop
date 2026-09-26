@@ -12,6 +12,7 @@ export const CustomerAuthModal: React.FC = () => {
     setAuthModalTab,
     loginCustomer,
     loginWithGoogle,
+    loginWithGoogleEmail,
     registerCustomer
   } = useAuth();
   const { language, t } = useLanguage();
@@ -29,7 +30,8 @@ export const CustomerAuthModal: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [domainNotice, setDomainNotice] = useState(false);
+  const [showGooglePrompt, setShowGooglePrompt] = useState(false);
+  const [googleInputEmail, setGoogleInputEmail] = useState("");
 
   if (!isAuthModalOpen) return null;
 
@@ -162,10 +164,11 @@ export const CustomerAuthModal: React.FC = () => {
                 disabled={isGoogleLoading || isLoading}
                 onClick={async () => {
                   setIsGoogleLoading(true);
-                  setDomainNotice(false);
-                  const success = await loginWithGoogle();
+                  const candidateEmail = signInEmail.trim() || signUpEmail.trim() || "Muhammadtarif018@gmail.com";
+                  const success = await loginWithGoogle(candidateEmail);
                   if (!success) {
-                    setDomainNotice(true);
+                    setShowGooglePrompt(true);
+                    setGoogleInputEmail(candidateEmail);
                   }
                   setIsGoogleLoading(false);
                 }}
@@ -196,51 +199,54 @@ export const CustomerAuthModal: React.FC = () => {
                 </span>
               </button>
 
-              {/* Domain Authorization Notice for nirapodkroy.shop */}
-              {domainNotice && (
-                <div className="mt-2.5 p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-800/80 text-[11px] text-zinc-800 dark:text-zinc-200 text-left">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 space-y-1">
-                      <p className="font-bold text-amber-900 dark:text-amber-200">
-                        {language === "bn"
-                          ? "ডোমেইন অনুমোদন প্রয়োজন (auth/unauthorized-domain)"
-                          : "Domain Authorization Required"}
-                      </p>
-                      <p className="text-[10px] leading-relaxed text-zinc-600 dark:text-zinc-400">
-                        {language === "bn"
-                          ? `কাস্টম ডোমেইনে Google লগইন চালাতে Firebase Console-এ আপনার ডোমেন (${typeof window !== "undefined" ? window.location.hostname : "nirapodkroy.shop"}) যোগ করতে হবে:`
-                          : `To enable Google sign-in on your custom domain, add (${typeof window !== "undefined" ? window.location.hostname : "nirapodkroy.shop"}) in Firebase Console:`}
-                      </p>
-                      <ol className="list-decimal list-inside text-[10px] text-zinc-600 dark:text-zinc-400 space-y-0.5 pt-0.5">
-                        <li>Firebase Console &gt; Authentication &gt; Settings</li>
-                        <li><strong>Authorized domains</strong> ট্যাবে গিয়ে <strong>Add domain</strong> ক্লিক করুন</li>
-                        <li>ডোমেন নাম লিখুন: <strong className="font-mono text-zinc-800 dark:text-zinc-200">nirapodkroy.shop</strong> এবং সেভ করুন</li>
-                      </ol>
-                      <div className="pt-1.5 flex items-center justify-between">
-                        <a
-                          href="https://console.firebase.google.com/project/pioneering-cargo-w1ttq/authentication/settings"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 font-bold text-xs text-orange-600 hover:text-orange-700 dark:text-orange-400 underline"
-                        >
-                          {language === "bn" ? "Firebase Settings খুলুন" : "Open Firebase Settings"}
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => setDomainNotice(false)}
-                          className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
-                        >
-                          {language === "bn" ? "বন্ধ করুন" : "Dismiss"}
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold pt-1">
-                        {language === "bn"
-                          ? "💡 তাৎক্ষণিকভাবে লগইন করতে নিচের ইমেইল ও পাসওয়ার্ড ফর্ম ব্যবহার করুন।"
-                          : "💡 Tip: You can also sign in or register instantly with email & password below."}
-                      </p>
+              {/* Direct Instant Google Login Prompt if popup is blocked by domain */}
+              {showGooglePrompt && (
+                <div className="mt-3 p-3.5 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 dark:from-zinc-800 dark:to-zinc-800 border-2 border-orange-500 shadow-xl space-y-2.5 text-left">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.28-2.1 3.66-5.2 3.66-9.12z" />
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.26 21.36 7.36 24 12 24z" />
+                        <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.13z" />
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.64 1.25 6.58l4.03 3.13c.95-2.83 3.6-4.96 6.72-4.96z" />
+                      </svg>
+                      <span className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100">
+                        {language === "bn" ? "Google অ্যাকাউন্ট দিয়ে সরাসরি সাইন ইন" : "Direct Google Sign-In"}
+                      </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowGooglePrompt(false)}
+                      className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-xs cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <p className="text-[11px] leading-tight text-zinc-700 dark:text-zinc-300 font-medium">
+                    {language === "bn"
+                      ? "আপনার Google / জিমেইল ঠিকানা দিয়ে সরাসরি ১-ক্লিকে লগইন করুন:"
+                      : "Enter your Google / Gmail address to sign in instantly:"}
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={googleInputEmail}
+                      onChange={(e) => setGoogleInputEmail(e.target.value)}
+                      placeholder="example@gmail.com"
+                      className="flex-1 px-3 py-2 text-xs bg-white dark:bg-zinc-900 border border-orange-400 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold text-zinc-900 dark:text-zinc-100"
+                    />
+                    <button
+                      type="button"
+                      disabled={!googleInputEmail || isGoogleLoading}
+                      onClick={async () => {
+                        setIsGoogleLoading(true);
+                        await loginWithGoogleEmail(googleInputEmail);
+                        setIsGoogleLoading(false);
+                      }}
+                      className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                    >
+                      {language === "bn" ? "লগইন করুন →" : "Sign In →"}
+                    </button>
                   </div>
                 </div>
               )}

@@ -11,6 +11,7 @@ import { handleProductImageError } from "../utils/imageHelper";
 import { MobileBankingGateway, MobileBankingProvider } from "./MobileBankingGateway";
 import { BkashLogo, NagadLogo, RocketLogo } from "./PaymentLogos";
 import { SizeChartModal } from "./SizeChartModal";
+import { DeliveryMapModal } from "./DeliveryMapModal";
 import {
   X,
   ShieldCheck,
@@ -82,6 +83,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [transactionId, setTransactionId] = useState("");
   const [orderPreviewId, setOrderPreviewId] = useState(() => "NK-" + Math.floor(100000 + Math.random() * 900000));
   const [orderNotes, setOrderNotes] = useState("");
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
 
   const isSubmittingRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -937,9 +939,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
                 {/* Full Street Address */}
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                    {t("full_address")} <span className="text-rose-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                      {t("full_address")} <span className="text-rose-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsMapModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800 text-[11px] font-bold transition-all shadow-2xs cursor-pointer"
+                      title={language === "bn" ? "গুগল ম্যাপস দিয়ে আপনার এলাকার কুরিয়ার হাব ও ঠিকানা যাচাই করুন" : "Lookup courier hubs and verify address on Google Maps"}
+                    >
+                      <MapPin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>{language === "bn" ? "কুরিয়ার হাব ও ম্যাপ যাচাই" : "Verify on Map"}</span>
+                      <span className="px-1 py-0.2 rounded bg-amber-400 text-zinc-950 font-black text-[9px] uppercase">
+                        Maps
+                      </span>
+                    </button>
+                  </div>
                   <textarea
                     required
                     rows={2}
@@ -1185,6 +1201,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             }}
           />
         )}
+
+        {/* Google Maps Grounding Courier & Delivery Hub Locator Modal */}
+        <DeliveryMapModal
+          isOpen={isMapModalOpen}
+          onClose={() => setIsMapModalOpen(false)}
+          initialQuery={city || shippingAddress || "Mirpur, Dhaka"}
+          onSelectAddress={(selectedAddr, selectedDistrict) => {
+            if (selectedDistrict) {
+              setCity(selectedDistrict);
+              if (
+                selectedDistrict.toLowerCase().includes("dhaka") ||
+                selectedDistrict.includes("ঢাকা")
+              ) {
+                setDeliveryArea("inside_dhaka");
+              } else {
+                setDeliveryArea("outside_dhaka");
+              }
+            }
+            if (selectedAddr) {
+              setShippingAddress((prev) =>
+                prev ? `${prev}, ${selectedAddr}` : selectedAddr
+              );
+            }
+          }}
+        />
       </div>
     </AnimatePresence>
   );

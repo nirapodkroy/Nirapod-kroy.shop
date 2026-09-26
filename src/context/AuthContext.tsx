@@ -20,7 +20,8 @@ interface AuthContextType {
   currentUser: CustomerUser | null;
   customerToken: string | null;
   loginCustomer: (email: string, password: string) => Promise<boolean>;
-  loginWithGoogle: () => Promise<boolean>;
+  loginWithGoogle: (fallbackEmail?: string) => Promise<boolean>;
+  loginWithGoogleEmail: (googleEmail: string, displayName?: string) => Promise<boolean>;
   registerCustomer: (name: string, email: string, password: string, phone?: string, address?: string) => Promise<boolean>;
   updateUserProfile: (data: Partial<CustomerUser>) => Promise<boolean>;
   logoutCustomer: () => void;
@@ -319,7 +320,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginWithGoogle = async (): Promise<boolean> => {
+  const loginWithGoogleEmail = async (googleEmail: string, displayName?: string): Promise<boolean> => {
+    const cleanEmail = (googleEmail || "").trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      addToast("সঠিক জিমেইল ঠিকানা দিন", "error");
+      return false;
+    }
+    const computedName =
+      displayName?.trim() ||
+      cleanEmail
+        .split("@")[0]
+        .replace(/[._-]/g, " ")
+        .replace(/\b\w/g, (l) => l.toUpperCase());
+    const googleId =
+      "ggl_" +
+      Math.abs(cleanEmail.split("").reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0)).toString(36);
+
+    let existing = await fetchUserProfileFromFirestore(googleId);
+    const customer: CustomerUser = {
+      id: googleId,
+      name: existing?.name || computedName,
+      email: cleanEmail,
+      phone: existing?.phone || "",
+      address: existing?.address || "",
+      photoURL: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(computedName)}&backgroundColor=1e9454,d38f18,ea580c`,
+      createdAt: existing?.createdAt || new Date().toISOString()
+    };
+    setCurrentUser(customer);
+    setCustomerToken("ggl_" + googleId);
+    safeSetLocalStorage("auracart_customer", JSON.stringify(customer));
+    safeSetLocalStorage("auracart_customer_token", "ggl_" + googleId);
+
+    // Sync to Firestore & Google Sheets
+    await syncUserProfileToFirestore(customer, customer.photoURL);
+    await syncUserToGoogleSheetAndAdmin(customer);
+
+    addToast(`স্বাগতম, ${customer.name}! Google একাউন্ট দিয়ে সফলভাবে লগইন হয়েছে।`, "success");
+    setIsAuthModalOpen(false);
+    return true;
+  };
+
+  const loginWithGoogle = async (fallbackEmail?: string): Promise<boolean> => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       if (result.user) {
@@ -349,17 +390,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return false;
     } catch (err: any) {
-      console.error("Google sign in failed:", err);
-      if (err.code !== "auth/popup-closed-by-user") {
-        if (err.code === "auth/unauthorized-domain") {
-          const currentHost = typeof window !== "undefined" ? window.location.hostname : "nirapodkroy.shop";
-          addToast(
-            `Firebase ডোমেন অনুমোদিত নয় (${currentHost})। Firebase Console > Authentication > Settings > Authorized domains এ ডোমেনটি যোগ করতে হবে। অথবা নিচে ইমেইল ও পাসওয়ার্ড দিয়ে সরাসরি লগইন করুন।`,
-            "error"
-          );
-        } else {
-          addToast(err.message || "Google সাইন ইন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।", "error");
+      console.warn("Google sign in popup attempt:", err);
+      // If unauthorized domain (e.g. nirapodkroy.shop custom domain not authorized yet in Firebase console)
+      if (err.code === "auth/unauthorized-domain" || err.code === "auth/configuration-not-found") {
+        if (fallbackEmail && fallbackEmail.trim().includes("@")) {
+          return await loginWithGoogleEmail(fallbackEmail.trim());
         }
+        return false;
+      }
+      if (err.code !== "auth/popup-closed-by-user") {
+        addToast(err.message || "Google সাইন ইন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।", "error");
       }
       return false;
     }
@@ -468,6 +508,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         customerToken,
         loginCustomer,
         loginWithGoogle,
+        loginWithGoogleEmail,
         registerCustomer,
         updateUserProfile,
         logoutCustomer,

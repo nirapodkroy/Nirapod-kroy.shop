@@ -29,6 +29,7 @@ import {
   Info,
   Home
 } from "lucide-react";
+import { DeliveryMapModal } from "./DeliveryMapModal";
 import {
   GROCERIES_PARENT,
   GROCERY_SUBCATEGORIES,
@@ -66,6 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [isSearchCatDropdownOpen, setIsSearchCatDropdownOpen] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [tickerItems, setTickerItems] = useState<OrderTickerItem[]>([]);
   const [currentTickerIdx, setCurrentTickerIdx] = useState(0);
 
@@ -129,6 +131,17 @@ export const Header: React.FC<HeaderProps> = ({
   const searchCatDropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Close search category dropdown when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (searchCatDropdownRef.current && !searchCatDropdownRef.current.contains(e.target as Node)) {
+        setIsSearchCatDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
   // Desktop search shortcut listener (Cmd/Ctrl + K or /)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -152,42 +165,6 @@ export const Header: React.FC<HeaderProps> = ({
         behavior: "smooth"
       });
     }
-  };
-
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (searchCatDropdownRef.current && !searchCatDropdownRef.current.contains(e.target as Node)) {
-        setIsSearchCatDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
-
-  // Category label formatter matching screenshot 1 (e.g. সব পণ্য (All), মুদি ও খাদ্য (Groceries))
-  const getCategoryDropdownLabel = (cat: string, lang: string): string => {
-    const c = cat.toLowerCase().trim();
-    if (c === "all") return lang === "bn" ? "সব পণ্য (All)" : "All Products";
-    if (c === "offer zone" || c === "offers" || c === "offer-zone" || c === "offer") return lang === "bn" ? "🔥 অফার জোন (Offer Zone)" : "🔥 Offer Zone";
-    if (c === "groceries & food" || c === "groceries" || c === "grocery") return lang === "bn" ? "মুদি ও খাদ্য (Groceries & Food)" : "Groceries & Food";
-    if (c === "electronics") return lang === "bn" ? "ইলেকট্রনিক্স (Electronics)" : "Electronics";
-    if (c === "fashion") return lang === "bn" ? "পোশাক ও ফ্যাশন (Fashion)" : "Fashion";
-    if (c === "health & beauty" || c === "beauty") return lang === "bn" ? "রূপচর্চা ও স্বাস্থ্য (Beauty)" : "Health & Beauty";
-    if (c === "home & kitchen" || c === "home") return lang === "bn" ? "গৃহস্থালি ও কিচেন (Home)" : "Home & Kitchen";
-    if (c === "baby & kids" || c === "kids" || c === "baby") return lang === "bn" ? "শিশু ও খেলনা (Kids)" : "Kids";
-    if (c === "sports") return lang === "bn" ? "খেলাধুলা ও ফিটনেস (Sports)" : "Sports";
-    if (c === "books") return lang === "bn" ? "বই ও স্টেশনারি (Books)" : "Books";
-    if (c === "honey") return lang === "bn" ? "মধু ও সুইটনার (Honey)" : "Honey";
-    if (c === "oil & ghee" || c === "oil" || c === "ghee") return lang === "bn" ? "তেল ও ঘি (Oil & Ghee)" : "Oil & Ghee";
-    if (c === "dates") return lang === "bn" ? "প্রিমিয়াম খেজুর (Dates)" : "Dates";
-    if (c === "spices") return lang === "bn" ? "খাঁটি মশলা (Spices)" : "Spices";
-    if (c === "nuts & seeds" || c === "nuts") return lang === "bn" ? "বাদাম ও বীজ (Nuts & Seeds)" : "Nuts & Seeds";
-    if (c === "beverage" || c === "tea") return lang === "bn" ? "চা ও পানীয় (Beverage)" : "Beverage";
-    if (c === "rice") return lang === "bn" ? "প্রিমিয়াম চাল (Rice)" : "Rice";
-    if (c === "flours & lentils" || c === "lentils") return lang === "bn" ? "আটা ও ডাল (Flours & Lentils)" : "Flours & Lentils";
-    if (c === "ladies  hoodie" || c === "ladies hoodie" || c === "ladies-hoodie" || c === "hoodie" || c === "hudie" || c === "হুডি" || c === "লেডিস হুডি") return lang === "bn" ? "লেডিস হুডি (Hoodie)" : "Ladies Hoodie";
-    return getCategoryName(cat);
   };
 
   // Fetch recent order ticker for privacy-friendly social proof
@@ -266,6 +243,17 @@ export const Header: React.FC<HeaderProps> = ({
               <span>হেল্পলাইন: 01786681134</span>
             </a>
 
+            {/* Google Maps Courier Hubs Link */}
+            <button
+              type="button"
+              onClick={() => setIsMapModalOpen(true)}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 text-[11px] font-semibold border border-emerald-800/80 transition-colors cursor-pointer"
+              title={language === "bn" ? "গুগল ম্যাপে কুরিয়ার হাব ও ডেলিভারি পয়েন্ট" : "Courier Hubs on Google Maps"}
+            >
+              <MapPin className="w-3 h-3 text-emerald-400" />
+              <span>{language === "bn" ? "কুরিয়ার ম্যাপ" : "Courier Map"}</span>
+            </button>
+
             {/* Language Switch */}
             <button
               onClick={toggleLanguage}
@@ -289,8 +277,8 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Main Header Row */}
-      <div className="bg-[#f2f7f4]/95 dark:bg-zinc-900/95 backdrop-blur-md border-b border-emerald-900/10 dark:border-zinc-800 transition-colors">
+      {/* Main Header Row - relative z-50 ensures dropdown stays above secondary bar */}
+      <div className="relative z-50 bg-[#f2f7f4]/95 dark:bg-zinc-900/95 backdrop-blur-md border-b border-emerald-900/10 dark:border-zinc-800 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-18 sm:h-20 gap-3 sm:gap-6">
             {/* Left: Official Nirapod Kroy Logo with Handshake Emblem */}
@@ -335,7 +323,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </a>
 
-            {/* Center: Search Bar with Category Dropdown attached (Matching Screenshot 1) */}
+            {/* Center: Search Bar with Category Dropdown attached (Matching Screenshot) */}
             <div className="flex-1 max-w-2xl mx-2 hidden lg:flex items-center gap-2">
               <div className="relative flex-1">
                 <input
@@ -375,26 +363,30 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
 
-              {/* Category Dropdown Pill beside Search (Screenshot 1) */}
+              {/* Exact [ All Products ^ ] Pill Button Uploaded by User */}
               <div className="relative shrink-0" ref={searchCatDropdownRef}>
                 <button
                   type="button"
                   id="search-category-dropdown-btn"
-                  onClick={() => setIsSearchCatDropdownOpen(prev => !prev)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-zinc-100/90 dark:bg-zinc-800/80 border transition-all cursor-pointer ${
-                    isSearchCatDropdownOpen
-                      ? "border-[#d38f18] text-[#d38f18] dark:text-amber-400 ring-2 ring-[#d38f18]/20 bg-white dark:bg-zinc-900"
-                      : "border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:border-[#d38f18]/50"
-                  }`}
+                  onClick={() => setIsSearchCatDropdownOpen((prev) => !prev)}
+                  className="flex items-center gap-1 px-4 py-2 rounded-full border-2 border-[#d38f18] bg-white dark:bg-zinc-900 text-[#d38f18] font-bold text-xs sm:text-sm hover:bg-amber-50/70 dark:hover:bg-amber-950/30 shadow-xs transition-all cursor-pointer select-none"
                   aria-expanded={isSearchCatDropdownOpen}
                 >
-                  <span className="max-w-[130px] truncate">{getCategoryDropdownLabel(selectedCategory, language)}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${isSearchCatDropdownOpen ? "rotate-180 text-emerald-500" : ""}`} />
+                  <span className="max-w-[130px] truncate">
+                    {selectedCategory === "All"
+                      ? (language === "bn" ? "সকল পণ্য" : "All Products")
+                      : getCategoryName(selectedCategory)}
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-[#d38f18] transition-transform duration-200 ${
+                      isSearchCatDropdownOpen ? "rotate-180" : ""
+                    }`}
+                  />
                 </button>
 
-                {/* Dropdown Menu (Matching Screenshot 1) */}
+                {/* Dropdown Menu - Clean, Floating on top of all bars with z-[9999] */}
                 {isSearchCatDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-1.5 z-50 animate-fadeIn max-h-84 overflow-y-auto">
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-2 z-[9999] animate-fadeIn max-h-[70vh] overflow-y-auto">
                     <button
                       type="button"
                       onClick={() => {
@@ -403,15 +395,15 @@ export const Header: React.FC<HeaderProps> = ({
                       }}
                       className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors ${
                         selectedCategory === "All"
-                          ? "bg-blue-600 text-white font-bold"
+                          ? "bg-[#d38f18] text-white font-bold"
                           : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                       }`}
                     >
-                      <span>{getCategoryDropdownLabel("All", language)}</span>
+                      <span>{language === "bn" ? "সকল পণ্য (All Products)" : "All Products"}</span>
                       {selectedCategory === "All" && <span className="text-[10px]">✓</span>}
                     </button>
 
-                    {/* Offer Zone in Search Dropdown */}
+                    {/* Offer Zone */}
                     <button
                       type="button"
                       onClick={() => {
@@ -419,13 +411,17 @@ export const Header: React.FC<HeaderProps> = ({
                         setIsSearchCatDropdownOpen(false);
                       }}
                       className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors ${
-                        selectedCategory.toLowerCase() === "offer zone" || selectedCategory.toLowerCase() === "offer-zone"
+                        selectedCategory.toLowerCase() === "offer zone" ||
+                        selectedCategory.toLowerCase() === "offer-zone"
                           ? "bg-amber-500 text-zinc-950 font-bold"
                           : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                       }`}
                     >
-                      <span>{getCategoryDropdownLabel("Offer Zone", language)}</span>
-                      {(selectedCategory.toLowerCase() === "offer zone" || selectedCategory.toLowerCase() === "offer-zone") && <span className="text-[10px]">✓</span>}
+                      <span>🔥 {language === "bn" ? "অফার জোন (Offer Zone)" : "Offer Zone"}</span>
+                      {(selectedCategory.toLowerCase() === "offer zone" ||
+                        selectedCategory.toLowerCase() === "offer-zone") && (
+                        <span className="text-[10px]">✓</span>
+                      )}
                     </button>
 
                     {/* Groceries & Food with 8 Subcategories */}
@@ -442,7 +438,7 @@ export const Header: React.FC<HeaderProps> = ({
                             : "text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/40"
                         }`}
                       >
-                        <span>🛒 {getCategoryDropdownLabel(GROCERIES_PARENT, language)}</span>
+                        <span>🛒 {language === "bn" ? "মুদি ও খাদ্য (Groceries & Food)" : "Groceries & Food"}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200/80 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-bold">
                           {language === "bn" ? "৮ উপ-ক্যাটাগরি" : "8 Subcategories"}
                         </span>
@@ -465,7 +461,7 @@ export const Header: React.FC<HeaderProps> = ({
                                   : "text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 hover:text-emerald-600 font-medium"
                               }`}
                             >
-                              <span>• {getCategoryDropdownLabel(sub, language)}</span>
+                              <span>• {getCategoryName(sub)}</span>
                               {isSubSelected && <span className="text-[10px]">✓</span>}
                             </button>
                           );
@@ -475,8 +471,15 @@ export const Header: React.FC<HeaderProps> = ({
 
                     {/* Other Categories */}
                     {categories
-                      .filter(c => c !== "All" && c !== "Offer Zone" && c !== "Groceries" && c !== GROCERIES_PARENT && !isGrocerySubcategory(c))
-                      .map(cat => {
+                      .filter(
+                        (c) =>
+                          c !== "All" &&
+                          c !== "Offer Zone" &&
+                          c !== "Groceries" &&
+                          c !== GROCERIES_PARENT &&
+                          !isGrocerySubcategory(c)
+                      )
+                      .map((cat) => {
                         const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
                         return (
                           <button
@@ -488,11 +491,11 @@ export const Header: React.FC<HeaderProps> = ({
                             }}
                             className={`w-full text-left px-4 py-2.5 text-xs font-semibold flex items-center justify-between transition-colors ${
                               isSelected
-                                ? "bg-blue-600 text-white font-bold"
+                                ? "bg-[#d38f18] text-white font-bold"
                                 : "text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                             }`}
                           >
-                            <span>{getCategoryDropdownLabel(cat, language)}</span>
+                            <span>{getCategoryName(cat)}</span>
                             {isSelected && <span className="text-[10px]">✓</span>}
                           </button>
                         );
@@ -749,7 +752,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Secondary Bar: Dark Green / Teal Bar (Visible only on PC/Mac desktop, hidden on Phone & Tablet as requested) */}
-      <div className="hidden lg:block bg-[#0b2923] text-white border-b border-[#071f1a] relative z-40 overflow-visible">
+      <div className="hidden lg:block bg-[#0b2923] text-white border-b border-[#071f1a] relative z-10 overflow-visible">
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 relative overflow-visible flex items-center gap-1 sm:gap-2">
           {/* 1. STABLE PINNED HOME BUTTON - Outside scroll container, ALWAYS stays in place and never moves */}
           <div className="shrink-0 flex items-center">
@@ -1033,6 +1036,23 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   onClick={() => {
                     setIsMoreOpen(false);
+                    setIsMapModalOpen(true);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-900 dark:text-emerald-200 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer border border-emerald-500/20"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{language === "bn" ? "কুরিয়ার হাব ও ম্যাপ (Google Maps)" : "Courier Hubs & Maps"}</span>
+                  </div>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-400 text-zinc-950 font-black text-[9px] uppercase">
+                    Maps
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMoreOpen(false);
                     const footerSection = document.getElementById("about-us-section");
                     if (footerSection) {
                       footerSection.scrollIntoView({ behavior: "smooth" });
@@ -1199,6 +1219,12 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       )}
+
+      {/* Google Maps Courier Hubs Modal */}
+      <DeliveryMapModal
+        isOpen={isMapModalOpen}
+        onClose={() => setIsMapModalOpen(false)}
+      />
     </header>
   );
 };
