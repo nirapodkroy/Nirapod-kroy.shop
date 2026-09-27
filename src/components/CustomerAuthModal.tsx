@@ -86,7 +86,7 @@ export const CustomerAuthModal: React.FC = () => {
           <div className="p-5 sm:p-8 pb-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center bg-white shadow-sm border border-emerald-100 dark:border-emerald-900/40 shrink-0">
+                <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center bg-white shadow-sm shrink-0">
                   <img
                     src="/logo.png"
                     alt="Nirapod Kroy Logo"

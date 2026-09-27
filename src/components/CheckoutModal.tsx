@@ -397,7 +397,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             /* Order Placed Success Confirmation Screen */
             <div className="p-6 sm:p-8 text-center space-y-6 overflow-y-auto">
               <div className="relative w-20 h-20 mx-auto">
-                <div className="w-20 h-20 rounded-full overflow-hidden bg-white shadow-lg border-2 border-emerald-500/30 flex items-center justify-center p-1">
+                <div className="w-20 h-20 rounded-full overflow-hidden bg-white shadow-lg flex items-center justify-center">
                   <img
                     src="/logo.png"
                     alt="Nirapod Kroy Logo"
@@ -516,7 +516,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <form onSubmit={handleSubmitOrder} className="p-6 sm:p-8 overflow-y-auto space-y-6">
               {/* Header Title */}
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full overflow-hidden bg-white shadow-sm border border-emerald-100 dark:border-emerald-900/40 flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-full overflow-hidden bg-white shadow-sm flex items-center justify-center shrink-0">
                   <img
                     src="/logo.png"
                     alt="Nirapod Kroy Logo"

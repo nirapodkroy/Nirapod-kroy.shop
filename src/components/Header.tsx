@@ -292,7 +292,7 @@ export const Header: React.FC<HeaderProps> = ({
               title="Nirapod Kroy - Home"
             >
               {/* Official Nirapod Kroy Handshake Logo Badge */}
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden flex items-center justify-center shadow-md bg-white border-2 border-emerald-100 dark:border-emerald-900/50 group-hover:scale-105 transition-transform shrink-0">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden flex items-center justify-center shadow-md bg-white group-hover:scale-105 transition-transform shrink-0">
                 <img
                   src="/logo.png"
                   alt="Nirapod Kroy Logo"
@@ -863,8 +863,18 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Header */}
               <div className="flex items-center justify-between pb-3.5 border-b border-zinc-100 dark:border-zinc-800">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-bold shadow-xs">
-                    <ShieldCheck className="w-5 h-5 text-white" />
+                  <div className="w-9 h-9 rounded-full bg-white dark:bg-zinc-800 shadow-xs shrink-0 overflow-hidden flex items-center justify-center">
+                    <img
+                      src="/logo.png"
+                      alt="Nirapod Kroy"
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (target.src.endsWith(".png")) {
+                          target.src = "/logo.svg";
+                        }
+                      }}
+                    />
                   </div>
                   <div className="flex flex-col">
                     <div className="flex items-center gap-1 font-extrabold text-sm sm:text-base leading-none">

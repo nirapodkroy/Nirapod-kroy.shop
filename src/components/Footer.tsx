@@ -152,7 +152,7 @@ export const Footer: React.FC<FooterProps> = ({
           {/* Brand Info */}
           <div className="col-span-2">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center shadow-md bg-white border border-emerald-100 dark:border-emerald-900/40 shrink-0">
+              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center shadow-md bg-white shrink-0">
                 <img
                   src="/logo.png"
                   alt="Nirapod Kroy Logo"

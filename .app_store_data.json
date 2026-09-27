@@ -1,6 +1,88 @@
 {
   "products": [
     {
+      "id": "prod-mujkh3fh",
+      "title": "Long Sleeve T-Shirt",
+      "description": "Long Sleeve T-Shirt\n\nProduct Type: T-Shirt\nFabrics: Synthetic (Type of Jersey)\nSleeve: Long\nGender: Men",
+      "price": 320,
+      "regularPrice": 450,
+      "category": "Long Sleeve T-Shirt",
+      "parentCategory": "Fashion",
+      "stock": 20,
+      "imageUrl": "https://res.cloudinary.com/dwvcatty/image/upload/v1790498093/1697045042_L_11.jpg",
+      "images": [
+        "https://res.cloudinary.com/dwvcatty/image/upload/v1790498093/1697045042_L_11.jpg",
+        "https://res.cloudinary.com/dwvcatty/image/upload/v1790498093/1697045042_L_9.jpg",
+        "https://res.cloudinary.com/dwvcatty/image/upload/v1790498093/1697045043_L_13.jpg",
+        "https://res.cloudinary.com/dwvcatty/image/upload/v1790498093/1697045042_L_10.jpg",
+        "https://res.cloudinary.com/dwvcatty/image/upload/v1790498093/1697045042_L_2.jpg",
+        "https://res.cloudinary.com/dwvcatty/image/upload/v1790498093/1697045042_L_5.jpg"
+      ],
+      "rating": 4.9,
+      "ratingCount": 39,
+      "badge": "New",
+      "featured": true,
+      "isActive": true,
+      "isAffiliate": false,
+      "isOfferZone": true,
+      "hasSizes": true,
+      "sizes": [
+        "M",
+        "L",
+        "XL",
+        "XXL"
+      ],
+      "sizeChart": {
+        "title": "টি-শার্ট / পোলো (M - XXL)",
+        "unit": "ইঞ্চি (Inches)",
+        "columns": [
+          "M",
+          "L",
+          "XL",
+          "XXL"
+        ],
+        "rows": [
+          {
+            "name": "বুক (Chest)",
+            "values": {
+              "M": "38\"",
+              "L": "40\"",
+              "XL": "42\"",
+              "XXL": "44\""
+            }
+          },
+          {
+            "name": "লম্বা (Length)",
+            "values": {
+              "M": "27\"",
+              "L": "28\"",
+              "XL": "29\"",
+              "XXL": "30\""
+            }
+          },
+          {
+            "name": "কাঁধ (Shoulder)",
+            "values": {
+              "M": "16.5\"",
+              "L": "17.5\"",
+              "XL": "18.5\"",
+              "XXL": "19.5\""
+            }
+          },
+          {
+            "name": "হাতা (Sleeve)",
+            "values": {
+              "M": "8\"",
+              "L": "8.5\"",
+              "XL": "9\"",
+              "XXL": "9.5\""
+            }
+          }
+        ],
+        "note": "* সকল মাপ প্রস্তুতকারক নির্দেশিকা অনুযায়ী প্রদান করা হয়েছে।"
+      }
+    },
+    {
       "id": "prod-mudksgm8",
       "title": "Exclusive Premium Qualityful full sleeve Cotton offichial Formal juri Check Shirt for Man's",
       "description": "Exclusive Premium Qualityful full sleeve Cotton offichial Formal juri Check Shirt for Man's\n\nChoice Qualityful full sleeve Cotton offichial Formal juri Check Shirt for Man's\nMaterial: Cotton\nFabric Classification :Cotton\nPattern: SolidColor\nCollar: SquareNeck\nColour :As given picture\nSleeveLength: LongSleeve\nPlateType: Formal\nSalesChannelType :E-commerceOnlySellsOnline\nMaterialComposition :100%Cotton\nSize:M,L,XL\nM-long:29\",body:42\"\nL-long:30\",body:44\"\nXL-long:31\",body:46",

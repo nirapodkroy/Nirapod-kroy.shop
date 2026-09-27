@@ -37,60 +37,60 @@ const BANNER_SLIDES: UserBannerSlide[] = [
   {
     id: 1,
     name: "shop_1",
+    category: "Ladies Hoodie",
+    dealsCategory: "Ladies Hoodie",
+    title: {
+      bn: "হুডি ও উইন্টার কালেকশন - Ladies Hoodie & Winter Wear",
+      en: "Ladies Hoodie & Winter Fashion Collection"
+    },
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432289/shop_1.jpg",
+    fallbackImage: "/images/banners/shop_1.jpg",
+    altText: "নিরাপদ ক্রয় ব্যানার ১ - হুডি ও উইন্টার কালেকশন"
+  },
+  {
+    id: 2,
+    name: "ss_banner",
+    category: "Electronics & Gadgets",
+    dealsCategory: "Electronics & Gadgets",
+    title: {
+      bn: "স্মার্ট টেক ও ইলেকট্রনিক্স গ্যাজেটস - Smart Electronics & Gadgets",
+      en: "Smart Electronics & Tech Accessories"
+    },
+    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432292/ss.jpg",
+    fallbackImage: "/images/banners/ss.jpg",
+    altText: "নিরাপদ ক্রয় ব্যানার ২ - স্মার্ট গ্যাজেটস ও এক্সেসরিজ"
+  },
+  {
+    id: 3,
+    name: "shop_4",
     category: "All",
     dealsCategory: "Offer Zone",
     title: {
       bn: "Nirapod Kroy (নিরাপদ ক্রয়) - সব ধরনের পণ্যের বিশ্বস্ত বাজার",
       en: "Nirapod Kroy - Your Trusted Shopping Destination"
     },
-    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432289/shop_1.jpg",
-    fallbackImage: "/images/banners/shop_1.jpg",
-    altText: "নিরাপদ ক্রয় ব্যানার ১ - সব পণ্যের বিশ্বস্ত অনলাইন শপ"
-  },
-  {
-    id: 2,
-    name: "ss_banner",
-    category: "Offer Zone",
-    dealsCategory: "Offer Zone",
-    title: {
-      bn: "বিশেষ আকর্ষণীয় অফার ও ডিসকাউন্ট - Special Deals & Offers",
-      en: "Special Deals & Mega Discounts - Nirapod Kroy"
-    },
-    image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432292/ss.jpg",
-    fallbackImage: "/images/banners/ss.jpg",
-    altText: "নিরাপদ ক্রয় ব্যানার ২ - আকর্ষণীয় অফার"
-  },
-  {
-    id: 3,
-    name: "shop_4",
-    category: "Fashion",
-    dealsCategory: "Offer Zone",
-    title: {
-      bn: "প্রিমিয়াম ফ্যাশন ও পোশাক কালেকশন - Fashion & Lifestyle",
-      en: "Premium Fashion & Lifestyle Collection"
-    },
     image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432293/shop_4.jpg",
     fallbackImage: "/images/banners/shop_4.jpg",
-    altText: "নিরাপদ ক্রয় ব্যানার ৩ - প্রিমিয়াম ফ্যাশন"
+    altText: "নিরাপদ ক্রয় ব্যানার ৩ - সব পণ্যের বিশ্বস্ত অনলাইন শপ"
   },
   {
     id: 4,
     name: "shop_3",
-    category: "Electronics",
-    dealsCategory: "Offer Zone",
+    category: "Fashion",
+    dealsCategory: "Fashion",
     title: {
-      bn: "স্মার্ট টেক ও ইলেকট্রনিক্স গ্যাজেটস - Smart Electronics",
-      en: "Smart Electronics & Tech Accessories"
+      bn: "স্টাইলিশ ফ্যাশন, পোশাক ও লাইফস্টাইল - Fashion & Lifestyle",
+      en: "Premium Fashion & Lifestyle Collection"
     },
     image: "https://res.cloudinary.com/dwvcatty/image/upload/v1790432294/shop_3.jpg",
     fallbackImage: "/images/banners/shop_3.jpg",
-    altText: "নিরাপদ ক্রয় ব্যানার ৪ - স্মার্ট গ্যাজেটস"
+    altText: "নিরাপদ ক্রয় ব্যানার ৪ - প্রিমিয়াম ফ্যাশন কালেকশন"
   },
   {
     id: 5,
     name: "shop_2",
     category: "Groceries & Food",
-    dealsCategory: "Offer Zone",
+    dealsCategory: "Groceries & Food",
     title: {
       bn: "স্বাস্থ্যসম্মত খাঁটি খাদ্য ও মুদি পণ্য - Pure Groceries & Food",
       en: "Healthy Groceries & Pure Food Essentials"
@@ -154,6 +154,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const handleTouchStart = (e: React.TouchEvent) => {
     setIsPaused(true);
     touchStartX.current = e.targetTouches[0].clientX;
+    touchEndX.current = null;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -162,13 +163,21 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
   const handleTouchEnd = () => {
     setIsPaused(false);
-    if (!touchStartX.current || !touchEndX.current) return;
-    const distance = touchStartX.current - touchEndX.current;
-    const minSwipeDistance = 45;
-    if (distance > minSwipeDistance) {
-      nextSlide();
-    } else if (distance < -minSwipeDistance) {
-      prevSlide();
+    if (touchStartX.current === null) return;
+    if (touchEndX.current !== null) {
+      const distance = touchStartX.current - touchEndX.current;
+      const minSwipeDistance = 45;
+      if (distance > minSwipeDistance) {
+        nextSlide();
+        touchStartX.current = null;
+        touchEndX.current = null;
+        return;
+      } else if (distance < -minSwipeDistance) {
+        prevSlide();
+        touchStartX.current = null;
+        touchEndX.current = null;
+        return;
+      }
     }
     touchStartX.current = null;
     touchEndX.current = null;
@@ -219,6 +228,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 />
               </motion.div>
             </AnimatePresence>
+
+            {/* Subtle Interactive Explore Pill Tag */}
+            <div className="absolute top-2.5 right-2.5 sm:top-4 sm:right-4 z-20 pointer-events-none">
+              <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 text-[10px] sm:text-xs font-bold shadow-lg transition-transform group-hover:scale-105">
+                <span>{language === "bn" ? "ব্রাউজ করুন" : "Explore"}</span>
+                <ChevronRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400" />
+              </span>
+            </div>
 
             {/* Slide Navigation Left/Right Arrows - visible on desktop hover, touchable on mobile */}
             <div className="absolute inset-y-0 left-0 right-0 z-20 flex items-center justify-between px-2 sm:px-4 pointer-events-none">
