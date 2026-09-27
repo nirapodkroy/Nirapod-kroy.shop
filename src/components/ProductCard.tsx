@@ -31,6 +31,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const secondaryImage = product.images && product.images.length > 1 ? product.images[1] : null;
   const totalImages = product.images && product.images.length > 0 ? product.images.length : 1;
 
+  // Sanitize and clean size pills for uniform single-row rendering without grid distortion
+  const cleanSizes = React.useMemo(() => {
+    if (!product.sizes || product.sizes.length === 0) return [];
+    const results: string[] = [];
+    for (const raw of product.sizes) {
+      const s = String(raw).trim();
+      if (!s || /^long:/i.test(s)) continue;
+      // If it contains "Chest" or "Long" or measurement descriptors, extract just the size badge
+      if (s.includes("Chest") || s.includes("Long") || s.includes("বুক")) {
+        const match = s.match(/\b(XS|S|M|L|XL|XXL|XXXL|[0-9]{2})\b/i);
+        const label = match ? match[1].toUpperCase() : s.split(/[-:]/)[0].trim();
+        if (label && !results.includes(label)) results.push(label);
+      } else {
+        const label = s.length > 10 ? s.slice(0, 10) : s;
+        if (!results.includes(label)) results.push(label);
+      }
+    }
+    return results;
+  }, [product.sizes]);
+
   const handleCardClick = () => {
     if (onProductClick) {
       onProductClick(product);
@@ -43,10 +63,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     <div
       id={`product-card-${product.id}`}
       onClick={handleCardClick}
-      className="group relative flex flex-col rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+      className="group relative flex flex-col h-full rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
     >
       {/* Product Image with Hover Zoom */}
-      <div className="relative aspect-square w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800/60">
+      <div className="relative aspect-square w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800/60 shrink-0">
         {/* Primary Image */}
         <img
           src={product.imageUrl || (product.images && product.images[0]) || "/images/products/prod-shirt-0.jpg"}
@@ -140,9 +160,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         )}
       </div>
 
-      {/* Product Info */}
+      {/* Product Info - Flex-1 container for uniform height */}
       <div className="flex flex-col flex-1 p-2.5 sm:p-4 md:p-5">
-        <div className="flex items-center justify-between gap-1.5 text-xs text-zinc-400 dark:text-zinc-500 mb-1">
+        <div className="flex items-center justify-between gap-1.5 text-xs text-zinc-400 dark:text-zinc-500 mb-1 h-5 sm:h-6 shrink-0">
           {/* Category Tag & Product Code */}
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <span className="font-semibold uppercase tracking-wider text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 sm:px-2 py-0.5 rounded-md truncate max-w-[110px] sm:max-w-none">
@@ -162,91 +182,99 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </div>
 
         <h3
-          className="font-bold text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm md:text-base line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors"
+          className="font-bold text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm md:text-base line-clamp-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors shrink-0"
           title={product.title}
         >
           {product.title}
         </h3>
 
-        <p className="mt-0.5 sm:mt-1 text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+        <p className="mt-0.5 sm:mt-1 text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed min-h-[30px] sm:min-h-[34px] shrink-0">
           {product.description}
         </p>
 
-        {/* Available Sizes Preview */}
-        {product.sizes && product.sizes.length > 0 && (
-          <div className="mt-1.5 sm:mt-2 flex items-center gap-1 flex-wrap">
-            <span className="text-[10px] sm:text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
-              সাইজ:
+        {/* Available Sizes Preview - Always a uniform fixed-height row */}
+        {cleanSizes.length > 0 ? (
+          <div className="mt-1.5 sm:mt-2 flex items-center gap-1 overflow-hidden h-6 shrink-0">
+            <span className="text-[10px] sm:text-[11px] font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
+              {language === "bn" ? "সাইজ:" : "Size:"}
             </span>
-            {product.sizes.slice(0, 5).map((s) => (
-              <span
-                key={s}
-                className="px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10px] font-bold border border-zinc-200/80 dark:border-zinc-700/80"
-              >
-                {s}
-              </span>
-            ))}
-            {product.sizes.length > 5 && (
-              <span className="text-[10px] text-zinc-400">+{product.sizes.length - 5}</span>
-            )}
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              {cleanSizes.slice(0, 5).map((s) => (
+                <span
+                  key={s}
+                  className="px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10px] font-bold border border-zinc-200/80 dark:border-zinc-700/80 whitespace-nowrap shrink-0"
+                  title={s}
+                >
+                  {s}
+                </span>
+              ))}
+              {cleanSizes.length > 5 && (
+                <span className="text-[10px] text-zinc-400 shrink-0">+{cleanSizes.length - 5}</span>
+              )}
+            </div>
           </div>
+        ) : (
+          <div className="h-6 mt-1.5 sm:mt-2 shrink-0" aria-hidden="true" />
         )}
 
-        {/* Pricing */}
-        <div className="mt-2 sm:mt-4 flex items-baseline gap-1.5 sm:gap-2 flex-wrap">
-          <span className="font-extrabold text-base sm:text-lg md:text-xl text-zinc-900 dark:text-zinc-50 font-display">
-            {formatPrice(product.price)}
-          </span>
-          {product.regularPrice && product.regularPrice > product.price && (
-            <span className="text-[11px] sm:text-xs md:text-sm text-zinc-400 dark:text-zinc-500 line-through">
-              {formatPrice(product.regularPrice)}
+        {/* Bottom Pinned Area: Pricing & Action Buttons (Pinned to the exact same baseline across all cards) */}
+        <div className="mt-auto pt-2.5 sm:pt-3">
+          {/* Pricing */}
+          <div className="flex items-baseline gap-1.5 sm:gap-2 flex-wrap min-h-[24px] sm:min-h-[28px] mb-2 sm:mb-2.5">
+            <span className="font-extrabold text-base sm:text-lg md:text-xl text-zinc-900 dark:text-zinc-50 font-display">
+              {formatPrice(product.price)}
             </span>
-          )}
-        </div>
+            {product.regularPrice && product.regularPrice > product.price && (
+              <span className="text-[11px] sm:text-xs md:text-sm text-zinc-400 dark:text-zinc-500 line-through">
+                {formatPrice(product.regularPrice)}
+              </span>
+            )}
+          </div>
 
-        {/* Action Buttons: Add to Cart & Buy Now */}
-        <div className="mt-2.5 sm:mt-4 pt-2 sm:pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
-          <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-            {/* Add to Cart Button (stopPropagation prevents card navigation) */}
-            <button
-              id={`add-to-cart-${product.id}`}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                addItem(product);
-              }}
-              className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 px-1 sm:px-2 rounded-xl text-[10px] sm:text-xs font-semibold transition-all duration-200 cursor-pointer min-h-[38px] sm:min-h-[42px] ${
-                inCartItem
-                  ? "bg-orange-50 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 border border-orange-500/30 font-bold"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-              }`}
-            >
-              {inCartItem ? (
-                <>
-                  <Check className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{language === "bn" ? `কার্ট (${inCartItem.quantity})` : `In Cart (${inCartItem.quantity})`}</span>
-                </>
-              ) : (
-                <>
-                  <ShoppingCart className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{t("add_to_cart")}</span>
-                </>
-              )}
-            </button>
+          {/* Action Buttons: Add to Cart & Buy Now */}
+          <div className="pt-2 sm:pt-2.5 border-t border-zinc-100 dark:border-zinc-800/80">
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+              {/* Add to Cart Button */}
+              <button
+                id={`add-to-cart-${product.id}`}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addItem(product);
+                }}
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 px-1 sm:px-2 rounded-xl text-[10px] sm:text-xs font-semibold transition-all duration-200 cursor-pointer min-h-[38px] sm:min-h-[42px] ${
+                  inCartItem
+                    ? "bg-orange-50 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 border border-orange-500/30 font-bold"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                }`}
+              >
+                {inCartItem ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{language === "bn" ? `কার্ট (${inCartItem.quantity})` : `In Cart (${inCartItem.quantity})`}</span>
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{t("add_to_cart")}</span>
+                  </>
+                )}
+              </button>
 
-            {/* Buy Now Button (stopPropagation prevents card navigation, opens checkout directly) */}
-            <button
-              id={`buy-now-${product.id}`}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                buyNow(product);
-              }}
-              className="flex items-center justify-center gap-1 py-2 sm:py-2.5 px-1 sm:px-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:from-orange-700 active:to-amber-700 text-white font-extrabold text-[10px] sm:text-xs tracking-wide shadow-sm shadow-orange-500/30 hover:shadow-md transition-all active:scale-[0.98] cursor-pointer min-h-[38px] sm:min-h-[42px]"
-            >
-              <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
-              <span className="truncate">{t("buy_now")}</span>
-            </button>
+              {/* Buy Now Button */}
+              <button
+                id={`buy-now-${product.id}`}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  buyNow(product);
+                }}
+                className="flex items-center justify-center gap-1 py-2 sm:py-2.5 px-1 sm:px-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:from-orange-700 active:to-amber-700 text-white font-extrabold text-[10px] sm:text-xs tracking-wide shadow-sm shadow-orange-500/30 hover:shadow-md transition-all active:scale-[0.98] cursor-pointer min-h-[38px] sm:min-h-[42px]"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
+                <span className="truncate">{t("buy_now")}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -640,10 +640,9 @@ export const DEFAULT_PRODUCTS: Product[] = [
     "isOfferZone": true,
     "hasSizes": true,
     "sizes": [
-      "M- Chest: 36",
-      "Long: 26 L- Chest: 38",
-      "Long: 27 XL- Chest: 40",
-      "Long: 28"
+      "M",
+      "L",
+      "XL"
     ]
   }
 ];

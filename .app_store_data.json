@@ -639,10 +639,9 @@
       "isOfferZone": true,
       "hasSizes": true,
       "sizes": [
-        "M- Chest: 36",
-        "Long: 26 L- Chest: 38",
-        "Long: 27 XL- Chest: 40",
-        "Long: 28"
+        "M",
+        "L",
+        "XL"
       ]
     }
   ],
@@ -801,6 +800,66 @@
   "webhookUrl": "https://script.google.com/macros/s/AKfycbzzGJV2nI7grFnBo6OjDw_vJ20DylCfLg6r8ZExsawP4f17rFn5rfKp870TifdtgV4/exec",
   "subscribers": [],
   "userTracking": [
+    {
+      "id": "v_mujur5jq_n0gw58_home",
+      "time": "9/27/2026, 7:26:56 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "103.12.173.138",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "সক্রিয় রয়েছে (Active)...",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mujur5jq_n0gw58_home",
+      "updatedAt": 1790515616844
+    },
+    {
+      "id": "v_mujur5iu_thgkgj_home",
+      "time": "9/27/2026, 7:26:56 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "103.12.173.136",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "1 সেকেন্ড",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mujur5iu_thgkgj_home",
+      "updatedAt": 1790515616846
+    },
+    {
+      "id": "v_mujuq3n9_ecbvu3_home",
+      "time": "9/27/2026, 7:26:15 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "103.12.173.138",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "49 সেকেন্ড",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mujuq3n9_ecbvu3_home",
+      "updatedAt": 1790515616674
+    },
+    {
+      "id": "v_mujuq3lq_uz8s0t_home",
+      "time": "9/27/2026, 7:26:15 PM",
+      "page": "হোমপেজ (Home)",
+      "ip": "103.12.173.136",
+      "location": "Bangladesh",
+      "device": "Desktop / PC",
+      "os": "Windows 10/11",
+      "browser": "Chrome",
+      "timeSpent": "1 সেকেন্ড",
+      "referrer": "https://aistudio.google.com/",
+      "screen": "1366x768",
+      "sessionId": "v_mujuq3lq_uz8s0t_home",
+      "updatedAt": 1790515575461
+    },
     {
       "id": "v_muiiavuw_n73psm_home",
       "time": "9/26/2026, 8:50:34 PM",

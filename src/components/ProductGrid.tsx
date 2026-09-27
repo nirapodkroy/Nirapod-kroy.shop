@@ -892,7 +892,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5 sm:gap-5 md:gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5 sm:gap-5 md:gap-6 items-stretch">
             {filteredAndSorted.map((product) => (
               <ProductCard
                 key={product.id}
