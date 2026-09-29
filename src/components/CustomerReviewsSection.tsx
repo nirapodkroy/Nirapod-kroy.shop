@@ -31,8 +31,10 @@ export interface CustomerReview {
   rating: number;
   productName: string;
   category: "all" | "food" | "dates" | "oil_ghee" | "fashion" | "gadgets";
+  comment?: string;
   commentBn: string;
   commentEn?: string;
+  date?: string;
   dateBn: string;
   dateEn?: string;
   isVerified: boolean;
@@ -215,8 +217,10 @@ const formatReviewItem = (r: any): CustomerReview => {
     rating: Number(r.rating) || 5,
     productName: r.productName || "Product",
     category: r.category || "food",
+    comment: r.comment || r.commentBn || r.commentEn || "",
     commentBn: r.comment || r.commentBn || "",
     commentEn: r.commentEn || r.comment || "",
+    date: r.date || new Date().toISOString(),
     dateBn,
     dateEn,
     isVerified: r.isVerified !== false,
@@ -391,6 +395,7 @@ export const CustomerReviewsSection: React.FC = () => {
 
     setIsSubmitting(true);
 
+    const nowIso = new Date().toISOString();
     const payload = {
       name: cleanName,
       email: cleanEmail,
@@ -399,7 +404,8 @@ export const CustomerReviewsSection: React.FC = () => {
       rating: formRating,
       productName: cleanProduct,
       category: formCategory,
-      comment: cleanComment
+      comment: cleanComment,
+      date: nowIso
     };
 
     let newRev: CustomerReview = {
@@ -411,8 +417,10 @@ export const CustomerReviewsSection: React.FC = () => {
       rating: formRating,
       productName: cleanProduct,
       category: formCategory,
+      comment: cleanComment,
       commentBn: cleanComment,
       commentEn: cleanComment,
+      date: nowIso,
       dateBn: "এইমাত্র",
       dateEn: "Just now",
       isVerified: true,
@@ -434,13 +442,11 @@ export const CustomerReviewsSection: React.FC = () => {
           newRev = formatReviewItem(data.review);
         }
       } else {
-        // Fallback to client mock API and sheets sync
         await handleLocalApi("/api/reviews", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         }).catch(() => null);
-        syncReviewToGoogleSheetsClient(newRev as any).catch(() => {});
       }
     } catch {
       await handleLocalApi("/api/reviews", {
@@ -448,8 +454,10 @@ export const CustomerReviewsSection: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       }).catch(() => null);
-      syncReviewToGoogleSheetsClient(newRev as any).catch(() => {});
     }
+
+    // Always dispatch directly to Google Sheets Webhook "review sheet" tab
+    syncReviewToGoogleSheetsClient(newRev as any).catch(() => {});
 
     const updated = [newRev, ...reviews];
     setReviews(updated);

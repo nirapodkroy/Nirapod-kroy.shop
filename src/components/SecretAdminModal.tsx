@@ -4,7 +4,7 @@ import { useToast } from "../context/ToastContext";
 import { Product, Order, AdminStats, AdminCustomer, UserTrackingEntry, SizeChart, SizeChartRow } from "../types";
 import { DEFAULT_REVIEWS, Review } from "../data/defaultReviews";
 import { SIZE_CHART_PRESETS } from "../utils/sizeChartPresets";
-import { handleLocalApi, syncOrderToGoogleSheets } from "../lib/mockApi";
+import { handleLocalApi, syncOrderToGoogleSheets, syncReviewToGoogleSheetsClient } from "../lib/mockApi";
 import {
   X,
   Lock,
@@ -164,6 +164,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [revFormCategory, setRevFormCategory] = useState<any>("food");
   const [revFormRating, setRevFormRating] = useState<number>(5);
   const [revFormComment, setRevFormComment] = useState("");
+  const [revFormDate, setRevFormDate] = useState("");
   const [revFormIsActive, setRevFormIsActive] = useState<boolean>(true);
   const [revFormIsVerified, setRevFormIsVerified] = useState<boolean>(true);
 
@@ -1933,7 +1934,13 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     try {
       if (editingReview) {
         // Edit existing review
-        const updated = reviews.map(r => r.id === editingReview.id ? { ...r, ...revData } as Review : r);
+        const finalDate = revData.date || editingReview.date || new Date().toISOString();
+        const updatedRev: Review = {
+          ...editingReview,
+          ...revData,
+          date: finalDate
+        };
+        const updated = reviews.map(r => String(r.id).trim() === String(editingReview.id).trim() ? updatedRev : r);
         setReviews(updated);
         try {
           localStorage.setItem("nirapod_customer_reviews_v1", JSON.stringify(updated));
@@ -1943,12 +1950,17 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           window.dispatchEvent(new Event("nirapod_reviews_updated"));
         } catch {}
 
+        // 1. Update on server PUT /api/admin/reviews/:id
         await safeAdminFetch(`/api/admin/reviews/${editingReview.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
-          body: JSON.stringify(revData)
-        });
-        addToast("রিভিউ সফলভাবে আপডেট করা হয়েছে!", "success");
+          body: JSON.stringify(updatedRev)
+        }).catch(() => null);
+
+        // 2. Direct Sync to Google Sheets immediately
+        syncReviewToGoogleSheetsClient(updatedRev).catch(() => {});
+
+        addToast("রিভিউ ও তারিখ সফলভাবে আপডেট এবং গুগল শিটে সেভ হয়েছে!", "success");
       } else {
         // Create new review
         const newRev: Review = {
@@ -1961,7 +1973,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           productName: revData.productName || "Product",
           category: (revData.category as any) || "food",
           comment: revData.comment || "",
-          date: new Date().toISOString(),
+          date: revData.date || new Date().toISOString(),
           isActive: revData.isActive !== false,
           isVerified: true,
           likes: 1
@@ -1976,12 +1988,17 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           window.dispatchEvent(new Event("nirapod_reviews_updated"));
         } catch {}
 
+        // 1. Save on server POST /api/admin/reviews
         await safeAdminFetch("/api/admin/reviews", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
           body: JSON.stringify(newRev)
-        });
-        addToast("নতুন রিভিউ সফলভাবে যোগ করা হয়েছে!", "success");
+        }).catch(() => null);
+
+        // 2. Direct sync to Google Sheets immediately
+        syncReviewToGoogleSheetsClient(newRev).catch(() => {});
+
+        addToast("নতুন রিভিউ সফলভাবে সংরক্ষিত এবং গুগল শিটে সেভ হয়েছে!", "success");
       }
       setIsReviewFormOpen(false);
       setEditingReview(null);
@@ -1990,7 +2007,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  // Push Reviews to GitHub
+  // Push Reviews to GitHub & Google Sheets
   const handlePushReviewsToGitHub = async () => {
     const token = githubToken.trim();
     const cleanRepo = String(githubRepo)
@@ -2001,9 +2018,20 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       .replace(/\/+$/, "");
     const cleanBranch = githubBranch.trim() || "main";
 
+    // Always ensure all reviews are synced to Google Sheets first!
+    for (const r of reviews) {
+      syncReviewToGoogleSheetsClient(r).catch(() => {});
+    }
+
     if (!token || !cleanRepo) {
-      addToast("GitHub Push করতে অনুগ্রহ করে GitHub Tab-এ Token ও Repository সেট করুন।", "error");
-      setActiveTab("github");
+      try {
+        await safeAdminFetch("/api/admin/reviews/sync-sheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
+          body: JSON.stringify({ reviews })
+        });
+      } catch {}
+      addToast("গুগল শিট ও লোকাল স্টোরেজে সকল রিভিউ সফলভাবে সেভ ও পুশ হয়েছে! (GitHub Commit-এর জন্য GitHub ট্যাবে Token সেট করুন)", "success");
       return;
     }
 
@@ -2016,9 +2044,9 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        addToast(`সফলভাবে GitHub-এ ${reviews.length} টি রিভিউ পুশ হয়েছে!`, "success");
+        addToast(`সফলভাবে GitHub ও গুগল শিটে ${reviews.length} টি রিভিউ পুশ হয়েছে!`, "success");
       } else {
-        addToast(`GitHub পুশ ব্যর্থ: ${data.error || "Unknown error"}`, "error");
+        addToast(`GitHub পুশ ব্যর্থ: ${data.error || "Unknown error"} (তবে গুগল শিট ও ডাটাবেজে সেভ হয়েছে)`, "warning");
       }
     } catch (e: any) {
       addToast(`GitHub পুশ এরর: ${e.message}`, "error");
@@ -2027,20 +2055,27 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  // Sync All Reviews to Google Sheets
+  // Sync All Reviews to Google Sheets ("review sheet" tab)
   const handleSyncReviewsToSheets = async () => {
     setIsSyncingReviewsToSheets(true);
     try {
       let count = 0;
       for (const rev of reviews) {
-        await safeAdminFetch("/api/reviews", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(rev)
-        }).catch(() => {});
-        count++;
+        try {
+          await syncReviewToGoogleSheetsClient(rev);
+          count++;
+        } catch {}
       }
-      addToast(`${count} টি রিভিউ গুগল শিটের 'Customer Reviews' ট্যাবে সফলভাবে সিঙ্ক হয়েছে!`, "success");
+
+      try {
+        await safeAdminFetch("/api/admin/reviews/sync-sheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
+          body: JSON.stringify({ reviews })
+        });
+      } catch {}
+
+      addToast(`${reviews.length} টি রিভিউ গুগল শিটের 'review sheet' ট্যাবে সফলভাবে পুশ ও সিঙ্ক হয়েছে!`, "success");
     } catch (e: any) {
       addToast(`গুগল শিট সিঙ্ক এরর: ${e.message}`, "error");
     } finally {
@@ -2065,7 +2100,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ action: "clean_tracking_reviews" })
       });
-      addToast("ইউজার ট্র্যাকিং মেরামত রিকোয়েস্ট সফল! রিভিউগুলো Customer Reviews শিটে স্থানান্তরিত হচ্ছে।", "success");
+      addToast("ইউজার ট্র্যাকিং মেরামত রিকোয়েস্ট সফল! রিভিউগুলো review sheet-এ স্থানান্তরিত হচ্ছে।", "success");
       setTimeout(() => {
         fetchAdminData();
       }, 1500);
@@ -2087,6 +2122,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setRevFormCategory("food");
     setRevFormRating(5);
     setRevFormComment("");
+    setRevFormDate(new Date().toISOString().split("T")[0]);
     setRevFormIsActive(true);
     setRevFormIsVerified(true);
     setIsReviewFormOpen(true);
@@ -2103,6 +2139,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     setRevFormCategory(rev.category || "food");
     setRevFormRating(rev.rating || 5);
     setRevFormComment(rev.comment || "");
+    setRevFormDate(rev.date ? (rev.date.includes("T") ? rev.date.split("T")[0] : rev.date) : new Date().toISOString().split("T")[0]);
     setRevFormIsActive(rev.isActive !== false);
     setRevFormIsVerified(rev.isVerified !== false);
     setIsReviewFormOpen(true);
@@ -3414,8 +3451,12 @@ function doGet(e) {
         });
     }
 
-    // 5. Customer Reviews tab ("Customer Reviews" বা "Reviews" - রিভিউ লোড করা)
-    var revSheet = findSheet(ss, ["Customer Reviews", "customer reviews", "Reviews", "reviews", "গ্রাহক রিভিউ", "রিভিউ"], "review", "order", "custom");
+    // 5. Customer Reviews tab ("review sheet", "review", "Customer Reviews" - রিভিউ লোড করা)
+    var revSheet = findSheet(ss, [
+      "review sheet", "Review Sheet", "review", "Review", 
+      "Customer Reviews", "customer reviews", "Reviews", "reviews", 
+      "গ্রাহক রিভিউ", "রিভিউ"
+    ], "review", "order", "custom");
     if (revSheet && revSheet.getLastRow() > 1) {
       var maxRevRows = Math.min(revSheet.getLastRow() - 1, 300);
       var rRows = revSheet.getRange(2, 1, maxRevRows, Math.min(revSheet.getLastColumn(), 11)).getValues();
@@ -3976,12 +4017,30 @@ function doPost(e) {
     } 
 
     // ===============================================
-    // ৫. কাস্টমার রিভিউ -> strictly "Customer Reviews" ট্যাবে (নাম, ইমেইল, রেটিং, কমেন্ট)
+    // ৫. কাস্টমার রিভিউ -> strictly "review sheet" / "review" ট্যাবে (নাম, ইমেইল, রেটিং, কমেন্ট)
     // ===============================================
     else if (isReview) {
-      var reviewSheet = findSheet(ss, ["Customer Reviews", "customer reviews", "Reviews", "reviews", "গ্রাহক রিভিউ", "রিভিউ"], "review") ||
-                        ss.getSheetByName("Customer Reviews") ||
-                        ss.insertSheet("Customer Reviews");
+      var targetTabName = String(data.sheetTab || data.targetSheet || data.tab || data.target || (e && e.parameter && (e.parameter.tab || e.parameter.target || e.parameter.sheetTab)) || "").trim();
+      var reviewSheet = null;
+      if (targetTabName) {
+        reviewSheet = ss.getSheetByName(targetTabName);
+      }
+      
+      if (!reviewSheet) {
+        reviewSheet = findSheet(ss, [
+          "review sheet", "Review Sheet", "review", "Review", 
+          "Customer Reviews", "customer reviews", "Reviews", "reviews", 
+          "গ্রাহক রিভিউ", "রিভিউ"
+        ], "review", "order", "custom");
+      }
+      
+      if (!reviewSheet) {
+        reviewSheet = ss.getSheetByName("review sheet") || 
+                      ss.getSheetByName("review") || 
+                      ss.getSheetByName("Customer Reviews") || 
+                      ss.insertSheet("review sheet");
+      }
+
       if (reviewSheet.getLastRow() === 0) {
         reviewSheet.appendRow([
           "Review ID", "Date/Time", "Customer Name", "Customer Email", "Customer Phone", 
@@ -3990,19 +4049,19 @@ function doPost(e) {
         reviewSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#d9ead3");
       }
 
-      var revId = String(data.id || data.reviewId || ("rev-" + new Date().getTime()));
-      var revDate = data.date || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
-      var revName = data.name || data.customerName || "Customer";
-      var revEmail = data.email || data.customerEmail || "";
-      var revPhone = data.phone || data.customerPhone || "";
-      var revRating = (data.rating ? data.rating + "★" : "5★");
-      var revProduct = data.productName || data.product || "";
-      var revCat = data.category || "All";
-      var revLoc = data.location || "";
-      var revComment = data.comment || data.reviewComment || "";
-      var revStatus = data.status || (data.isActive !== false ? "Active" : "Pending");
+      var revId = String(data.id || data.reviewId || (data.sheetRow ? data.sheetRow[0] : "") || ("rev-" + new Date().getTime()));
+      var revDate = data.date || (data.sheetRow ? data.sheetRow[1] : "") || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+      var revName = data.name || data.customerName || (data.sheetRow ? data.sheetRow[2] : "") || "Customer";
+      var revEmail = data.email || data.customerEmail || (data.sheetRow ? data.sheetRow[3] : "") || "";
+      var revPhone = data.phone || data.customerPhone || (data.sheetRow ? data.sheetRow[4] : "") || "";
+      var revRating = (data.rating ? (String(data.rating).indexOf("★") !== -1 ? data.rating : data.rating + "★") : ((data.sheetRow && data.sheetRow[5]) ? data.sheetRow[5] : "5★"));
+      var revProduct = data.productName || data.product || (data.sheetRow ? data.sheetRow[6] : "") || "";
+      var revCat = data.category || (data.sheetRow ? data.sheetRow[7] : "") || "All";
+      var revLoc = data.location || (data.sheetRow ? data.sheetRow[8] : "") || "";
+      var revComment = data.comment || data.reviewComment || (data.sheetRow ? data.sheetRow[9] : "") || "";
+      var revStatus = data.status || (data.sheetRow ? data.sheetRow[10] : "") || (data.isActive !== false ? "Active" : "Pending");
 
-      var rowToAppend = data.sheetRow || [
+      var defaultRevRow = [
         revId,
         revDate,
         revName,
@@ -4016,11 +4075,32 @@ function doPost(e) {
         revStatus
       ];
 
+      var rowToAppend = buildReviewRowByHeaders(reviewSheet, {
+        id: revId,
+        reviewId: revId,
+        date: revDate,
+        name: revName,
+        customerName: revName,
+        email: revEmail,
+        customerEmail: revEmail,
+        phone: revPhone,
+        customerPhone: revPhone,
+        rating: revRating,
+        productName: revProduct,
+        product: revProduct,
+        category: revCat,
+        location: revLoc,
+        comment: revComment,
+        reviewComment: revComment,
+        status: revStatus,
+        sheetRow: data.sheetRow || defaultRevRow
+      }, data.sheetRow || defaultRevRow);
+
       var revUpdated = false;
       if (reviewSheet.getLastRow() > 1 && revId) {
         var existingIds = reviewSheet.getRange(2, 1, reviewSheet.getLastRow() - 1, 1).getValues();
         for (var rIdx = 0; rIdx < existingIds.length; rIdx++) {
-          if (String(existingIds[rIdx][0]).trim() === revId) {
+          if (String(existingIds[rIdx][0]).trim() === revId.trim()) {
             reviewSheet.getRange(rIdx + 2, 1, 1, rowToAppend.length).setValues([rowToAppend]);
             revUpdated = true;
             break;
@@ -4189,9 +4269,15 @@ function cleanUserTrackingReviews() {
   var trackSheet = findSheet(ss, ["user traking", "user tracking", "User Traking", "User Tracking"], "trak") || findSheet(ss, [], "track");
   if (!trackSheet || trackSheet.getLastRow() <= 1) return "ইউজার ট্র্যাকিং শিটে কোনো ডেটা নেই";
 
-  var revSheet = findSheet(ss, ["Customer Reviews", "customer reviews", "Reviews", "reviews"], "review") || 
-                 ss.getSheetByName("Customer Reviews") || 
-                 ss.insertSheet("Customer Reviews");
+  var revSheet = findSheet(ss, [
+    "review sheet", "Review Sheet", "review", "Review", 
+    "Customer Reviews", "customer reviews", "Reviews", "reviews", 
+    "গ্রাহক রিভিউ", "রিভিউ"
+  ], "review", "order", "custom") || 
+  ss.getSheetByName("review sheet") || 
+  ss.getSheetByName("review") || 
+  ss.getSheetByName("Customer Reviews") || 
+  ss.insertSheet("review sheet");
   if (revSheet.getLastRow() === 0) {
     revSheet.appendRow([
       "Review ID", "Date/Time", "Customer Name", "Customer Email", "Customer Phone", 
@@ -4498,6 +4584,75 @@ function buildCustomerRowByHeaders(sheet, data, fallbackArray) {
     // Password (পাসওয়ার্ড)
     else if (h.indexOf("pass") !== -1 || h.indexOf("পাসওয়ার্ড") !== -1) {
       row.push(data.password || (data.sheetRow ? data.sheetRow[6] : "") || "");
+    }
+    else {
+      row.push(colIdx < fallbackArray.length ? fallbackArray[colIdx] : "");
+    }
+  }
+  return row;
+}
+
+// ==========================================
+// ৪.২ রিভিউ শিট ডাইনামিক হেডার-ম্যাপিং ফাংশন (review sheet এর যেকোনো কলাম ক্রম হলেও নির্ভুল কলামে মান বসবে)
+// ==========================================
+function buildReviewRowByHeaders(sheet, data, fallbackArray) {
+  if (!sheet || sheet.getLastRow() < 1) return fallbackArray;
+  var lastCol = Math.max(sheet.getLastColumn(), fallbackArray.length);
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (!headers || headers.length === 0 || !headers[0]) return fallbackArray;
+
+  var row = [];
+  for (var colIdx = 0; colIdx < headers.length; colIdx++) {
+    var rawHeader = String(headers[colIdx] || "").trim();
+    if (!rawHeader) {
+      row.push(colIdx < fallbackArray.length ? fallbackArray[colIdx] : "");
+      continue;
+    }
+    var h = rawHeader.toLowerCase().replace(/[^a-z0-9\u0980-\u09FF]/g, "");
+
+    // ID
+    if (h.indexOf("id") !== -1 || h.indexOf("আইডি") !== -1) {
+      row.push(data.id || data.reviewId || (data.sheetRow ? data.sheetRow[0] : ""));
+    }
+    // Date / Time
+    else if (h.indexOf("date") !== -1 || h.indexOf("time") !== -1 || h.indexOf("তারিখ") !== -1 || h.indexOf("সময়") !== -1) {
+      row.push(data.date || (data.sheetRow ? data.sheetRow[1] : ""));
+    }
+    // Name
+    else if (h.indexOf("name") !== -1 || h.indexOf("customer") !== -1 || h.indexOf("নাম") !== -1 || h.indexOf("গ্রাহক") !== -1) {
+      row.push(data.name || data.customerName || (data.sheetRow ? data.sheetRow[2] : ""));
+    }
+    // Email
+    else if (h.indexOf("email") !== -1 || h.indexOf("mail") !== -1 || h.indexOf("ইমেইল") !== -1) {
+      row.push(data.email || data.customerEmail || (data.sheetRow ? data.sheetRow[3] : ""));
+    }
+    // Phone
+    else if (h.indexOf("phone") !== -1 || h.indexOf("mobile") !== -1 || h.indexOf("ফোন") !== -1 || h.indexOf("মোবাইল") !== -1) {
+      row.push(data.phone || data.customerPhone || (data.sheetRow ? data.sheetRow[4] : ""));
+    }
+    // Rating / Star
+    else if (h.indexOf("rating") !== -1 || h.indexOf("star") !== -1 || h.indexOf("রেটিং") !== -1 || h.indexOf("স্টার") !== -1) {
+      row.push(data.rating ? (String(data.rating).indexOf("★") !== -1 ? data.rating : data.rating + "★") : (data.sheetRow ? data.sheetRow[5] : "5★"));
+    }
+    // Product
+    else if (h.indexOf("product") !== -1 || h.indexOf("item") !== -1 || h.indexOf("পণ্য") !== -1) {
+      row.push(data.productName || data.product || (data.sheetRow ? data.sheetRow[6] : ""));
+    }
+    // Category
+    else if (h.indexOf("cat") !== -1 || h.indexOf("ক্যাটাগরি") !== -1) {
+      row.push(data.category || (data.sheetRow ? data.sheetRow[7] : ""));
+    }
+    // Location / Address
+    else if (h.indexOf("loc") !== -1 || h.indexOf("address") !== -1 || h.indexOf("ঠিকানা") !== -1 || h.indexOf("জেলা") !== -1) {
+      row.push(data.location || (data.sheetRow ? data.sheetRow[8] : ""));
+    }
+    // Comment / Review Text
+    else if (h.indexOf("comment") !== -1 || h.indexOf("review") !== -1 || h.indexOf("মন্তব্য") !== -1 || h.indexOf("মতামত") !== -1) {
+      row.push(data.comment || data.reviewComment || (data.sheetRow ? data.sheetRow[9] : ""));
+    }
+    // Status
+    else if (h.indexOf("status") !== -1 || h.indexOf("স্ট্যাটাস") !== -1 || h.indexOf("active") !== -1) {
+      row.push(data.status || (data.sheetRow ? data.sheetRow[10] : "Active"));
     }
     else {
       row.push(colIdx < fallbackArray.length ? fallbackArray[colIdx] : "");
@@ -6632,6 +6787,24 @@ function cleanAndFixOrderSheetRows() {
                                       <Edit2 className="w-4 h-4 text-sky-400" />
                                     </button>
 
+                                    {/* Push to Sheet Button */}
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          await syncReviewToGoogleSheetsClient(rev);
+                                          addToast(`"${rev.name}" এর রিভিউটি সফলভাবে গুগল শিটের 'review sheet' ট্যাবে পুশ হয়েছে!`, "success");
+                                        } catch (err: any) {
+                                          addToast("গুগল শিটে পুশ ব্যর্থ: " + (err?.message || ""), "error");
+                                        }
+                                      }}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all active:scale-95 cursor-pointer text-xs font-bold"
+                                      title="এই নির্দিষ্ট রিভিউটি গুগল শিটের 'review sheet' ট্যাবে পুশ ও সেভ করুন"
+                                    >
+                                      <Send className="w-3.5 h-3.5" />
+                                      <span>Push</span>
+                                    </button>
+
                                     {/* Delete Button */}
                                     <button
                                       type="button"
@@ -6722,6 +6895,7 @@ function cleanAndFixOrderSheetRows() {
                             addToast("নাম, পণ্য এবং রিভিউ পূরণ আবশ্যক", "error");
                             return;
                           }
+                          const finalDate = revFormDate ? new Date(revFormDate).toISOString() : (editingReview?.date || new Date().toISOString());
                           handleSaveReview({
                             name: revFormName.trim(),
                             email: revFormEmail.trim().toLowerCase(),
@@ -6731,6 +6905,7 @@ function cleanAndFixOrderSheetRows() {
                             category: revFormCategory,
                             rating: revFormRating,
                             comment: revFormComment.trim(),
+                            date: finalDate,
                             isActive: revFormIsActive,
                             isVerified: revFormIsVerified
                           });
@@ -6763,6 +6938,21 @@ function cleanAndFixOrderSheetRows() {
                               {revFormRating} / 5 স্টার
                             </span>
                           </div>
+                        </div>
+
+                        {/* Review Date (dt / তারিখ) */}
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-300 mb-1 flex items-center justify-between">
+                            <span>রিভিউ তারিখ (Review Date / dt) *</span>
+                            <span className="text-[10px] text-emerald-400 font-normal">তারিখ পরিবর্তন (Change Date)</span>
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={revFormDate}
+                            onChange={(e) => setRevFormDate(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
                         </div>
 
                         {/* Name & Email */}

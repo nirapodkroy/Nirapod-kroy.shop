@@ -990,7 +990,7 @@ async function syncNewsletterToGoogleSheets(email: string, source = "Website Foo
   }
 }
 
-// Helper: dispatch customer review to Google Sheets webhook under "Customer Reviews" tab
+// Helper: dispatch customer review to Google Sheets webhook under "review sheet" tab
 async function syncReviewToGoogleSheets(review: any): Promise<boolean> {
   const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
   if (!targetUrl || !targetUrl.startsWith("http")) {
@@ -1001,48 +1001,65 @@ async function syncReviewToGoogleSheets(review: any): Promise<boolean> {
   const timeoutId = setTimeout(() => controller.abort(), 40000);
 
   try {
-    const revDate = review.date
-      ? new Date(review.date).toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
-      : new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+    const rawDate = review.date || new Date().toISOString();
+    const revDate = new Date(rawDate).toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+    const revComment = String(review.comment || review.commentBn || review.commentEn || review.reviewComment || "").trim();
+    const revName = String(review.name || review.customerName || "Customer").trim();
+    const revProduct = String(review.productName || review.product || "Product").trim();
+    const revRating = Number(review.rating) || 5;
+    const revRatingStr = revRating + "★";
+    const revStatus = review.isActive !== false ? "Active" : "Pending";
+    const revId = String(review.id || ("rev-" + Date.now())).trim();
+    const revEmail = String(review.email || "").trim();
+    const revPhone = String(review.phone || "").trim();
+    const revLocation = String(review.location || "ঢাকা").trim();
+    const revCategory = String(review.category || "food").trim();
+
+    const sheetRow = [
+      revId,
+      revDate,
+      revName,
+      revEmail,
+      revPhone,
+      revRatingStr,
+      revProduct,
+      revCategory,
+      revLocation,
+      revComment,
+      revStatus
+    ];
 
     const payload = {
       action: "customer_review",
       type: "review",
-      sheetTab: "Customer Reviews",
-      targetSheet: "Customer Reviews",
-      id: review.id,
-      reviewId: review.id,
+      sheetTab: "review sheet",
+      targetSheet: "review sheet",
+      targetTab: "review sheet",
+      tab: "review sheet",
+      target: "review sheet",
+      alternativeSheet: "review",
+      altTab: "Customer Reviews",
+      id: revId,
+      reviewId: revId,
       date: revDate,
-      name: review.name || "Anonymous",
-      customerName: review.name || "Anonymous",
-      email: review.email || "N/A",
-      phone: review.phone || "N/A",
-      rating: review.rating || 5,
-      productName: review.productName || "Product",
-      category: review.category || "All",
-      location: review.location || "N/A",
-      comment: review.comment || "",
-      reviewComment: review.comment || "",
-      status: review.isActive !== false ? "Active" : "Pending",
-      sheetRow: [
-        review.id,
-        revDate,
-        review.name || "Anonymous",
-        review.email || "N/A",
-        review.phone || "N/A",
-        `${review.rating || 5}★`,
-        review.productName || "Product",
-        review.category || "All",
-        review.location || "N/A",
-        review.comment || "",
-        review.isActive !== false ? "Active" : "Pending"
-      ]
+      name: revName,
+      customerName: revName,
+      email: revEmail,
+      phone: revPhone,
+      rating: revRating,
+      productName: revProduct,
+      category: revCategory,
+      location: revLocation,
+      comment: revComment,
+      reviewComment: revComment,
+      status: revStatus,
+      sheetRow: sheetRow
     };
 
     const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
-      `tab=Customer+Reviews&target=Customer+Reviews&type=review&action=customer_review&name=${encodeURIComponent(review.name || "")}&email=${encodeURIComponent(review.email || "")}&phone=${encodeURIComponent(review.phone || "")}&rating=${encodeURIComponent(review.rating || 5)}&product=${encodeURIComponent(review.productName || "")}&location=${encodeURIComponent(review.location || "")}`;
+      `tab=review+sheet&target=review+sheet&sheetTab=review+sheet&targetSheet=review+sheet&altTab=Customer+Reviews&type=review&action=customer_review&id=${encodeURIComponent(revId)}&name=${encodeURIComponent(revName)}&email=${encodeURIComponent(revEmail)}&phone=${encodeURIComponent(revPhone)}&rating=${encodeURIComponent(revRating)}&product=${encodeURIComponent(revProduct)}&location=${encodeURIComponent(revLocation)}&comment=${encodeURIComponent(revComment)}&date=${encodeURIComponent(revDate)}`;
 
-    console.log(`[Google Sheets] Dispatching review from ${review.name} (${review.email}) to ${urlWithParams}`);
+    console.log(`[Google Sheets] Dispatching review from ${revName} (${revEmail}) to ${urlWithParams}`);
 
     const res = await fetch(urlWithParams, {
       method: "POST",
@@ -3176,13 +3193,13 @@ app.delete("/api/reviews/:id", (req, res) => {
 // POST /api/reviews (Public: submit review from store)
 app.post("/api/reviews", async (req, res) => {
   try {
-    const { name, email, phone, location, rating, productName, category, comment } = req.body;
+    const { id, name, email, phone, location, rating, productName, category, comment, date, isActive, isVerified } = req.body;
     if (!name || !email || !comment || !productName) {
       return res.status(400).json({ error: "Name, email, product and comment are required." });
     }
 
     const newReview: Review = {
-      id: "rev-" + Date.now(),
+      id: id || ("rev-" + Date.now()),
       name: String(name).trim(),
       email: String(email).trim().toLowerCase(),
       phone: phone ? String(phone).trim() : "",
@@ -3191,19 +3208,24 @@ app.post("/api/reviews", async (req, res) => {
       productName: String(productName).trim(),
       category: category || "food",
       comment: String(comment).trim(),
-      date: new Date().toISOString(),
-      isActive: true,
-      isVerified: true,
+      date: date || new Date().toISOString(),
+      isActive: isActive !== false,
+      isVerified: isVerified !== false,
       likes: 1
     };
 
     if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
-    storeState.reviews.unshift(newReview);
+    const existingIdx = storeState.reviews.findIndex(r => String(r.id).trim() === String(newReview.id).trim());
+    if (existingIdx !== -1) {
+      storeState.reviews[existingIdx] = newReview;
+    } else {
+      storeState.reviews.unshift(newReview);
+    }
     saveReviewsToStaticFiles(storeState.reviews);
 
-    // Sync to Google Sheets webhook under "Customer Reviews" tab!
+    // Sync to Google Sheets webhook under "review sheet" tab!
     syncReviewToGoogleSheets(newReview).catch(err => {
-      console.warn("[Google Sheets Review Sync Failed]:", err);
+      console.warn("[Google Sheets Review Sync Warning]:", err);
     });
 
     res.status(201).json({ success: true, review: newReview });
@@ -3216,6 +3238,24 @@ app.post("/api/reviews", async (req, res) => {
 app.get("/api/admin/reviews", requireAdmin, (_req, res) => {
   const allReviews = storeState.reviews || loadReviewsFromFiles();
   res.json({ reviews: allReviews });
+});
+
+// POST /api/admin/reviews/sync-sheets (Admin: push and sync all reviews to Google Sheets)
+app.post("/api/admin/reviews/sync-sheets", requireAdmin, async (req, res) => {
+  const incoming = req.body.reviews;
+  if (Array.isArray(incoming) && incoming.length > 0) {
+    storeState.reviews = incoming;
+    saveReviewsToStaticFiles(incoming);
+  }
+  const reviewsToSync = storeState.reviews || loadReviewsFromFiles();
+  let count = 0;
+  for (const r of reviewsToSync) {
+    try {
+      await syncReviewToGoogleSheets(r);
+      count++;
+    } catch {}
+  }
+  res.json({ success: true, message: `Successfully synced ${count} reviews to Google Sheet`, count });
 });
 
 // POST /api/admin/reviews (Admin: add review)
@@ -3239,7 +3279,12 @@ app.post("/api/admin/reviews", requireAdmin, async (req, res) => {
     };
 
     if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
-    storeState.reviews.unshift(newReview);
+    const existingIdx = storeState.reviews.findIndex(r => String(r.id).trim() === String(newReview.id).trim());
+    if (existingIdx !== -1) {
+      storeState.reviews[existingIdx] = newReview;
+    } else {
+      storeState.reviews.unshift(newReview);
+    }
     saveReviewsToStaticFiles(storeState.reviews);
 
     // Sync to Google Sheets
@@ -3257,7 +3302,7 @@ app.put("/api/admin/reviews/:id", requireAdmin, (req, res) => {
   const updates = req.body;
 
   if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
-  const idx = storeState.reviews.findIndex(r => r.id === id);
+  const idx = storeState.reviews.findIndex(r => String(r.id).trim() === String(id).trim());
   if (idx === -1) {
     return res.status(404).json({ error: "Review not found" });
   }
@@ -3269,6 +3314,12 @@ app.put("/api/admin/reviews/:id", requireAdmin, (req, res) => {
   };
 
   saveReviewsToStaticFiles(storeState.reviews);
+
+  // Sync edited review to Google Sheets
+  syncReviewToGoogleSheets(storeState.reviews[idx]).catch(err => {
+    console.warn("[Google Sheets Review Update Sync Warning]:", err);
+  });
+
   res.json({ success: true, review: storeState.reviews[idx] });
 });
 
@@ -3276,7 +3327,7 @@ app.put("/api/admin/reviews/:id", requireAdmin, (req, res) => {
 app.delete("/api/admin/reviews/:id", requireAdmin, (req, res) => {
   const { id } = req.params;
   if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
-  storeState.reviews = storeState.reviews.filter(r => r.id !== id);
+  storeState.reviews = storeState.reviews.filter(r => String(r.id).trim() !== String(id).trim());
   saveReviewsToStaticFiles(storeState.reviews);
   res.json({ success: true, message: "Review deleted successfully" });
 });

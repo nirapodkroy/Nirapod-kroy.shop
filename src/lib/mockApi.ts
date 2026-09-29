@@ -441,51 +441,68 @@ export async function syncNewsletterToGoogleSheets(email: string, source = "Webs
   }
 }
 
-// Background sync customer review to Google Sheets ("Customer Reviews" tab)
-export async function syncReviewToGoogleSheetsClient(review: Review): Promise<boolean> {
+// Background sync customer review to Google Sheets ("review sheet" tab)
+export async function syncReviewToGoogleSheetsClient(review: any): Promise<boolean> {
   const target = resolveGoogleSheetWebhook();
   if (!target || !target.startsWith("http")) return false;
 
-  const revDate = review.date 
-    ? new Date(review.date).toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
-    : new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+  const rawDate = review.date || new Date().toISOString();
+  const revDate = new Date(rawDate).toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+  const revComment = String(review.comment || review.commentBn || review.commentEn || review.reviewComment || "").trim();
+  const revName = String(review.name || review.customerName || "Customer").trim();
+  const revProduct = String(review.productName || review.product || "Product").trim();
+  const revRating = Number(review.rating) || 5;
+  const revRatingStr = revRating + "★";
+  const revStatus = review.isActive !== false ? "Active" : "Pending";
+  const revId = String(review.id || ("rev-" + Date.now())).trim();
+  const revEmail = String(review.email || "").trim();
+  const revPhone = String(review.phone || "").trim();
+  const revLocation = String(review.location || "ঢাকা").trim();
+  const revCategory = String(review.category || "food").trim();
+
+  const sheetRow = [
+    revId,
+    revDate,
+    revName,
+    revEmail,
+    revPhone,
+    revRatingStr,
+    revProduct,
+    revCategory,
+    revLocation,
+    revComment,
+    revStatus
+  ];
 
   const payload = {
     action: "customer_review",
     type: "review",
-    sheetTab: "Customer Reviews",
-    targetSheet: "Customer Reviews",
-    id: review.id,
-    reviewId: review.id,
+    sheetTab: "review sheet",
+    targetSheet: "review sheet",
+    targetTab: "review sheet",
+    tab: "review sheet",
+    target: "review sheet",
+    alternativeSheet: "review",
+    altTab: "Customer Reviews",
+    id: revId,
+    reviewId: revId,
     date: revDate,
-    name: review.name || "Anonymous",
-    customerName: review.name || "Anonymous",
-    email: review.email || "N/A",
-    phone: review.phone || "N/A",
-    rating: review.rating || 5,
-    productName: review.productName || "Product",
-    category: review.category || "All",
-    location: review.location || "N/A",
-    comment: review.comment || "",
-    reviewComment: review.comment || "",
-    status: review.isActive !== false ? "Active" : "Pending",
-    sheetRow: [
-      review.id,
-      revDate,
-      review.name || "Anonymous",
-      review.email || "N/A",
-      review.phone || "N/A",
-      `${review.rating || 5}★`,
-      review.productName || "Product",
-      review.category || "All",
-      review.location || "N/A",
-      review.comment || "",
-      review.isActive !== false ? "Active" : "Pending"
-    ]
+    name: revName,
+    customerName: revName,
+    email: revEmail,
+    phone: revPhone,
+    rating: revRating,
+    productName: revProduct,
+    category: revCategory,
+    location: revLocation,
+    comment: revComment,
+    reviewComment: revComment,
+    status: revStatus,
+    sheetRow: sheetRow
   };
 
   const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
-    `tab=Customer+Reviews&target=Customer+Reviews&type=review&action=customer_review&name=${encodeURIComponent(review.name || "")}&email=${encodeURIComponent(review.email || "")}&phone=${encodeURIComponent(review.phone || "")}&rating=${encodeURIComponent(review.rating || 5)}&product=${encodeURIComponent(review.productName || "")}&location=${encodeURIComponent(review.location || "")}`;
+    `tab=review+sheet&target=review+sheet&sheetTab=review+sheet&targetSheet=review+sheet&altTab=Customer+Reviews&type=review&action=customer_review&id=${encodeURIComponent(revId)}&name=${encodeURIComponent(revName)}&email=${encodeURIComponent(revEmail)}&phone=${encodeURIComponent(revPhone)}&rating=${encodeURIComponent(revRating)}&product=${encodeURIComponent(revProduct)}&location=${encodeURIComponent(revLocation)}&comment=${encodeURIComponent(revComment)}&date=${encodeURIComponent(revDate)}`;
 
   try {
     const jsonBody = JSON.stringify(payload);
@@ -578,7 +595,7 @@ export async function syncTrackingToGoogleSheets(entry: UserTrackingEntry, isHea
 }
 
 // Helper to pull live orders, customers, subscribers, and tracking directly from Google Sheets
-export async function fetchLiveGoogleSheetData(webhookUrl?: string): Promise<{ orders?: any[]; customers?: any[]; subscribers?: any[]; tracking?: any[] } | null> {
+export async function fetchLiveGoogleSheetData(webhookUrl?: string): Promise<{ orders?: any[]; customers?: any[]; subscribers?: any[]; tracking?: any[]; reviews?: any[] } | null> {
   const target = resolveGoogleSheetWebhook(webhookUrl);
   if (!target || !target.startsWith("http")) return null;
 
@@ -1002,7 +1019,12 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
         isVerified: body.isVerified !== false,
         likes: Number(body.likes) || 0
       };
-      allReviews.unshift(newReview);
+      const existingIdx = allReviews.findIndex(r => String(r.id).trim() === String(newReview.id).trim());
+      if (existingIdx !== -1) {
+        allReviews[existingIdx] = newReview;
+      } else {
+        allReviews.unshift(newReview);
+      }
       setSafeStorage(REVIEWS_KEY, allReviews);
       syncReviewToGoogleSheetsClient(newReview).catch(() => {});
       return createJsonResponse({ success: true, review: newReview }, 201);
@@ -1017,6 +1039,46 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
     return createJsonResponse({ success: true, message: "Review deleted successfully" });
   }
 
+  // Admin Reviews Sync to Google Sheets
+  if (path === "/api/admin/reviews/sync-sheets" && method === "POST") {
+    const body = parseJsonBody<any>(init?.body);
+    const reviewsList = Array.isArray(body?.reviews) ? body.reviews : getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+    for (const r of reviewsList) {
+      syncReviewToGoogleSheetsClient(r).catch(() => {});
+    }
+    return createJsonResponse({ success: true, message: "Reviews successfully pushed to Google Sheet", count: reviewsList.length });
+  }
+
+  // Admin Add Review
+  if (path === "/api/admin/reviews" && method === "POST") {
+    const body = parseJsonBody<any>(init?.body);
+    const allReviews = getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+    const newReview: Review = {
+      id: body.id || ("rev-" + Date.now()),
+      name: String(body.name || "Customer").trim(),
+      email: String(body.email || "").trim(),
+      phone: String(body.phone || "").trim(),
+      location: String(body.location || "ঢাকা").trim(),
+      rating: Number(body.rating) || 5,
+      productName: String(body.productName || "Product").trim(),
+      category: body.category || "food",
+      comment: String(body.comment || "").trim(),
+      date: body.date || new Date().toISOString(),
+      isActive: body.isActive !== false,
+      isVerified: body.isVerified !== false,
+      likes: Number(body.likes) || 0
+    };
+    const existingIdx = allReviews.findIndex(r => String(r.id).trim() === String(newReview.id).trim());
+    if (existingIdx !== -1) {
+      allReviews[existingIdx] = newReview;
+    } else {
+      allReviews.unshift(newReview);
+    }
+    setSafeStorage(REVIEWS_KEY, allReviews);
+    syncReviewToGoogleSheetsClient(newReview).catch(() => {});
+    return createJsonResponse({ success: true, review: newReview }, 201);
+  }
+
   if (path.startsWith("/api/admin/reviews/")) {
     const revId = path.replace("/api/admin/reviews/", "").trim();
     if (method === "PUT") {
@@ -1026,6 +1088,7 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       if (idx !== -1) {
         allReviews[idx] = { ...allReviews[idx], ...updates, id: revId };
         setSafeStorage(REVIEWS_KEY, allReviews);
+        syncReviewToGoogleSheetsClient(allReviews[idx]).catch(() => {});
         return createJsonResponse({ success: true, review: allReviews[idx] });
       }
       return createJsonResponse({ error: "Review not found" }, 404);
@@ -1039,7 +1102,14 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
   }
 
   if (path === "/api/admin/github/push-reviews" && method === "POST") {
-    const allReviews = getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+    const body = parseJsonBody<any>(init?.body);
+    const allReviews = Array.isArray(body?.reviews) ? body.reviews : getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+    if (Array.isArray(body?.reviews)) {
+      setSafeStorage(REVIEWS_KEY, allReviews);
+    }
+    for (const r of allReviews) {
+      syncReviewToGoogleSheetsClient(r).catch(() => {});
+    }
     return createJsonResponse({
       success: true,
       commitUrl: "https://github.com/nirapodkroy/Nirapod-kroy.shop/commits/main",
