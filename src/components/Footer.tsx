@@ -91,19 +91,19 @@ export const Footer: React.FC<FooterProps> = ({
   };
 
   return (
-    <footer id="about-us-section" className="border-t border-emerald-900/10 dark:border-zinc-800/80 bg-[#f2f7f4]/90 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 transition-colors duration-200">
+    <footer id="about-us-section" className="border-t border-[#98FB98] dark:border-zinc-800 bg-[#eaf8ea] dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 transition-colors duration-200 relative z-10">
       {/* Newsletter / Value Bar */}
-      <div className="border-b border-zinc-200/80 dark:border-zinc-800/80 py-8 sm:py-10">
+      <div className="border-b border-[#98FB98]/80 dark:border-zinc-800/80 py-8 sm:py-10 bg-[#ddf6dd] dark:bg-zinc-900/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-widest">
                 {language === "bn" ? "নিরাপদ কেনাকাটা" : "Safe Shopping"}
               </span>
               <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white font-display mt-0.5">
                 {t("newsletter_heading")}
               </h3>
-              <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 mt-1">
                 {t("newsletter_desc")}
               </p>
             </div>
@@ -116,7 +116,7 @@ export const Footer: React.FC<FooterProps> = ({
                 onChange={(e) => setEmailInput(e.target.value)}
                 placeholder={t("email_placeholder")}
                 required
-                className="w-full sm:w-72 px-4 py-3 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full sm:w-72 px-4 py-3 bg-white dark:bg-zinc-900 border border-emerald-700/20 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
               />
               <button
                 id="footer-subscribe-btn"
@@ -353,15 +353,15 @@ export const Footer: React.FC<FooterProps> = ({
         </div>
 
         {/* Bottom Bar: Copyright & Payment Methods */}
-        <div className="mt-12 pt-6 pb-24 lg:pb-6 border-t border-zinc-200/60 dark:border-zinc-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-          <div className="text-zinc-400 text-center sm:text-left flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+        <div className="mt-12 pt-6 pb-24 lg:pb-6 border-t border-[#98FB98]/70 dark:border-zinc-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+          <div className="text-zinc-600 dark:text-zinc-400 text-center sm:text-left flex items-center justify-center sm:justify-start gap-2 flex-wrap font-medium">
             <span>
               © {new Date().getFullYear()} Nirapod Kroy (নিরাপদ ক্রয়) — {t("copyright")}
             </span>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-center">
-            <span className="text-[11px] text-zinc-400 mr-1">{language === "bn" ? "পেমেন্ট মাধ্যম:" : "Accepted Payments:"}</span>
+            <span className="text-[11px] text-zinc-600 dark:text-zinc-400 font-medium mr-1">{language === "bn" ? "পেমেন্ট মাধ্যম:" : "Accepted Payments:"}</span>
             <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-2xs">
               <BkashLogo className="h-4.5 w-auto max-h-5 object-contain" alt="bKash" />
               <span className="text-[10px] font-bold text-zinc-700 dark:text-zinc-200">bKash</span>

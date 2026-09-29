@@ -158,6 +158,7 @@ interface Customer {
 }
 
 import { DEFAULT_PRODUCTS } from "./src/data/defaultProducts";
+import { DEFAULT_REVIEWS, Review } from "./src/data/defaultReviews";
 
 // Seed initial orders for activity
 const INITIAL_ORDERS: Order[] = [
@@ -284,6 +285,7 @@ interface StoreState {
   customers: Customer[];
   subscribers?: Subscriber[];
   userTracking?: UserTrackingEntry[];
+  reviews?: Review[];
   webhookUrl: string;
   customTotalRevenue?: number;
   isDataSaved?: boolean;
@@ -295,9 +297,58 @@ let storeState: StoreState = {
   customers: INITIAL_CUSTOMERS,
   subscribers: [],
   userTracking: [],
+  reviews: DEFAULT_REVIEWS,
   webhookUrl: googleSheetWebhookUrl,
   isDataSaved: false
 };
+
+// Helper to load reviews from static JSON files
+function loadReviewsFromFiles(): Review[] {
+  const candidates = [
+    path.join(process.cwd(), "public", "reviews.json"),
+    path.join(process.cwd(), "docs", "reviews.json"),
+    path.join(process.cwd(), "reviews.json")
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      try {
+        const raw = fs.readFileSync(p, "utf-8");
+        const list = JSON.parse(raw);
+        if (Array.isArray(list) && list.length > 0) {
+          return list;
+        }
+      } catch (e) {
+        console.warn(`[Store] Error reading reviews from ${p}:`, e);
+      }
+    }
+  }
+  return DEFAULT_REVIEWS;
+}
+
+// Helper to save reviews across all static targets and TS data file
+function saveReviewsToStaticFiles(reviewsList: Review[]): void {
+  try {
+    const jsonStr = JSON.stringify(reviewsList, null, 2);
+    const pub = path.join(process.cwd(), "public", "reviews.json");
+    const docs = path.join(process.cwd(), "docs", "reviews.json");
+    const dist = path.join(process.cwd(), "dist", "reviews.json");
+    const root = path.join(process.cwd(), "reviews.json");
+
+    if (fs.existsSync(path.dirname(pub))) fs.writeFileSync(pub, jsonStr, "utf-8");
+    if (fs.existsSync(path.dirname(docs))) fs.writeFileSync(docs, jsonStr, "utf-8");
+    if (fs.existsSync(path.dirname(dist))) fs.writeFileSync(dist, jsonStr, "utf-8");
+    fs.writeFileSync(root, jsonStr, "utf-8");
+
+    // Also update src/data/defaultReviews.ts
+    const tsFile = path.join(process.cwd(), "src", "data", "defaultReviews.ts");
+    if (fs.existsSync(tsFile)) {
+      const tsCode = `export interface Review {\n  id: string;\n  name: string;\n  email: string;\n  phone?: string;\n  location: string;\n  rating: number;\n  productName: string;\n  category: "all" | "food" | "dates" | "oil_ghee" | "fashion" | "gadgets";\n  comment: string;\n  date: string;\n  isActive: boolean;\n  isVerified: boolean;\n  likes: number;\n}\n\nexport const DEFAULT_REVIEWS: Review[] = ${jsonStr};\n`;
+      fs.writeFileSync(tsFile, tsCode, "utf-8");
+    }
+  } catch (err) {
+    console.warn("[Store] Error saving reviews to static files:", err);
+  }
+}
 
 // Helper to load orders from static JSON files
 function loadOrdersFromFiles(): Order[] {
@@ -477,6 +528,11 @@ function saveState() {
     // 7. Write orders and tracking to static JSON files (orders.json & tracking.json)
     if (storeState.orders && Array.isArray(storeState.orders) && storeState.orders.length > 0) {
       saveOrdersToStaticFiles(storeState.orders);
+    }
+
+    // 8. Write customer reviews to static JSON files (reviews.json)
+    if (storeState.reviews && Array.isArray(storeState.reviews) && storeState.reviews.length > 0) {
+      saveReviewsToStaticFiles(storeState.reviews);
     }
 
     console.log(`[Store] Live state synchronized across all targets (${storeState.products.length} products, ${(storeState.orders || []).length} orders).`);
@@ -930,6 +986,82 @@ async function syncNewsletterToGoogleSheets(email: string, source = "Website Foo
     } else {
       console.log(`[Google Sheets Newsletter Sync Notice]: ${err?.message || "Connection issue"}`);
     }
+    return false;
+  }
+}
+
+// Helper: dispatch customer review to Google Sheets webhook under "Customer Reviews" tab
+async function syncReviewToGoogleSheets(review: any): Promise<boolean> {
+  const targetUrl = storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return false;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 40000);
+
+  try {
+    const revDate = review.date
+      ? new Date(review.date).toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
+      : new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+
+    const payload = {
+      action: "customer_review",
+      type: "review",
+      sheetTab: "Customer Reviews",
+      targetSheet: "Customer Reviews",
+      id: review.id,
+      reviewId: review.id,
+      date: revDate,
+      name: review.name || "Anonymous",
+      customerName: review.name || "Anonymous",
+      email: review.email || "N/A",
+      phone: review.phone || "N/A",
+      rating: review.rating || 5,
+      productName: review.productName || "Product",
+      category: review.category || "All",
+      location: review.location || "N/A",
+      comment: review.comment || "",
+      reviewComment: review.comment || "",
+      status: review.isActive !== false ? "Active" : "Pending",
+      sheetRow: [
+        review.id,
+        revDate,
+        review.name || "Anonymous",
+        review.email || "N/A",
+        review.phone || "N/A",
+        `${review.rating || 5}★`,
+        review.productName || "Product",
+        review.category || "All",
+        review.location || "N/A",
+        review.comment || "",
+        review.isActive !== false ? "Active" : "Pending"
+      ]
+    };
+
+    const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
+      `tab=Customer+Reviews&target=Customer+Reviews&type=review&action=customer_review&name=${encodeURIComponent(review.name || "")}&email=${encodeURIComponent(review.email || "")}&phone=${encodeURIComponent(review.phone || "")}&rating=${encodeURIComponent(review.rating || 5)}&product=${encodeURIComponent(review.productName || "")}&location=${encodeURIComponent(review.location || "")}`;
+
+    console.log(`[Google Sheets] Dispatching review from ${review.name} (${review.email}) to ${urlWithParams}`);
+
+    const res = await fetch(urlWithParams, {
+      method: "POST",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+        "User-Agent": "NirapodKroy-Ecommerce/1.0"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    clearTimeout(timeoutId);
+    const responseText = await res.text().catch(() => "");
+    console.log(`[Google Sheets Review] Status: ${res.status}, response: ${responseText.slice(0, 100)}`);
+    return res.ok || responseText.includes('"status":"success"');
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    console.log(`[Google Sheets Review Sync Notice]: ${err?.message || "Connection issue"}`);
     return false;
   }
 }
@@ -1991,6 +2123,69 @@ async function commitOrdersAndTrackingToGithub(cleanRepo: string, cleanBranch: s
   return { success: true, commitUrl: lastCommitUrl };
 }
 
+// Helper to commit customer reviews to GitHub repository
+async function commitReviewsToGithub(cleanRepo: string, cleanBranch: string, cleanToken: string, reviewsList: any[]) {
+  const committer = createGithubCommitter(cleanRepo, cleanBranch, cleanToken);
+  const jsonStr = JSON.stringify(reviewsList, null, 2);
+  const tsContent = `export interface Review {\n  id: string;\n  name: string;\n  email: string;\n  phone?: string;\n  location: string;\n  rating: number;\n  productName: string;\n  category: "all" | "food" | "dates" | "oil_ghee" | "fashion" | "gadgets";\n  comment: string;\n  date: string;\n  isActive: boolean;\n  isVerified: boolean;\n  likes: number;\n}\n\nexport const DEFAULT_REVIEWS: Review[] = ${jsonStr};\n`;
+
+  let lastCommitUrl = `https://github.com/${cleanRepo}/commits/${cleanBranch}`;
+
+  // 1. Commit docs/reviews.json (live site Pages)
+  try {
+    const docsRes = await committer.commitSingleFile(
+      "docs/reviews.json",
+      jsonStr,
+      `chore(reviews): sync ${reviewsList.length} reviews to docs/reviews.json`
+    );
+    if (docsRes.ok) {
+      const data: any = await docsRes.json();
+      if (data.commit?.html_url) lastCommitUrl = data.commit.html_url;
+    }
+  } catch (err) {
+    console.warn("[PushReviews] Warning committing docs/reviews.json:", err);
+  }
+
+  // 2. Commit public/reviews.json
+  try {
+    const pubRes = await committer.commitSingleFile(
+      "public/reviews.json",
+      jsonStr,
+      `chore(reviews): sync ${reviewsList.length} reviews to public/reviews.json`
+    );
+    if (pubRes.ok) {
+      const data: any = await pubRes.json();
+      if (data.commit?.html_url) lastCommitUrl = data.commit.html_url;
+    }
+  } catch (err) {
+    console.warn("[PushReviews] Warning committing public/reviews.json:", err);
+  }
+
+  // 3. Commit root reviews.json
+  try {
+    await committer.commitSingleFile(
+      "reviews.json",
+      jsonStr,
+      `chore(reviews): sync ${reviewsList.length} reviews to root reviews.json`
+    );
+  } catch (err) {
+    console.warn("[PushReviews] Warning committing root reviews.json:", err);
+  }
+
+  // 4. Commit src/data/defaultReviews.ts
+  try {
+    await committer.commitSingleFile(
+      "src/data/defaultReviews.ts",
+      tsContent,
+      `chore(reviews): sync defaultReviews.ts`
+    );
+  } catch (err) {
+    console.warn("[PushReviews] Warning committing defaultReviews.ts:", err);
+  }
+
+  return { success: true, commitUrl: lastCommitUrl };
+}
+
 // POST /api/admin/github/push (Commit products.json directly to GitHub repo)
 app.post("/api/admin/github/push", async (req, res) => {
   try {
@@ -2242,6 +2437,43 @@ app.post("/api/admin/github/push-orders", async (req, res) => {
       return res.status(401).json({ error: "GitHub Token সঠিক নয় বা পারমিশন নেই।" });
     }
     return res.status(500).json({ error: `অর্ডার পুশ করার সময় এরর: ${err.message}` });
+  }
+});
+
+// POST /api/admin/github/push-reviews (Commit reviews.json directly to GitHub repo)
+app.post("/api/admin/github/push-reviews", async (req, res) => {
+  try {
+    const { token, repo, branch, reviews } = req.body;
+    if (!token || !repo) {
+      return res.status(400).json({ error: "GitHub Token এবং Repository নাম দেওয়া আবশ্যক।" });
+    }
+
+    const cleanRepo = String(repo)
+      .trim()
+      .replace(/^https?:\/\//i, "")
+      .replace(/^github\.com\//i, "")
+      .replace(/\.git$/i, "")
+      .replace(/\/+$/, "");
+    const cleanBranch = (branch && String(branch).trim()) || "main";
+    const cleanToken = String(token).trim();
+    const targetReviews = Array.isArray(reviews) ? reviews : (storeState.reviews || loadReviewsFromFiles());
+
+    if (Array.isArray(reviews)) {
+      storeState.reviews = reviews;
+      saveReviewsToStaticFiles(reviews);
+    }
+
+    const result = await commitReviewsToGithub(cleanRepo, cleanBranch, cleanToken, targetReviews);
+    return res.json({
+      success: true,
+      commitUrl: result.commitUrl,
+      message: `সফলভাবে GitHub-এ ${targetReviews.length} টি কাস্টমার রিভিউ পুশ ও কমিট হয়েছে!`
+    });
+  } catch (err: any) {
+    if (err.message === "AUTH_ERROR") {
+      return res.status(401).json({ error: "GitHub Token সঠিক নয় বা পারমিশন নেই।" });
+    }
+    return res.status(500).json({ error: `রিভিউ পুশ করার সময় এরর: ${err.message}` });
   }
 });
 
@@ -2538,7 +2770,19 @@ app.get(["/api/orders/track", "/api/orders/track/:query"], async (req, res) => {
 // GET /api/orders/customer/:email (Customer viewing their own orders)
 app.get("/api/orders/customer/:email", (req, res) => {
   const email = req.params.email.trim().toLowerCase();
-  const customerOrders = storeState.orders.filter(o => o.customerEmail.toLowerCase() === email);
+  const phone = req.query.phone ? String(req.query.phone).trim() : "";
+  const cleanPhone = phone.replace(/[^0-9]/g, "");
+
+  const customerOrders = storeState.orders.filter(o => {
+    const matchEmail = Boolean(email && o.customerEmail && o.customerEmail.toLowerCase() === email);
+    const orderPhone = o.customerPhone ? o.customerPhone.replace(/[^0-9]/g, "") : "";
+    const matchPhone = Boolean(
+      cleanPhone.length >= 8 &&
+      orderPhone.length >= 8 &&
+      (cleanPhone.includes(orderPhone.slice(-8)) || orderPhone.includes(cleanPhone.slice(-8)))
+    );
+    return matchEmail || matchPhone;
+  });
   res.json({ orders: customerOrders });
 });
 
@@ -2910,6 +3154,131 @@ app.put("/api/admin/revenue", requireAdmin, (req, res) => {
     customTotalRevenue: storeState.customTotalRevenue,
     message: reset ? "মোট রেভিনিউ স্বয়ংক্রিয় গণনায় রিসেট করা হয়েছে।" : "মোট রেভিনিউ সফলভাবে পরিবর্তন করা হয়েছে!"
   });
+});
+
+// 6.5. Customer Reviews API
+// GET /api/reviews (Public: active reviews only)
+app.get("/api/reviews", (_req, res) => {
+  const allReviews = storeState.reviews || loadReviewsFromFiles();
+  const activeOnly = allReviews.filter(r => r.isActive !== false);
+  res.json({ reviews: activeOnly });
+});
+
+// DELETE /api/reviews/:id (Public / Storefront review delete)
+app.delete("/api/reviews/:id", (req, res) => {
+  const { id } = req.params;
+  if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
+  storeState.reviews = storeState.reviews.filter(r => String(r.id).trim() !== String(id).trim());
+  saveReviewsToStaticFiles(storeState.reviews);
+  res.json({ success: true, message: "Review deleted successfully" });
+});
+
+// POST /api/reviews (Public: submit review from store)
+app.post("/api/reviews", async (req, res) => {
+  try {
+    const { name, email, phone, location, rating, productName, category, comment } = req.body;
+    if (!name || !email || !comment || !productName) {
+      return res.status(400).json({ error: "Name, email, product and comment are required." });
+    }
+
+    const newReview: Review = {
+      id: "rev-" + Date.now(),
+      name: String(name).trim(),
+      email: String(email).trim().toLowerCase(),
+      phone: phone ? String(phone).trim() : "",
+      location: location ? String(location).trim() : "বাংলাদেশ",
+      rating: Number(rating) || 5,
+      productName: String(productName).trim(),
+      category: category || "food",
+      comment: String(comment).trim(),
+      date: new Date().toISOString(),
+      isActive: true,
+      isVerified: true,
+      likes: 1
+    };
+
+    if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
+    storeState.reviews.unshift(newReview);
+    saveReviewsToStaticFiles(storeState.reviews);
+
+    // Sync to Google Sheets webhook under "Customer Reviews" tab!
+    syncReviewToGoogleSheets(newReview).catch(err => {
+      console.warn("[Google Sheets Review Sync Failed]:", err);
+    });
+
+    res.status(201).json({ success: true, review: newReview });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to submit review" });
+  }
+});
+
+// GET /api/admin/reviews (Admin: all reviews)
+app.get("/api/admin/reviews", requireAdmin, (_req, res) => {
+  const allReviews = storeState.reviews || loadReviewsFromFiles();
+  res.json({ reviews: allReviews });
+});
+
+// POST /api/admin/reviews (Admin: add review)
+app.post("/api/admin/reviews", requireAdmin, async (req, res) => {
+  try {
+    const reviewData = req.body;
+    const newReview: Review = {
+      id: reviewData.id || ("rev-" + Date.now()),
+      name: String(reviewData.name || "Customer").trim(),
+      email: String(reviewData.email || "").trim(),
+      phone: String(reviewData.phone || "").trim(),
+      location: String(reviewData.location || "ঢাকা").trim(),
+      rating: Number(reviewData.rating) || 5,
+      productName: String(reviewData.productName || "Product").trim(),
+      category: reviewData.category || "food",
+      comment: String(reviewData.comment || "").trim(),
+      date: reviewData.date || new Date().toISOString(),
+      isActive: reviewData.isActive !== false,
+      isVerified: reviewData.isVerified !== false,
+      likes: Number(reviewData.likes) || 0
+    };
+
+    if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
+    storeState.reviews.unshift(newReview);
+    saveReviewsToStaticFiles(storeState.reviews);
+
+    // Sync to Google Sheets
+    syncReviewToGoogleSheets(newReview).catch(() => {});
+
+    res.status(201).json({ success: true, review: newReview });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/reviews/:id (Admin: edit or toggle review)
+app.put("/api/admin/reviews/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+
+  if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
+  const idx = storeState.reviews.findIndex(r => r.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Review not found" });
+  }
+
+  storeState.reviews[idx] = {
+    ...storeState.reviews[idx],
+    ...updates,
+    id // keep id
+  };
+
+  saveReviewsToStaticFiles(storeState.reviews);
+  res.json({ success: true, review: storeState.reviews[idx] });
+});
+
+// DELETE /api/admin/reviews/:id (Admin: delete review)
+app.delete("/api/admin/reviews/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
+  storeState.reviews = storeState.reviews.filter(r => r.id !== id);
+  saveReviewsToStaticFiles(storeState.reviews);
+  res.json({ success: true, message: "Review deleted successfully" });
 });
 
 // 7. Admin Settings & Google Sheets Webhook
@@ -3437,20 +3806,6 @@ app.post("/api/track", async (req, res) => {
 
 // 2. Admin: Get live user tracking stats & logs (GET /api/admin/tracking)
 app.get("/api/admin/tracking", requireAdmin, (_req, res) => {
-  if (!storeState.isDataSaved) {
-    return res.json({
-      success: true,
-      totalVisits: 0,
-      activeNow: 0,
-      tracking: [],
-      pageStats: {},
-      deviceStats: {},
-      browserStats: {},
-      sheetTab: "user tracking",
-      isSaved: false
-    });
-  }
-
   const trackingList = storeState.userTracking || [];
   const now = Date.now();
   // Active visitors in the last 2 minutes
@@ -3474,7 +3829,7 @@ app.get("/api/admin/tracking", requireAdmin, (_req, res) => {
     pageStats: pageCounts,
     deviceStats: deviceCounts,
     browserStats: browserCounts,
-    sheetTab: "user tracking",
+    sheetTab: "user traking",
     isSaved: true
   });
 });

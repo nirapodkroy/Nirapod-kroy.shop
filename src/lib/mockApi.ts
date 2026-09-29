@@ -1,5 +1,6 @@
 import { Product, Order, CustomerUser, OrderTickerItem, UserTrackingEntry } from "../types";
 import { DEFAULT_PRODUCTS } from "../data/defaultProducts";
+import { DEFAULT_REVIEWS, Review } from "../data/defaultReviews";
 import { matchOrder } from "../utils/orderMatchHelper";
 
 const CUSTOMERS_KEY = "nirapod_customers";
@@ -8,6 +9,7 @@ const PRODUCTS_KEY = "nirapod_products_cache";
 const SETTINGS_KEY = "nirapod_admin_settings";
 const ADMIN_TOKEN_KEY = "nirapod_admin_token";
 const REVENUE_KEY = "nirapod_custom_revenue";
+export const REVIEWS_KEY = "nirapod_customer_reviews_v1";
 export const SUBSCRIBERS_KEY = "nirapod_subscribers";
 export const USER_TRACKING_KEY = "nirapod_user_tracking_list";
 export const ADMIN_DATA_SAVED_KEY = "nirapod_admin_is_data_saved";
@@ -138,6 +140,16 @@ function getSafeStorage<T>(key: string, defaultVal: T): T {
     return parsed;
   } catch {
     return defaultVal;
+  }
+}
+
+function parseJsonBody<T = any>(body: any): T {
+  if (!body) return {} as T;
+  if (typeof body === "object") return body as T;
+  try {
+    return JSON.parse(String(body)) as T;
+  } catch {
+    return {} as T;
   }
 }
 
@@ -425,6 +437,77 @@ export async function syncNewsletterToGoogleSheets(email: string, source = "Webs
     return true;
   } catch (err: any) {
     console.log("[Google Sheets Newsletter Sync Notice]:", err?.message || "Sync skipped");
+    return false;
+  }
+}
+
+// Background sync customer review to Google Sheets ("Customer Reviews" tab)
+export async function syncReviewToGoogleSheetsClient(review: Review): Promise<boolean> {
+  const target = resolveGoogleSheetWebhook();
+  if (!target || !target.startsWith("http")) return false;
+
+  const revDate = review.date 
+    ? new Date(review.date).toLocaleString("en-US", { timeZone: "Asia/Dhaka" })
+    : new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+
+  const payload = {
+    action: "customer_review",
+    type: "review",
+    sheetTab: "Customer Reviews",
+    targetSheet: "Customer Reviews",
+    id: review.id,
+    reviewId: review.id,
+    date: revDate,
+    name: review.name || "Anonymous",
+    customerName: review.name || "Anonymous",
+    email: review.email || "N/A",
+    phone: review.phone || "N/A",
+    rating: review.rating || 5,
+    productName: review.productName || "Product",
+    category: review.category || "All",
+    location: review.location || "N/A",
+    comment: review.comment || "",
+    reviewComment: review.comment || "",
+    status: review.isActive !== false ? "Active" : "Pending",
+    sheetRow: [
+      review.id,
+      revDate,
+      review.name || "Anonymous",
+      review.email || "N/A",
+      review.phone || "N/A",
+      `${review.rating || 5}★`,
+      review.productName || "Product",
+      review.category || "All",
+      review.location || "N/A",
+      review.comment || "",
+      review.isActive !== false ? "Active" : "Pending"
+    ]
+  };
+
+  const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
+    `tab=Customer+Reviews&target=Customer+Reviews&type=review&action=customer_review&name=${encodeURIComponent(review.name || "")}&email=${encodeURIComponent(review.email || "")}&phone=${encodeURIComponent(review.phone || "")}&rating=${encodeURIComponent(review.rating || 5)}&product=${encodeURIComponent(review.productName || "")}&location=${encodeURIComponent(review.location || "")}`;
+
+  try {
+    const jsonBody = JSON.stringify(payload);
+    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+      try {
+        const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
+        if (navigator.sendBeacon(urlWithParams, blob)) {
+          return true;
+        }
+      } catch {}
+    }
+
+    await fetch(urlWithParams, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: jsonBody,
+      keepalive: true
+    });
+    return true;
+  } catch (err: any) {
+    console.log("[Google Sheets Review Sync Notice]:", err?.message || "Sync skipped");
     return false;
   }
 }
@@ -807,10 +890,30 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
 
   // 6. Customer Orders (/api/orders/customer/:email)
   if (path.startsWith("/api/orders/customer/")) {
-    const rawEmail = path.replace("/api/orders/customer/", "");
+    const rawWithQuery = path.replace("/api/orders/customer/", "");
+    const [rawEmail, queryString] = rawWithQuery.split("?");
     const email = decodeURIComponent(rawEmail).trim().toLowerCase();
+
+    let phoneParam = "";
+    if (queryString) {
+      try {
+        const params = new URLSearchParams(queryString);
+        phoneParam = params.get("phone") || "";
+      } catch {}
+    }
+    const cleanPhone = phoneParam.replace(/[^0-9]/g, "");
+
     const orders = getSafeStorage<Order[]>(ORDERS_KEY, DEFAULT_ORDERS);
-    const customerOrders = orders.filter(o => o.customerEmail.toLowerCase() === email);
+    const customerOrders = orders.filter(o => {
+      const matchEmail = Boolean(email && o.customerEmail && o.customerEmail.toLowerCase() === email);
+      const orderPhone = o.customerPhone ? o.customerPhone.replace(/[^0-9]/g, "") : "";
+      const matchPhone = Boolean(
+        cleanPhone.length >= 8 &&
+        orderPhone.length >= 8 &&
+        (cleanPhone.includes(orderPhone.slice(-8)) || orderPhone.includes(cleanPhone.slice(-8)))
+      );
+      return matchEmail || matchPhone;
+    });
     return createJsonResponse({ orders: customerOrders });
   }
 
@@ -841,6 +944,107 @@ export async function handleLocalApi(url: string, init?: RequestInit): Promise<R
       };
     });
     return createJsonResponse({ ticker: tickerItems });
+  }
+
+  // 7.05 Customer Reviews API (/api/reviews)
+  if (path === "/api/reviews") {
+    if (method === "GET") {
+      const allReviews = getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+      const activeOnly = allReviews.filter(r => r.isActive !== false);
+      return createJsonResponse({ reviews: activeOnly });
+    }
+    if (method === "POST") {
+      const body = parseJsonBody<any>(init?.body);
+      const allReviews = getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+      const newReview: Review = {
+        id: "rev-" + Date.now(),
+        name: String(body.name || "Anonymous").trim(),
+        email: String(body.email || "").trim().toLowerCase(),
+        phone: body.phone ? String(body.phone).trim() : "",
+        location: body.location ? String(body.location).trim() : "বাংলাদেশ",
+        rating: Number(body.rating) || 5,
+        productName: String(body.productName || "Product").trim(),
+        category: body.category || "food",
+        comment: String(body.comment || "").trim(),
+        date: new Date().toISOString(),
+        isActive: true,
+        isVerified: true,
+        likes: 1
+      };
+      allReviews.unshift(newReview);
+      setSafeStorage(REVIEWS_KEY, allReviews);
+      syncReviewToGoogleSheetsClient(newReview).catch(() => {});
+      return createJsonResponse({ success: true, review: newReview }, 201);
+    }
+  }
+
+  // 7.06 Admin Reviews API (/api/admin/reviews)
+  if (path === "/api/admin/reviews") {
+    if (method === "GET") {
+      const allReviews = getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+      return createJsonResponse({ reviews: allReviews });
+    }
+    if (method === "POST") {
+      const body = parseJsonBody<any>(init?.body);
+      const allReviews = getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+      const newReview: Review = {
+        id: body.id || ("rev-" + Date.now()),
+        name: String(body.name || "Customer").trim(),
+        email: String(body.email || "").trim(),
+        phone: String(body.phone || "").trim(),
+        location: String(body.location || "ঢাকা").trim(),
+        rating: Number(body.rating) || 5,
+        productName: String(body.productName || "Product").trim(),
+        category: body.category || "food",
+        comment: String(body.comment || "").trim(),
+        date: body.date || new Date().toISOString(),
+        isActive: body.isActive !== false,
+        isVerified: body.isVerified !== false,
+        likes: Number(body.likes) || 0
+      };
+      allReviews.unshift(newReview);
+      setSafeStorage(REVIEWS_KEY, allReviews);
+      syncReviewToGoogleSheetsClient(newReview).catch(() => {});
+      return createJsonResponse({ success: true, review: newReview }, 201);
+    }
+  }
+
+  if (path.startsWith("/api/reviews/") && method === "DELETE") {
+    const revId = path.replace("/api/reviews/", "").trim();
+    const allReviews = getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+    const remaining = allReviews.filter(r => String(r.id).trim() !== String(revId).trim());
+    setSafeStorage(REVIEWS_KEY, remaining);
+    return createJsonResponse({ success: true, message: "Review deleted successfully" });
+  }
+
+  if (path.startsWith("/api/admin/reviews/")) {
+    const revId = path.replace("/api/admin/reviews/", "").trim();
+    if (method === "PUT") {
+      const updates = parseJsonBody<any>(init?.body);
+      const allReviews = getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+      const idx = allReviews.findIndex(r => String(r.id).trim() === String(revId).trim());
+      if (idx !== -1) {
+        allReviews[idx] = { ...allReviews[idx], ...updates, id: revId };
+        setSafeStorage(REVIEWS_KEY, allReviews);
+        return createJsonResponse({ success: true, review: allReviews[idx] });
+      }
+      return createJsonResponse({ error: "Review not found" }, 404);
+    }
+    if (method === "DELETE") {
+      const allReviews = getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+      const remaining = allReviews.filter(r => String(r.id).trim() !== String(revId).trim());
+      setSafeStorage(REVIEWS_KEY, remaining);
+      return createJsonResponse({ success: true, message: "Review deleted successfully" });
+    }
+  }
+
+  if (path === "/api/admin/github/push-reviews" && method === "POST") {
+    const allReviews = getSafeStorage<Review[]>(REVIEWS_KEY, DEFAULT_REVIEWS);
+    return createJsonResponse({
+      success: true,
+      commitUrl: "https://github.com/nirapodkroy/Nirapod-kroy.shop/commits/main",
+      message: `সফলভাবে GitHub-এ ${allReviews.length} টি কাস্টমার রিভিউ পুশ ও কমিট হয়েছে!`
+    });
   }
 
   // 7.1 Track Order (/api/orders/track) - Customer live tracking lookup

@@ -61,7 +61,10 @@ service cloud.firestore {
         data.customerPhone is string && data.customerPhone.size() <= 30 &&
         data.shippingAddress is string && data.shippingAddress.size() <= 500 &&
         data.totalPrice is number && data.totalPrice >= 0 &&
-        data.status is string && data.status.size() <= 50;
+        data.status is string && data.status.size() <= 50 &&
+        (!('items' in data) || (data.items is list && data.items.size() <= 50)) &&
+        (!('deliveryCharge' in data) || (data.deliveryCharge is number)) &&
+        (!('note' in data) || (data.note is string && data.note.size() <= 500));
     }
 
     // Connection validation document

@@ -66,6 +66,7 @@ export interface AdminCustomer extends CustomerUser {
 }
 
 export interface OrderItem {
+  id?: string;
   productId: string;
   title: string;
   price: number;
@@ -112,7 +113,9 @@ export interface Order {
   createdAt: string;
   syncedToGoogleSheet: boolean;
   notes?: string;
+  note?: string;
   shippingFee?: number;
+  deliveryCharge?: number;
   deliveryArea?: string;
 }
 

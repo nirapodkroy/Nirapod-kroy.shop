@@ -109,6 +109,18 @@
         "trackingNumber": {
           "type": "string",
           "description": "Tracking number"
+        },
+        "deliveryCharge": {
+          "type": "number",
+          "description": "Delivery fee"
+        },
+        "note": {
+          "type": "string",
+          "description": "Customer order instructions or notes"
+        },
+        "items": {
+          "type": "array",
+          "description": "Ordered line items"
         }
       },
       "required": ["id", "userId", "customerName", "customerPhone", "shippingAddress", "totalPrice", "status"]

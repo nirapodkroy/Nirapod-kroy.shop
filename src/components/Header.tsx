@@ -716,6 +716,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="relative flex items-center">
               <Search className="absolute left-3.5 w-4 h-4 text-emerald-600 dark:text-emerald-400 pointer-events-none" />
               <input
+                id="mobile-search-input"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => handleSearchInput(e.target.value)}

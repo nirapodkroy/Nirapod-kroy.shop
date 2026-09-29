@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { Product, Order, AdminStats, AdminCustomer, UserTrackingEntry, SizeChart, SizeChartRow } from "../types";
+import { DEFAULT_REVIEWS, Review } from "../data/defaultReviews";
 import { SIZE_CHART_PRESETS } from "../utils/sizeChartPresets";
 import { handleLocalApi, syncOrderToGoogleSheets } from "../lib/mockApi";
 import {
@@ -140,7 +141,31 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Admin View Tabs
-  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "orders" | "customers" | "subscribers" | "tracking" | "sheets" | "github">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "orders" | "customers" | "reviews" | "subscribers" | "tracking" | "sheets" | "github">("dashboard");
+
+  // Customer Reviews Management State
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  const [reviewsSearchTerm, setReviewsSearchTerm] = useState("");
+  const [reviewsStatusFilter, setReviewsStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [reviewsCategoryFilter, setReviewsCategoryFilter] = useState<string>("all");
+  const [isReviewFormOpen, setIsReviewFormOpen] = useState(false);
+  const [editingReview, setEditingReview] = useState<Review | null>(null);
+  const [isPushingReviews, setIsPushingReviews] = useState(false);
+  const [isSyncingReviewsToSheets, setIsSyncingReviewsToSheets] = useState(false);
+  const [reviewToDelete, setReviewToDelete] = useState<{ id: string; name: string; productName?: string } | null>(null);
+
+  // Review Form Input States
+  const [revFormName, setRevFormName] = useState("");
+  const [revFormEmail, setRevFormEmail] = useState("");
+  const [revFormPhone, setRevFormPhone] = useState("");
+  const [revFormLocation, setRevFormLocation] = useState("");
+  const [revFormProduct, setRevFormProduct] = useState("");
+  const [revFormCategory, setRevFormCategory] = useState<any>("food");
+  const [revFormRating, setRevFormRating] = useState<number>(5);
+  const [revFormComment, setRevFormComment] = useState("");
+  const [revFormIsActive, setRevFormIsActive] = useState<boolean>(true);
+  const [revFormIsVerified, setRevFormIsVerified] = useState<boolean>(true);
 
   // User Real-Time Tracking State
   const [userTracking, setUserTracking] = useState<UserTrackingEntry[]>([]);
@@ -677,7 +702,23 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       setIsLoadingSubscribers(false);
     }
 
-    // 2.3 User Real-Time Tracking
+    // 2.25 Reviews
+    setIsLoadingReviews(true);
+    try {
+      const revRes = await safeAdminFetch("/api/admin/reviews", {
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
+      });
+      if (revRes.ok) {
+        const revData = await revRes.json();
+        setReviews(revData?.reviews || []);
+      }
+    } catch (e) {
+      console.warn("Admin reviews fetch fallback:", e);
+    } finally {
+      setIsLoadingReviews(false);
+    }
+
+    // 2.3 User Real-Time Tracking (Always preserve and load real visitor visits)
     setIsLoadingTracking(true);
     try {
       const trackRes = await safeAdminFetch("/api/admin/tracking", {
@@ -685,24 +726,34 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       if (trackRes.ok) {
         const trackData = await trackRes.json();
-        if (!trackData?.isSaved && !isLiveSheetMode) {
-          setUserTracking([]);
+        const incomingTracking = Array.isArray(trackData?.tracking) ? trackData.tracking : [];
+        if (incomingTracking.length > 0) {
+          setUserTracking(incomingTracking);
           setTrackingStats({
-            totalVisits: 0,
-            activeNow: 0,
-            pageStats: {},
-            deviceStats: {},
-            browserStats: {}
-          });
-        } else {
-          setUserTracking(trackData?.tracking || []);
-          setTrackingStats({
-            totalVisits: trackData?.totalVisits || 0,
+            totalVisits: trackData?.totalVisits || incomingTracking.length,
             activeNow: trackData?.activeNow || 0,
             pageStats: trackData?.pageStats || {},
             deviceStats: trackData?.deviceStats || {},
             browserStats: trackData?.browserStats || {}
           });
+        } else {
+          // Fallback to local storage tracking if server tracking list is empty
+          try {
+            const rawStored = localStorage.getItem("nirapod_user_tracking_list");
+            if (rawStored) {
+              const localList = JSON.parse(rawStored);
+              if (Array.isArray(localList) && localList.length > 0) {
+                setUserTracking(localList);
+                setTrackingStats({
+                  totalVisits: localList.length,
+                  activeNow: Math.min(localList.length, 3),
+                  pageStats: {},
+                  deviceStats: {},
+                  browserStats: {}
+                });
+              }
+            }
+          } catch {}
         }
       }
     } catch (e) {
@@ -1792,6 +1843,301 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     } finally {
       setIsSavingRevenue(false);
     }
+  };
+
+  // Toggle Review Active/Inactive status instantly
+  const handleToggleReviewActive = async (id: string, currentStatus: boolean) => {
+    const nextStatus = !currentStatus;
+    const updated = reviews.map(r => r.id === id ? { ...r, isActive: nextStatus } : r);
+    setReviews(updated);
+    try {
+      localStorage.setItem("nirapod_customer_reviews_v1", JSON.stringify(updated));
+    } catch {}
+
+    addToast(
+      nextStatus
+        ? "রিভিউটি সফলভাবে সক্রিয় (Active) করা হয়েছে! ওয়েবসাইটে প্রদর্শিত হবে।"
+        : "রিভিউটি নিষ্ক্রিয় (Inactive/Hidden) করা হয়েছে।",
+      "success"
+    );
+
+    try {
+      window.dispatchEvent(new Event("nirapod_reviews_updated"));
+    } catch {}
+
+    try {
+      await safeAdminFetch(`/api/admin/reviews/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
+        body: JSON.stringify({ isActive: nextStatus })
+      });
+    } catch (e) {
+      console.warn("Review toggle error:", e);
+    }
+  };
+
+  // Delete Review directly on click (immediate, reliable removal)
+  const handleDeleteReview = (revOrId: string | Review) => {
+    const id = typeof revOrId === "object" && revOrId !== null ? revOrId.id : String(revOrId);
+    const name = typeof revOrId === "object" && revOrId !== null ? revOrId.name : undefined;
+    executeDeleteReview(id, name);
+  };
+
+  const executeDeleteReview = async (id: string, name?: string) => {
+    const cleanId = String(id).trim();
+    // 1. Optimistically update review list immediately
+    setReviews(prev => prev.filter(r => String(r.id).trim() !== cleanId));
+    try {
+      const saved = localStorage.getItem("nirapod_customer_reviews_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const rem = parsed.filter((r: any) => String(r.id).trim() !== cleanId);
+          localStorage.setItem("nirapod_customer_reviews_v1", JSON.stringify(rem));
+        }
+      }
+    } catch {}
+
+    try {
+      window.dispatchEvent(new Event("nirapod_reviews_updated"));
+    } catch {}
+
+    addToast(name ? `"${name}" এর রিভিউটি সফলভাবে মুছে ফেলা হয়েছে!` : "রিভিউটি সফলভাবে মুছে ফেলা হয়েছে!", "success");
+
+    // 2. Sync deletion to server API
+    try {
+      await safeAdminFetch(`/api/admin/reviews/${encodeURIComponent(cleanId)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getAdminAuthToken()}` }
+      });
+    } catch (e) {
+      console.warn("Review delete admin API notice:", e);
+    }
+
+    try {
+      await fetch(`/api/reviews/${encodeURIComponent(cleanId)}`, {
+        method: "DELETE"
+      });
+    } catch {}
+  };
+
+  const confirmDeleteReview = () => {
+    if (!reviewToDelete) return;
+    const { id, name } = reviewToDelete;
+    setReviewToDelete(null);
+    executeDeleteReview(id, name);
+  };
+
+  // Save/Create/Edit Review
+  const handleSaveReview = async (revData: Partial<Review>) => {
+    try {
+      if (editingReview) {
+        // Edit existing review
+        const updated = reviews.map(r => r.id === editingReview.id ? { ...r, ...revData } as Review : r);
+        setReviews(updated);
+        try {
+          localStorage.setItem("nirapod_customer_reviews_v1", JSON.stringify(updated));
+        } catch {}
+
+        try {
+          window.dispatchEvent(new Event("nirapod_reviews_updated"));
+        } catch {}
+
+        await safeAdminFetch(`/api/admin/reviews/${editingReview.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
+          body: JSON.stringify(revData)
+        });
+        addToast("রিভিউ সফলভাবে আপডেট করা হয়েছে!", "success");
+      } else {
+        // Create new review
+        const newRev: Review = {
+          id: "rev-" + Date.now(),
+          name: revData.name || "Customer",
+          email: revData.email || "",
+          phone: revData.phone || "",
+          location: revData.location || "ঢাকা",
+          rating: revData.rating || 5,
+          productName: revData.productName || "Product",
+          category: (revData.category as any) || "food",
+          comment: revData.comment || "",
+          date: new Date().toISOString(),
+          isActive: revData.isActive !== false,
+          isVerified: true,
+          likes: 1
+        };
+        const updated = [newRev, ...reviews];
+        setReviews(updated);
+        try {
+          localStorage.setItem("nirapod_customer_reviews_v1", JSON.stringify(updated));
+        } catch {}
+
+        try {
+          window.dispatchEvent(new Event("nirapod_reviews_updated"));
+        } catch {}
+
+        await safeAdminFetch("/api/admin/reviews", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
+          body: JSON.stringify(newRev)
+        });
+        addToast("নতুন রিভিউ সফলভাবে যোগ করা হয়েছে!", "success");
+      }
+      setIsReviewFormOpen(false);
+      setEditingReview(null);
+    } catch (e: any) {
+      addToast(`রিভিউ সেভ করতে সমস্যা হয়েছে: ${e.message}`, "error");
+    }
+  };
+
+  // Push Reviews to GitHub
+  const handlePushReviewsToGitHub = async () => {
+    const token = githubToken.trim();
+    const cleanRepo = String(githubRepo)
+      .trim()
+      .replace(/^https?:\/\//i, "")
+      .replace(/^github\.com\//i, "")
+      .replace(/\.git$/i, "")
+      .replace(/\/+$/, "");
+    const cleanBranch = githubBranch.trim() || "main";
+
+    if (!token || !cleanRepo) {
+      addToast("GitHub Push করতে অনুগ্রহ করে GitHub Tab-এ Token ও Repository সেট করুন।", "error");
+      setActiveTab("github");
+      return;
+    }
+
+    setIsPushingReviews(true);
+    try {
+      const res = await safeAdminFetch("/api/admin/github/push-reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
+        body: JSON.stringify({ token, repo: cleanRepo, branch: cleanBranch, reviews })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addToast(`সফলভাবে GitHub-এ ${reviews.length} টি রিভিউ পুশ হয়েছে!`, "success");
+      } else {
+        addToast(`GitHub পুশ ব্যর্থ: ${data.error || "Unknown error"}`, "error");
+      }
+    } catch (e: any) {
+      addToast(`GitHub পুশ এরর: ${e.message}`, "error");
+    } finally {
+      setIsPushingReviews(false);
+    }
+  };
+
+  // Sync All Reviews to Google Sheets
+  const handleSyncReviewsToSheets = async () => {
+    setIsSyncingReviewsToSheets(true);
+    try {
+      let count = 0;
+      for (const rev of reviews) {
+        await safeAdminFetch("/api/reviews", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(rev)
+        }).catch(() => {});
+        count++;
+      }
+      addToast(`${count} টি রিভিউ গুগল শিটের 'Customer Reviews' ট্যাবে সফলভাবে সিঙ্ক হয়েছে!`, "success");
+    } catch (e: any) {
+      addToast(`গুগল শিট সিঙ্ক এরর: ${e.message}`, "error");
+    } finally {
+      setIsSyncingReviewsToSheets(false);
+    }
+  };
+
+  // Clean User Tracking and Move Reviews to Reviews Sheet
+  const [isCleaningTracking, setIsCleaningTracking] = useState(false);
+  const handleCleanTrackingAndReviews = async () => {
+    setIsCleaningTracking(true);
+    try {
+      const targetHook = webhookUrl.trim() || "https://script.google.com/macros/s/AKfycbzzGJV2nI7grFnBo6OjDw_vJ20DylCfLg6r8ZExsawP4f17rFn5rfKp870TifdtgV4/exec";
+      if (!targetHook || !targetHook.startsWith("http")) {
+        addToast("গুগল শিট ওয়েব হুক ইউআরএল পাওয়া যায়নি!", "error");
+        return;
+      }
+      const targetUrl = targetHook + (targetHook.includes("?") ? "&" : "?") + "action=clean_tracking_reviews";
+      await fetch(targetUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "clean_tracking_reviews" })
+      });
+      addToast("ইউজার ট্র্যাকিং মেরামত রিকোয়েস্ট সফল! রিভিউগুলো Customer Reviews শিটে স্থানান্তরিত হচ্ছে।", "success");
+      setTimeout(() => {
+        fetchAdminData();
+      }, 1500);
+    } catch (e: any) {
+      addToast("মেরামত কমান্ড ব্যর্থ: " + (e?.message || ""), "error");
+    } finally {
+      setIsCleaningTracking(false);
+    }
+  };
+
+  // Open Add Review Modal
+  const openAddReviewModal = () => {
+    setEditingReview(null);
+    setRevFormName("");
+    setRevFormEmail("");
+    setRevFormPhone("");
+    setRevFormLocation("ঢাকা, বাংলাদেশ");
+    setRevFormProduct("");
+    setRevFormCategory("food");
+    setRevFormRating(5);
+    setRevFormComment("");
+    setRevFormIsActive(true);
+    setRevFormIsVerified(true);
+    setIsReviewFormOpen(true);
+  };
+
+  // Open Edit Review Modal
+  const openEditReviewModal = (rev: Review) => {
+    setEditingReview(rev);
+    setRevFormName(rev.name || "");
+    setRevFormEmail(rev.email || "");
+    setRevFormPhone(rev.phone || "");
+    setRevFormLocation(rev.location || "ঢাকা");
+    setRevFormProduct(rev.productName || "");
+    setRevFormCategory(rev.category || "food");
+    setRevFormRating(rev.rating || 5);
+    setRevFormComment(rev.comment || "");
+    setRevFormIsActive(rev.isActive !== false);
+    setRevFormIsVerified(rev.isVerified !== false);
+    setIsReviewFormOpen(true);
+  };
+
+  // Export defaultReviews.ts for GitHub commit / website static storage
+  const handleExportReviewsCode = () => {
+    const code = `export interface Review {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  location: string;
+  rating: number;
+  productName: string;
+  category: "all" | "food" | "dates" | "oil_ghee" | "fashion" | "gadgets";
+  comment: string;
+  date: string;
+  isActive: boolean;
+  isVerified: boolean;
+  likes: number;
+}
+
+export const DEFAULT_REVIEWS: Review[] = ${JSON.stringify(reviews, null, 2)};
+`;
+    const blob = new Blob([code], { type: "text/typescript;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "defaultReviews.ts";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addToast("defaultReviews.ts ফাইল ডাউনলোড হয়েছে! এটি গিটহাবে পুশ বা কোডবেসে সেভ রাখতে পারবেন।", "success");
   };
 
   // Update Order Status
@@ -3005,6 +3351,8 @@ function doGet(e) {
           var sId = String(r[10] || "").trim();
           var tTime = String(r[0] || "").trim();
           var tPage = String(r[1] || "").trim();
+          // Filter out accidental reviews logged to tracking sheet
+          if (String(r[0] || "").indexOf("rev-") === 0 || String(r[5] || "").indexOf("★") !== -1 || sId.toLowerCase() === "active" || sId.toLowerCase() === "pending") return false;
           return (sId !== "" || tTime !== "") && (tPage !== "" || sId !== "");
         })
         .map(function(r) {
@@ -3066,6 +3414,38 @@ function doGet(e) {
         });
     }
 
+    // 5. Customer Reviews tab ("Customer Reviews" বা "Reviews" - রিভিউ লোড করা)
+    var revSheet = findSheet(ss, ["Customer Reviews", "customer reviews", "Reviews", "reviews", "গ্রাহক রিভিউ", "রিভিউ"], "review", "order", "custom");
+    if (revSheet && revSheet.getLastRow() > 1) {
+      var maxRevRows = Math.min(revSheet.getLastRow() - 1, 300);
+      var rRows = revSheet.getRange(2, 1, maxRevRows, Math.min(revSheet.getLastColumn(), 11)).getValues();
+      result.reviews = rRows
+        .filter(function(r) {
+          var rName = String(r[2] || "").trim();
+          var rId = String(r[0] || "").trim();
+          var rComment = String(r[9] || "").trim();
+          return rName !== "" || rId !== "" || rComment !== "";
+        })
+        .map(function(r) {
+          var ratingRaw = String(r[5] || "5").replace(/[^0-9]/g, "");
+          return {
+            id: String(r[0] || ("rev-" + new Date().getTime())),
+            date: String(r[1] || ""),
+            name: String(r[2] || "Customer"),
+            email: String(r[3] || ""),
+            phone: String(r[4] || ""),
+            rating: parseInt(ratingRaw, 10) || 5,
+            productName: String(r[6] || "Product"),
+            category: String(r[7] || "all").toLowerCase(),
+            location: String(r[8] || "ঢাকা, বাংলাদেশ"),
+            comment: String(r[9] || ""),
+            isActive: String(r[10] || "Active").toLowerCase() !== "inactive",
+            isVerified: true,
+            likes: 0
+          };
+        });
+    }
+
     return ContentService.createTextOutput(JSON.stringify(result))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
@@ -3121,27 +3501,59 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: clearTrackMsg }))
         .setMimeType(ContentService.MimeType.JSON);
     }
+
+    // ইউজার ট্র্যাকিং শিট মেরামত ও রিভিউ শিটে স্থানান্তর করার স্পেশাল কমান্ড
+    if (data.action === "clean_tracking_reviews" || (e && e.parameter && e.parameter.action === "clean_tracking_reviews")) {
+      var fixTrackMsg = cleanUserTrackingReviews();
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: fixTrackMsg }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     
-    // ১. ইউজার ট্র্যাকিং ডেটা নিখুঁতভাবে শনাক্তকরণ (user traking / user tracking)
-    var isTracking = Boolean(
+    // ১. কাস্টমার রিভিউ নির্ধারণ (Customer Reviews - গ্রাহকদের নাম, ইমেইল, রেটিং ও কমেন্ট - রিভিউ শিটে যাবে)
+    var isReview = Boolean(
+      data.action === "customer_review" || 
+      data.action === "review" || 
+      data.type === "review" ||
+      data.type === "customer_review" ||
+      data.reviewId ||
+      data.reviewComment ||
+      (data.rating && (data.productName || data.product || data.comment)) ||
+      String(data.sheetTab || data.targetSheet || data.target || data.tab || "").toLowerCase().indexOf("review") !== -1 ||
+      (e && e.parameter && (
+        String(e.parameter.tab || "").toLowerCase().indexOf("review") !== -1 ||
+        String(e.parameter.action || "").toLowerCase().indexOf("review") !== -1 ||
+        String(e.parameter.type || "").toLowerCase().indexOf("review") !== -1 ||
+        e.parameter.reviewComment ||
+        e.parameter.rating
+      )) ||
+      (data.sheetRow && (
+        String(data.sheetRow[0] || "").indexOf("rev-") === 0 ||
+        String(data.sheetRow[5] || "").indexOf("★") !== -1 ||
+        String(data.sheetRow[10] || "").toLowerCase() === "active" ||
+        String(data.sheetRow[10] || "").toLowerCase() === "pending"
+      ))
+    );
+
+    // ২. ইউজার ট্র্যাকিং ডেটা নিখুঁতভাবে শনাক্তকরণ (user traking / user tracking - শুধুমাত্র ভিজিটর ট্র্যাকিং)
+    var isTracking = !isReview && Boolean(
       data.action === "user_tracking" || 
       data.action === "user_traking" || 
       data.type === "user_tracking" ||
       data.type === "user_traking" ||
-      String(data.sheetTab || data.targetSheet || "").toLowerCase().indexOf("trak") !== -1 ||
-      String(data.sheetTab || data.targetSheet || "").toLowerCase().indexOf("track") !== -1 ||
+      String(data.sheetTab || data.targetSheet || data.target || data.tab || "").toLowerCase().indexOf("trak") !== -1 ||
+      String(data.sheetTab || data.targetSheet || data.target || data.tab || "").toLowerCase().indexOf("track") !== -1 ||
       (e && e.parameter && (
         String(e.parameter.tab || "").toLowerCase().indexOf("trak") !== -1 ||
         String(e.parameter.tab || "").toLowerCase().indexOf("track") !== -1 ||
         String(e.parameter.type || "").toLowerCase().indexOf("tracking") !== -1 ||
         String(e.parameter.action || "").toLowerCase().indexOf("tracking") !== -1
       )) ||
-      (data.sheetRow && data.sheetRow.length === 11) ||
-      Boolean(data.sessionId && (data.page || data.timeSpent))
+      Boolean(data.sessionId && (data.page || data.timeSpent)) ||
+      (data.sheetRow && data.sheetRow.length === 11 && String(data.sheetRow[10] || "").indexOf("v_") === 0)
     );
 
-    // ২. সাবস্ক্রাইবার বা নিউজলেটার নির্ধারণ
-    var isSubscriber = !isTracking && Boolean(
+    // ৩. সাবস্ক্রাইবার বা নিউজলেটার নির্ধারণ
+    var isSubscriber = !isReview && !isTracking && Boolean(
       data.action === "subscribe" || 
       data.action === "newsletter_subscription" || 
       data.type === "subscriber" ||
@@ -3150,8 +3562,8 @@ function doPost(e) {
       (data.sheetRow && data.sheetRow.length === 4 && String(data.sheetRow[1]).indexOf("@") !== -1)
     );
 
-    // ৩. গ্রাহক রেজিস্ট্রেশন চেক (শুধুমাত্র নতুন অ্যাকাউন্ট সাইন-আপ, অর্ডার কখনোই নয়!)
-    var isCustomer = !isTracking && !isSubscriber && Boolean(
+    // ৪. গ্রাহক রেজিস্ট্রেশন চেক (শুধুমাত্র নতুন অ্যাকাউন্ট সাইন-আপ, অর্ডার বা রিভিউ কখনোই নয়!)
+    var isCustomer = !isReview && !isTracking && !isSubscriber && Boolean(
       data.action === "customer_registration" || 
       data.action === "customer" ||
       data.type === "customer" ||
@@ -3168,8 +3580,8 @@ function doPost(e) {
       Boolean(data.customerId && (data.password || data.registeredAt || data.customerEmail || data.email))
     );
 
-    // ৪. অর্ডার চেক (সরাসরি এবং নিশ্চিতভাবে order sheet এ যাবে, কাস্টমার শিটে কখনোই নয়)
-    var isOrder = !isTracking && !isSubscriber && !isCustomer && Boolean(
+    // ৫. অর্ডার চেক (সরাসরি এবং নিশ্চিতভাবে order sheet এ যাবে, কাস্টমার বা রিভিউ শিটে কখনোই নয়)
+    var isOrder = !isReview && !isTracking && !isSubscriber && !isCustomer && Boolean(
       data.action === "new_order" ||
       data.action === "order" ||
       data.type === "order" ||
@@ -3237,7 +3649,8 @@ function doPost(e) {
           }
         }
       }
-      if (orderRowIndex !== -1) {
+      var orderUpdated = (orderRowIndex !== -1);
+      if (orderUpdated) {
         // অর্ডার আগে থাকলে রো আপডেট করুন (যাতে ট্র্যাকিং ও স্ট্যাটাস পরিবর্তন শিটে সিঙ্ক হয়)
         orderSheet.getRange(orderRowIndex, 1, 1, ordRow.length).setValues([ordRow]);
       } else {
@@ -3563,7 +3976,73 @@ function doPost(e) {
     } 
 
     // ===============================================
-    // ৫. অন্যান্য ডেটা ফলব্যাক
+    // ৫. কাস্টমার রিভিউ -> strictly "Customer Reviews" ট্যাবে (নাম, ইমেইল, রেটিং, কমেন্ট)
+    // ===============================================
+    else if (isReview) {
+      var reviewSheet = findSheet(ss, ["Customer Reviews", "customer reviews", "Reviews", "reviews", "গ্রাহক রিভিউ", "রিভিউ"], "review") ||
+                        ss.getSheetByName("Customer Reviews") ||
+                        ss.insertSheet("Customer Reviews");
+      if (reviewSheet.getLastRow() === 0) {
+        reviewSheet.appendRow([
+          "Review ID", "Date/Time", "Customer Name", "Customer Email", "Customer Phone", 
+          "Rating", "Product Name", "Category", "Location", "Review / Comment", "Status"
+        ]);
+        reviewSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#d9ead3");
+      }
+
+      var revId = String(data.id || data.reviewId || ("rev-" + new Date().getTime()));
+      var revDate = data.date || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+      var revName = data.name || data.customerName || "Customer";
+      var revEmail = data.email || data.customerEmail || "";
+      var revPhone = data.phone || data.customerPhone || "";
+      var revRating = (data.rating ? data.rating + "★" : "5★");
+      var revProduct = data.productName || data.product || "";
+      var revCat = data.category || "All";
+      var revLoc = data.location || "";
+      var revComment = data.comment || data.reviewComment || "";
+      var revStatus = data.status || (data.isActive !== false ? "Active" : "Pending");
+
+      var rowToAppend = data.sheetRow || [
+        revId,
+        revDate,
+        revName,
+        revEmail,
+        revPhone,
+        revRating,
+        revProduct,
+        revCat,
+        revLoc,
+        revComment,
+        revStatus
+      ];
+
+      var revUpdated = false;
+      if (reviewSheet.getLastRow() > 1 && revId) {
+        var existingIds = reviewSheet.getRange(2, 1, reviewSheet.getLastRow() - 1, 1).getValues();
+        for (var rIdx = 0; rIdx < existingIds.length; rIdx++) {
+          if (String(existingIds[rIdx][0]).trim() === revId) {
+            reviewSheet.getRange(rIdx + 2, 1, 1, rowToAppend.length).setValues([rowToAppend]);
+            revUpdated = true;
+            break;
+          }
+        }
+      }
+
+      if (!revUpdated) {
+        reviewSheet.appendRow(rowToAppend);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: "success", 
+        type: "review",
+        target: reviewSheet.getName(),
+        updatedExisting: revUpdated,
+        reviewId: revId
+      })).setMimeType(ContentService.MimeType.JSON);
+    } 
+
+    // ===============================================
+    // ৬. অন্যান্য ডেটা ফলব্যাক
     // ===============================================
     else {
       // যদি কোনো কারণে মিস হয় কিন্তু অর্ডার সংক্রান্ত ফিল্ড থাকে তবে নিশ্চিতভাবে orderSheet এ যাবে (কখনোই কাস্টমার বা ট্র্যাকিংয়ে যাবে না)
@@ -3700,6 +4179,59 @@ function clearUserTrackingSheetRows() {
     return "ইউজার ট্র্যাকিং শিটের সকল ভিজিটর লগ সফলভাবে ডিলিট করা হয়েছে";
   }
   return "ইউজার ট্র্যাকিং শিট ইতিমধ্যে সম্পূর্ণ খালি রয়েছে";
+}
+
+// ==========================================
+// ৩.২ ইউজার ট্র্যাকিং শিট থেকে দুর্ঘটনাবশত ঢোকা রিভিউ ফিল্টার করে কাস্টমার রিভিউ শিটে স্থানান্তর ও ক্লিন করার ফাংশন
+// ==========================================
+function cleanUserTrackingReviews() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var trackSheet = findSheet(ss, ["user traking", "user tracking", "User Traking", "User Tracking"], "trak") || findSheet(ss, [], "track");
+  if (!trackSheet || trackSheet.getLastRow() <= 1) return "ইউজার ট্র্যাকিং শিটে কোনো ডেটা নেই";
+
+  var revSheet = findSheet(ss, ["Customer Reviews", "customer reviews", "Reviews", "reviews"], "review") || 
+                 ss.getSheetByName("Customer Reviews") || 
+                 ss.insertSheet("Customer Reviews");
+  if (revSheet.getLastRow() === 0) {
+    revSheet.appendRow([
+      "Review ID", "Date/Time", "Customer Name", "Customer Email", "Customer Phone", 
+      "Rating", "Product Name", "Category", "Location", "Review / Comment", "Status"
+    ]);
+    revSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#d9ead3");
+  }
+
+  var numRows = trackSheet.getLastRow() - 1;
+  var numCols = Math.max(trackSheet.getLastColumn(), 11);
+  var values = trackSheet.getRange(2, 1, numRows, numCols).getValues();
+
+  var cleanTrackingRows = [];
+  var movedReviewCount = 0;
+
+  for (var i = 0; i < values.length; i++) {
+    var r = values[i];
+    var colA = String(r[0] || "").trim();
+    var colF = String(r[5] || "").trim();
+    var colK = String(r[10] || "").trim();
+
+    // শনাক্তকরণ: এটি কি কাস্টমার রিভিউ?
+    var isReviewRow = (colA.indexOf("rev-") === 0) || (colF.indexOf("★") !== -1) || (colK.toLowerCase() === "active") || (colK.toLowerCase() === "pending");
+
+    if (isReviewRow) {
+      // রিভিউ শিটে কপি বা যুক্ত করা
+      revSheet.appendRow(r.slice(0, 11));
+      movedReviewCount++;
+    } else {
+      cleanTrackingRows.push(r);
+    }
+  }
+
+  // ইউজার ট্র্যাকিং শিট রি-রাইট করা
+  trackSheet.deleteRows(2, numRows);
+  if (cleanTrackingRows.length > 0) {
+    trackSheet.getRange(2, 1, cleanTrackingRows.length, cleanTrackingRows[0].length).setValues(cleanTrackingRows);
+  }
+
+  return "ইউজার ট্র্যাকিং শিট মেরামত সম্পন্ন! " + movedReviewCount + " টি রিভিউ 'Customer Reviews' শিটে সফলভাবে স্থানান্তর করা হয়েছে এবং ট্র্যাকিং শিট ১০০% ঠিক করা হয়েছে।";
 }
 
 // ==========================================
@@ -4273,6 +4805,17 @@ function cleanAndFixOrderSheetRows() {
                   >
                     <Users className="w-4 h-4 text-sky-400" />
                     <span>Customers ({customers.length})</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("reviews")}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                      activeTab === "reviews"
+                        ? "bg-zinc-800 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    <span>Reviews ({reviews.length})</span>
                   </button>
                   <button
                     onClick={() => setActiveTab("subscribers")}
@@ -5840,6 +6383,544 @@ function cleanAndFixOrderSheetRows() {
                           ))}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* TAB: CUSTOMER REVIEWS MANAGEMENT */}
+                {activeTab === "reviews" && (
+                  <div className="space-y-4">
+                    {/* Header with Title and Action Buttons */}
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-2xl bg-zinc-800/40 border border-zinc-700/60">
+                      <div>
+                        <h3 className="font-bold text-base text-white flex items-center gap-2">
+                          <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+                          কাস্টমার রিভিউ ও ফিডব্যাক ব্যবস্থাপনা ({reviews.length})
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          ফুটারের উপরে আসল গ্রাহকদের রিভিউ। এখান থেকে রিভিউ সক্রিয় (Active/লাইভ) বা নিষ্ক্রিয় (লুকানো) রাখতে পারবেন, নতুন রিভিউ তৈরি ও এডিট করতে পারবেন, গুগল শিটে ও গিটহাবে পুশ করে স্থায়ী সেভ রাখতে পারবেন।
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Add Review Button */}
+                        <button
+                          type="button"
+                          onClick={openAddReviewModal}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>নতুন রিভিউ যোগ করুন</span>
+                        </button>
+
+                        {/* Google Sheets Sync Button */}
+                        <button
+                          type="button"
+                          onClick={handleSyncReviewsToSheets}
+                          disabled={isSyncingReviewsToSheets}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-bold active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                          title="গুগল শিটের 'Customer Reviews' ট্যাবে সমস্ত রিভিউ সিঙ্ক করুন"
+                        >
+                          <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                          <span>{isSyncingReviewsToSheets ? "সিঙ্ক হচ্ছে..." : "Google Sheet সিঙ্ক"}</span>
+                        </button>
+
+                        {/* Clean Tracking & Restore Reviews Button */}
+                        <button
+                          type="button"
+                          onClick={handleCleanTrackingAndReviews}
+                          disabled={isCleaningTracking}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-bold active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                          title="ইউজার ট্র্যাকিং শিট মেরামত করে রিভিউগুলো 'Customer Reviews' শিটে স্থানান্তর করুন"
+                        >
+                          <Sparkles className="w-4 h-4 text-amber-400" />
+                          <span>{isCleaningTracking ? "মেরামত হচ্ছে..." : "ট্র্যাকিং ও রিভিউ শিট মেরামত"}</span>
+                        </button>
+
+                        {/* GitHub Push Button */}
+                        <button
+                          type="button"
+                          onClick={handlePushReviewsToGitHub}
+                          disabled={isPushingReviews}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-200 text-xs font-bold active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                          title="সরাসরি GitHub-এ defaultReviews.ts পুশ করুন"
+                        >
+                          <Github className="w-4 h-4 text-white" />
+                          <span>{isPushingReviews ? "পুশ হচ্ছে..." : "GitHub Push"}</span>
+                        </button>
+
+                        {/* Export Code Button */}
+                        <button
+                          type="button"
+                          onClick={handleExportReviewsCode}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold border border-zinc-700 transition-all cursor-pointer"
+                          title="defaultReviews.ts ফাইল ডাউনলোড করুন"
+                        >
+                          <Download className="w-4 h-4 text-sky-400" />
+                          <span>Export Code</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Filter and Search Bar */}
+                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                      {/* Search Bar */}
+                      <div className="relative flex-1 w-full">
+                        <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="গ্রাহকের নাম, ইমেইল, ফোন, পণ্য অথবা মন্তব্য দিয়ে খুঁজুন..."
+                          value={reviewsSearchTerm}
+                          onChange={(e) => setReviewsSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                      </div>
+
+                      {/* Status Tabs */}
+                      <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900 border border-zinc-700 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setReviewsStatusFilter("all")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            reviewsStatusFilter === "all"
+                              ? "bg-zinc-800 text-white shadow-2xs"
+                              : "text-zinc-400 hover:text-zinc-200"
+                          }`}
+                        >
+                          সকল ({reviews.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReviewsStatusFilter("active")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            reviewsStatusFilter === "active"
+                              ? "bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 shadow-2xs"
+                              : "text-zinc-400 hover:text-emerald-400"
+                          }`}
+                        >
+                          সক্রিয় ({reviews.filter(r => r.isActive !== false).length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReviewsStatusFilter("inactive")}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            reviewsStatusFilter === "inactive"
+                              ? "bg-amber-600/30 text-amber-400 border border-amber-500/30 shadow-2xs"
+                              : "text-zinc-400 hover:text-amber-400"
+                          }`}
+                        >
+                          নিষ্ক্রিয় ({reviews.filter(r => r.isActive === false).length})
+                        </button>
+                      </div>
+
+                      {/* Category Filter */}
+                      <select
+                        value={reviewsCategoryFilter}
+                        onChange={(e) => setReviewsCategoryFilter(e.target.value)}
+                        className="px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-zinc-300 focus:outline-none shrink-0"
+                      >
+                        <option value="all">সকল ক্যাটাগরি</option>
+                        <option value="food">🍯 খাঁটি মধু ও ফুড</option>
+                        <option value="dates">🌴 খেজুর ও বাদাম</option>
+                        <option value="oil_ghee">🌾 সরিষার তেল ও ঘি</option>
+                        <option value="fashion">🧥 ফ্যাশন ও পোশাক</option>
+                        <option value="gadgets">📱 গ্যাজেটস ও অন্যান্য</option>
+                      </select>
+                    </div>
+
+                    {/* Reviews List */}
+                    {isLoadingReviews ? (
+                      <div className="p-8 text-center text-zinc-400">Loading reviews...</div>
+                    ) : reviews.length === 0 ? (
+                      <div className="p-8 text-center bg-zinc-800/40 rounded-2xl border border-zinc-700 text-zinc-400">
+                        এখনও কোনো রিভিউ যুক্ত করা হয়নি। উপরে "নতুন রিভিউ যোগ করুন" বাটনে ক্লিক করে প্রথম রিভিউ যোগ করুন।
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {reviews
+                          .filter((r) => {
+                            if (reviewsStatusFilter === "active" && r.isActive === false) return false;
+                            if (reviewsStatusFilter === "inactive" && r.isActive !== false) return false;
+                            if (reviewsCategoryFilter !== "all" && r.category !== reviewsCategoryFilter) return false;
+                            if (!reviewsSearchTerm.trim()) return true;
+                            const term = reviewsSearchTerm.toLowerCase();
+                            return (
+                              r.name?.toLowerCase().includes(term) ||
+                              r.email?.toLowerCase().includes(term) ||
+                              (r.phone && r.phone.toLowerCase().includes(term)) ||
+                              r.productName?.toLowerCase().includes(term) ||
+                              r.comment?.toLowerCase().includes(term)
+                            );
+                          })
+                          .map((rev) => {
+                            const isLive = rev.isActive !== false;
+                            return (
+                              <div
+                                key={rev.id}
+                                className={`p-4 rounded-2xl border transition-all ${
+                                  isLive
+                                    ? "bg-zinc-800/60 border-zinc-700/80 hover:border-emerald-500/50"
+                                    : "bg-zinc-900/50 border-zinc-800 opacity-75 hover:opacity-100"
+                                }`}
+                              >
+                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                  {/* Reviewer Details */}
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white font-bold text-sm shadow-md shrink-0">
+                                      {rev.name ? rev.name.charAt(0).toUpperCase() : "R"}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <h4 className="font-bold text-sm text-white">{rev.name}</h4>
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                          isLive
+                                            ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                                            : "bg-zinc-700/50 border-zinc-600 text-zinc-400"
+                                        }`}>
+                                          {isLive ? "● লাইভ (Active)" : "○ লুকানো (Inactive)"}
+                                        </span>
+                                        {rev.isVerified !== false && (
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-1 font-semibold">
+                                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                            Verified
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center gap-3 text-xs text-zinc-400 mt-1 flex-wrap font-mono">
+                                        {rev.email && (
+                                          <span className="flex items-center gap-1">
+                                            <Mail className="w-3 h-3 text-zinc-500" />
+                                            {rev.email}
+                                          </span>
+                                        )}
+                                        {rev.phone && (
+                                          <span>• {rev.phone}</span>
+                                        )}
+                                        {rev.location && (
+                                          <span>• {rev.location}</span>
+                                        )}
+                                        <span>
+                                          • {new Date(rev.date).toLocaleDateString("bn-BD")}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Right Action Buttons */}
+                                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                                    {/* Toggle Active / Inactive Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleReviewActive(rev.id, isLive)}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                                        isLive
+                                          ? "bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/40 text-emerald-300"
+                                          : "bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-300"
+                                      }`}
+                                      title={isLive ? "ওয়েবসাইট থেকে লুকাতে ক্লিক করুন" : "ওয়েবসাইটে লাইভ দেখাতে ক্লিক করুন"}
+                                    >
+                                      {isLive ? "সক্রিয় (Active)" : "নিষ্ক্রিয় (Inactive)"}
+                                    </button>
+
+                                    {/* Edit Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditReviewModal(rev)}
+                                      className="p-1.5 rounded-xl text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition-colors cursor-pointer"
+                                      title="রিভিউ এডিট করুন"
+                                    >
+                                      <Edit2 className="w-4 h-4 text-sky-400" />
+                                    </button>
+
+                                    {/* Delete Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteReview(rev)}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all active:scale-95 cursor-pointer text-xs font-bold"
+                                      title="রিভিউ মুছে ফেলুন"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span>Delete</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Review Content & Product Information */}
+                                <div className="mt-3 pt-3 border-t border-zinc-700/50 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                                  <div className="md:col-span-1">
+                                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">পণ্য ও রেটিং</span>
+                                    <p className="font-semibold text-zinc-200 mt-0.5">{rev.productName}</p>
+                                    <div className="flex items-center gap-1 mt-1 text-amber-400">
+                                      {Array.from({ length: 5 }).map((_, i) => (
+                                        <Star
+                                          key={i}
+                                          className={`w-3.5 h-3.5 ${
+                                            i < (rev.rating || 5)
+                                              ? "fill-amber-400 text-amber-400"
+                                              : "text-zinc-600"
+                                          }`}
+                                        />
+                                      ))}
+                                      <span className="text-[11px] font-bold text-amber-400 ml-1">
+                                        {rev.rating || 5}★
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="md:col-span-3">
+                                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">গ্রাহকের মন্তব্য (Review)</span>
+                                    <p className="text-zinc-300 mt-0.5 leading-relaxed bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-800">
+                                      "{rev.comment}"
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ADD / EDIT REVIEW MODAL */}
+                {isReviewFormOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div
+                      className="fixed inset-0 -z-10"
+                      onClick={() => setIsReviewFormOpen(false)}
+                    />
+                    <div className="relative w-full max-w-lg rounded-3xl bg-zinc-900 border border-zinc-700 p-6 sm:p-8 shadow-2xl overflow-hidden max-h-[92dvh] overflow-y-auto">
+                      <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center shadow-2xs">
+                            <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-base text-white">
+                              {editingReview ? "রিভিউ এডিট করুন" : "নতুন কাস্টমার রিভিউ যোগ করুন"}
+                            </h3>
+                            <p className="text-xs text-zinc-400">
+                              {editingReview
+                                ? "রিভিউ সংক্রান্ত তথ্য পরিবর্তন করে সেভ করুন"
+                                : "সরাসরি ওয়েবসাইটে প্রদর্শনের জন্য রিভিউ তৈরি করুন ও গুগল শিটে সিঙ্ক রাখুন"}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsReviewFormOpen(false)}
+                          className="p-1.5 rounded-xl text-zinc-400 hover:text-white cursor-pointer active:scale-95"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!revFormName.trim() || !revFormComment.trim() || !revFormProduct.trim()) {
+                            addToast("নাম, পণ্য এবং রিভিউ পূরণ আবশ্যক", "error");
+                            return;
+                          }
+                          handleSaveReview({
+                            name: revFormName.trim(),
+                            email: revFormEmail.trim().toLowerCase(),
+                            phone: revFormPhone.trim(),
+                            location: revFormLocation.trim() || "ঢাকা",
+                            productName: revFormProduct.trim(),
+                            category: revFormCategory,
+                            rating: revFormRating,
+                            comment: revFormComment.trim(),
+                            isActive: revFormIsActive,
+                            isVerified: revFormIsVerified
+                          });
+                        }}
+                        className="space-y-4 pt-4 text-xs"
+                      >
+                        {/* Rating Selector */}
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-300 mb-1.5">
+                            স্টার রেটিং:
+                          </label>
+                          <div className="flex items-center gap-2">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                type="button"
+                                onClick={() => setRevFormRating(star)}
+                                className="p-1 text-amber-400 hover:scale-110 active:scale-90 transition-transform cursor-pointer"
+                              >
+                                <Star
+                                  className={`w-7 h-7 ${
+                                    star <= revFormRating
+                                      ? "fill-amber-400 text-amber-400"
+                                      : "text-zinc-700"
+                                  }`}
+                                />
+                              </button>
+                            ))}
+                            <span className="text-xs font-bold text-amber-400 ml-2">
+                              {revFormRating} / 5 স্টার
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Name & Email */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-bold text-zinc-300 mb-1">
+                              গ্রাহকের নাম *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={revFormName}
+                              onChange={(e) => setRevFormName(e.target.value)}
+                              placeholder="উদাঃ তানভীর আহমেদ"
+                              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-zinc-300 mb-1">
+                              ইমেইল এড্রেস (গুগল শিটে যাবে) *
+                            </label>
+                            <input
+                              type="email"
+                              required
+                              value={revFormEmail}
+                              onChange={(e) => setRevFormEmail(e.target.value)}
+                              placeholder="tanvir@gmail.com"
+                              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Phone & Location */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-bold text-zinc-300 mb-1">
+                              মোবাইল নম্বর (ঐচ্ছিক)
+                            </label>
+                            <input
+                              type="tel"
+                              value={revFormPhone}
+                              onChange={(e) => setRevFormPhone(e.target.value)}
+                              placeholder="017XXXXXXXX"
+                              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-zinc-300 mb-1">
+                              ঠিকানা / জেলা
+                            </label>
+                            <input
+                              type="text"
+                              value={revFormLocation}
+                              onChange={(e) => setRevFormLocation(e.target.value)}
+                              placeholder="মিরপুর-১০, ঢাকা"
+                              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Product Name & Category */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-bold text-zinc-300 mb-1">
+                              ক্রয়কৃত পণ্যের নাম *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={revFormProduct}
+                              onChange={(e) => setRevFormProduct(e.target.value)}
+                              placeholder="উদাঃ সুন্দরবনের মধু - ১ কেজি"
+                              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-zinc-300 mb-1">
+                              ক্যাটাগরি
+                            </label>
+                            <select
+                              value={revFormCategory}
+                              onChange={(e) => setRevFormCategory(e.target.value as any)}
+                              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            >
+                              <option value="food">🍯 খাঁটি মধু ও ফুড</option>
+                              <option value="dates">🌴 খেজুর ও বাদাম</option>
+                              <option value="oil_ghee">🌾 সরিষার তেল ও ঘি</option>
+                              <option value="fashion">🧥 ফ্যাশন ও পোশাক</option>
+                              <option value="gadgets">📱 গ্যাজেটস ও অন্যান্য</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Review Comment */}
+                        <div>
+                          <label className="block text-xs font-bold text-zinc-300 mb-1">
+                            গ্রাহকের রিভিউ ও অভিজ্ঞতা *
+                          </label>
+                          <textarea
+                            required
+                            rows={4}
+                            value={revFormComment}
+                            onChange={(e) => setRevFormComment(e.target.value)}
+                            placeholder="পণ্যটির স্বাদ, মান ও ডেলিভারি নিয়ে বিস্তারিত লিখুন..."
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none"
+                          />
+                        </div>
+
+                        {/* Status Toggles: Active & Verified */}
+                        <div className="p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/80 flex items-center justify-between gap-4">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={revFormIsActive}
+                              onChange={(e) => setRevFormIsActive(e.target.checked)}
+                              className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <div>
+                              <span className="font-bold text-xs text-white block">সক্রিয় রাখুন (Active)</span>
+                              <span className="text-[10px] text-zinc-400">টিক দেওয়া থাকলে লাইভ ওয়েবসাইটে প্রদর্শিত হবে</span>
+                            </div>
+                          </label>
+
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={revFormIsVerified}
+                              onChange={(e) => setRevFormIsVerified(e.target.checked)}
+                              className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <div>
+                              <span className="font-bold text-xs text-white block">Verified Badge</span>
+                              <span className="text-[10px] text-zinc-400">যাচাইকৃত ক্রেতা ব্যাজ যুক্ত করুন</span>
+                            </div>
+                          </label>
+                        </div>
+
+                        <div className="pt-2 flex items-center justify-end gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setIsReviewFormOpen(false)}
+                            className="px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white cursor-pointer"
+                          >
+                            বাতিল
+                          </button>
+                          <button
+                            type="submit"
+                            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/25 active:scale-95 transition-all cursor-pointer"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            <span>{editingReview ? "আপডেট করুন" : "রিভিউ সংরক্ষণ করুন"}</span>
+                          </button>
+                        </div>
+                      </form>
+                    </div>
                   </div>
                 )}
 
@@ -8619,6 +9700,49 @@ function cleanAndFixOrderSheetRows() {
                     className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer transition-all active:scale-95"
                   >
                     Delete Subscriber
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Review Confirmation Modal (In-App Modal - works inside iframe) */}
+          {reviewToDelete && (
+            <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+              <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl animate-in fade-in zoom-in duration-150">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 shrink-0">
+                    <Trash2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-white">রিভিউ মুছে ফেলবেন?</h4>
+                    <p className="text-[11px] text-zinc-400">Delete Review: {reviewToDelete.name}</p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-800/60 border border-zinc-700 text-xs text-zinc-300">
+                  <p className="text-zinc-400 text-[11px]">পণ্য:</p>
+                  <p className="font-bold text-white text-sm mt-0.5">{reviewToDelete.productName || "Product"}</p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs leading-relaxed">
+                  ✓ <strong>ওয়েবসাইট থেকে সম্পূর্ণ মুছে যাবে:</strong> এই রিভিউটি লাইভ ওয়েবসাইট ও অ্যাডমিন প্যানেল থেকে সফলভাবে স্থায়ীভাবে অপসারিত হবে।
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setReviewToDelete(null)}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    Cancel (বাতিল)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDeleteReview}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 cursor-pointer transition-all active:scale-95"
+                  >
+                    Delete Review (মুছে ফেলুন)
                   </button>
                 </div>
               </div>

@@ -24,6 +24,7 @@ import { DeliveryPolicyModal } from "./components/DeliveryPolicyModal";
 import { FloatingWhatsApp } from "./components/FloatingWhatsApp";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import { SecretAdminModal } from "./components/SecretAdminModal";
+import { CustomerReviewsSection } from "./components/CustomerReviewsSection";
 import { Footer } from "./components/Footer";
 import { ToastContainer } from "./components/ToastContainer";
 import { BASE_CATEGORIES, getDynamicCategories } from "./data/categories";
@@ -552,7 +553,7 @@ const StoreContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f2f7f4] bg-[radial-gradient(rgba(234,88,12,0.16)_1.5px,transparent_1.5px)] [background-size:26px_26px] dark:bg-zinc-950 dark:bg-[radial-gradient(rgba(249,115,22,0.10)_1.5px,transparent_1.5px)] text-zinc-900 dark:text-zinc-100 selection:bg-orange-500 selection:text-white transition-colors duration-200">
+    <div className="min-h-screen flex flex-col bg-[#f2f7f4] bg-[radial-gradient(rgba(234,88,12,0.20)_1.5px,transparent_1.5px)] [background-size:24px_24px] dark:bg-zinc-950 dark:bg-[radial-gradient(rgba(249,115,22,0.18)_1.5px,transparent_1.5px)] text-zinc-900 dark:text-zinc-100 selection:bg-emerald-600 selection:text-white transition-colors duration-200">
       {/* Toast Notification Layer */}
       <ToastContainer />
 
@@ -604,6 +605,9 @@ const StoreContent: React.FC = () => {
         />
       </main>
 
+      {/* Verified Customer Reviews Section */}
+      <CustomerReviewsSection />
+
       {/* Footer */}
       <Footer
         onCategorySelect={(cat) => {
@@ -629,6 +633,10 @@ const StoreContent: React.FC = () => {
         onOpenWishlist={() => setIsWishlistOpen(true)}
         wishlistCount={wishlistIds.length}
         categories={dynamicCategories}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        products={products}
+        onProductClick={handleProductClick}
       />
 
       {/* Cart Slide-Over Drawer */}
@@ -701,7 +709,9 @@ const StoreContent: React.FC = () => {
       <CustomerAuthModal />
 
       {/* Customer Profile & Order History Modal */}
-      <CustomerProfileModal />
+      <CustomerProfileModal
+        onOpenTrackOrder={(q) => handleOpenTrackOrder(q)}
+      />
 
       {/* Product Quick View Modal */}
       <ProductDetailModal

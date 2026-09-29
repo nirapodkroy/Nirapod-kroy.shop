@@ -182,6 +182,30 @@ try {
     }
   }
 
+  // 8.5. Ensure reviews.json is synced across public, dist, docs, and assets
+  const publicReviewsFile = path.join(root, 'public', 'reviews.json');
+  if (fs.existsSync(publicReviewsFile)) {
+    try {
+      const reviewsJsonStr = fs.readFileSync(publicReviewsFile, 'utf-8');
+      fs.writeFileSync(path.join(root, 'reviews.json'), reviewsJsonStr);
+      if (fs.existsSync(dist)) {
+        fs.writeFileSync(path.join(dist, 'reviews.json'), reviewsJsonStr);
+        const distPublic = path.join(dist, 'public');
+        if (!fs.existsSync(distPublic)) fs.mkdirSync(distPublic, { recursive: true });
+        fs.writeFileSync(path.join(distPublic, 'reviews.json'), reviewsJsonStr);
+      }
+      if (fs.existsSync(docs)) {
+        fs.writeFileSync(path.join(docs, 'reviews.json'), reviewsJsonStr);
+        const docsPublic = path.join(docs, 'public');
+        if (!fs.existsSync(docsPublic)) fs.mkdirSync(docsPublic, { recursive: true });
+        fs.writeFileSync(path.join(docsPublic, 'reviews.json'), reviewsJsonStr);
+      }
+      if (fs.existsSync(assets)) {
+        fs.writeFileSync(path.join(assets, 'reviews.json'), reviewsJsonStr);
+      }
+    } catch {}
+  }
+
   // 9. Sync sitemap.xml and robots.txt
   ['sitemap.xml', 'robots.txt'].forEach(file => {
     const srcFile = path.join(root, 'public', file);

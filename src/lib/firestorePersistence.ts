@@ -117,9 +117,22 @@ export async function saveUserOrderToFirestore(userId: string, order: Order): Pr
       paymentMethod: order.paymentMethod || "Cash on Delivery",
       status: order.status || "Pending",
       createdAt: order.createdAt || new Date().toISOString(),
-      trackingNumber: order.trackingNumber || ""
+      trackingNumber: order.trackingNumber || "",
+      deliveryCharge: Number(order.deliveryCharge) || 0,
+      note: order.note || "",
+      items: Array.isArray(order.items)
+        ? order.items.map((item) => ({
+            id: item.id || item.productId || "",
+            productId: item.productId || item.id || "",
+            title: item.title || "Item",
+            price: Number(item.price) || 0,
+            quantity: Number(item.quantity) || 1,
+            selectedSize: item.selectedSize || "",
+            imageUrl: item.imageUrl || ""
+          }))
+        : []
     };
-    await setDoc(doc(db, "users", userId, "orders", cleanId), orderDoc);
+    await setDoc(doc(db, "users", userId, "orders", cleanId), orderDoc, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }

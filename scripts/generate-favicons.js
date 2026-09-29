@@ -1,6 +1,14 @@
 import fs from 'fs';
 import path from 'path';
-import sharp from 'sharp';
+
+let sharp;
+try {
+  const sharpModule = await import('sharp');
+  sharp = sharpModule.default || sharpModule;
+} catch (e) {
+  console.log('[Favicon Generator] sharp package not present, retaining pre-generated Google-compliant favicons in public/');
+  process.exit(0);
+}
 
 const root = process.cwd();
 const logoPngPath = path.join(root, 'public', 'logo.png');
