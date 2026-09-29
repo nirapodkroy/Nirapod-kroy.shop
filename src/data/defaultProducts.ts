@@ -406,7 +406,7 @@ export const DEFAULT_PRODUCTS: Product[] = [
     "regularPrice": 1020,
     "category": "Panjabi",
     "parentCategory": "Fashion",
-    "stock": 11,
+    "stock": 9,
     "imageUrl": "/images/products/prod-mua3v17h-cover.jpg",
     "images": [
       "/images/products/prod-mua3v17h-0.jpg",
