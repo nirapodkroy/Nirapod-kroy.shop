@@ -477,6 +477,7 @@ export async function syncReviewToGoogleSheetsClient(review: any): Promise<boole
   const payload = {
     action: "customer_review",
     type: "review",
+    isReview: true,
     sheetTab: "review sheet",
     targetSheet: "review sheet",
     targetTab: "review sheet",
@@ -492,7 +493,9 @@ export async function syncReviewToGoogleSheetsClient(review: any): Promise<boole
     email: revEmail,
     phone: revPhone,
     rating: revRating,
+    ratingStr: revRatingStr,
     productName: revProduct,
+    product: revProduct,
     category: revCategory,
     location: revLocation,
     comment: revComment,
@@ -502,19 +505,11 @@ export async function syncReviewToGoogleSheetsClient(review: any): Promise<boole
   };
 
   const urlWithParams = target + (target.includes("?") ? "&" : "?") + 
-    `tab=review+sheet&target=review+sheet&sheetTab=review+sheet&targetSheet=review+sheet&altTab=Customer+Reviews&type=review&action=customer_review&id=${encodeURIComponent(revId)}&name=${encodeURIComponent(revName)}&email=${encodeURIComponent(revEmail)}&phone=${encodeURIComponent(revPhone)}&rating=${encodeURIComponent(revRating)}&product=${encodeURIComponent(revProduct)}&location=${encodeURIComponent(revLocation)}&comment=${encodeURIComponent(revComment)}&date=${encodeURIComponent(revDate)}`;
+    `tab=review+sheet&target=review+sheet&sheetTab=review+sheet&targetSheet=review+sheet&altTab=Customer+Reviews&type=review&action=customer_review&isReview=true&id=${encodeURIComponent(revId)}&name=${encodeURIComponent(revName)}&email=${encodeURIComponent(revEmail)}&phone=${encodeURIComponent(revPhone)}&rating=${encodeURIComponent(revRating)}&product=${encodeURIComponent(revProduct)}&location=${encodeURIComponent(revLocation)}&comment=${encodeURIComponent(revComment)}&date=${encodeURIComponent(revDate)}`;
 
   try {
     const jsonBody = JSON.stringify(payload);
-    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-      try {
-        const blob = new Blob([jsonBody], { type: "text/plain;charset=utf-8" });
-        if (navigator.sendBeacon(urlWithParams, blob)) {
-          return true;
-        }
-      } catch {}
-    }
-
+    // Directly fetch with keepalive: true to ensure reliable dispatch across Google Apps Script 302 redirects
     await fetch(urlWithParams, {
       method: "POST",
       mode: "no-cors",

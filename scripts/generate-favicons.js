@@ -15,13 +15,26 @@ const logoPngPath = path.join(root, 'public', 'logo.png');
 const svgPath = path.join(root, 'favicon.svg');
 
 let sourceBuffer;
-if (fs.existsSync(logoPngPath)) {
-  sourceBuffer = fs.readFileSync(logoPngPath);
-} else if (fs.existsSync(svgPath)) {
-  sourceBuffer = fs.readFileSync(svgPath);
-} else {
-  console.error('Source icon not found at logo.png or favicon.svg');
-  process.exit(1);
+const candidateLogoPaths = [
+  path.join(root, 'public', 'logo.png'),
+  path.join(root, 'logo.png'),
+  path.join(root, 'assets', 'logo.png')
+];
+
+for (const p of candidateLogoPaths) {
+  if (fs.existsSync(p)) {
+    sourceBuffer = fs.readFileSync(p);
+    break;
+  }
+}
+
+if (!sourceBuffer) {
+  if (fs.existsSync(svgPath)) {
+    sourceBuffer = fs.readFileSync(svgPath);
+  } else {
+    console.error('Source icon not found at logo.png or favicon.svg');
+    process.exit(1);
+  }
 }
 
 // Target dimensions required by Google Search and modern browsers
@@ -46,7 +59,8 @@ async function generateFavicons() {
     const buffer = await sharp(sourceBuffer)
       .resize(item.size, item.size, {
         fit: 'contain',
-        background: { r: 0, g: 0, b: 0, alpha: 0 }
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+        kernel: 'lanczos3'
       })
       .png({ compressionLevel: 9 })
       .toBuffer();
@@ -89,6 +103,15 @@ async function generateFavicons() {
   const icoBuffer = Buffer.concat([icoHeader, ...entryBuffers, ...imageBuffers]);
   pngBuffers['favicon.ico'] = icoBuffer;
 
+  // Generate high-resolution SVG favicon & brand logo mirroring the new logo
+  const logoBase64 = sourceBuffer.toString('base64');
+  const svgBadgeContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="100%" height="100%">
+  <image href="data:image/png;base64,${logoBase64}" width="1024" height="1024" />
+</svg>`;
+  pngBuffers['favicon.svg'] = Buffer.from(svgBadgeContent, 'utf-8');
+  pngBuffers['logo.svg'] = Buffer.from(svgBadgeContent, 'utf-8');
+  pngBuffers['logo.png'] = sourceBuffer;
+
   // Directories where favicons need to be placed
   const targetDirs = [
     root,
@@ -98,7 +121,7 @@ async function generateFavicons() {
     path.join(root, 'docs', 'assets')
   ];
 
-  // Write Web Manifest
+  // Write Web Manifest with cache buster query params
   const manifest = {
     name: "Nirapod Kroy | নিরাপদ ক্রয়",
     short_name: "Nirapod Kroy",
@@ -109,26 +132,32 @@ async function generateFavicons() {
     theme_color: "#10b981",
     icons: [
       {
-        src: "/favicon-48x48.png",
+        src: "/favicon-48x48.png?v=20261012",
         sizes: "48x48",
         type: "image/png",
         purpose: "any maskable"
       },
       {
-        src: "/favicon-96x96.png",
+        src: "/favicon-96x96.png?v=20261012",
         sizes: "96x96",
         type: "image/png",
         purpose: "any maskable"
       },
       {
-        src: "/favicon-192x192.png",
+        src: "/favicon-192x192.png?v=20261012",
         sizes: "192x192",
         type: "image/png",
         purpose: "any maskable"
       },
       {
-        src: "/favicon-512x512.png",
+        src: "/favicon-512x512.png?v=20261012",
         sizes: "512x512",
+        type: "image/png",
+        purpose: "any maskable"
+      },
+      {
+        src: "/logo.png?v=20261012",
+        sizes: "1024x1024",
         type: "image/png",
         purpose: "any maskable"
       }
@@ -148,7 +177,8 @@ async function generateFavicons() {
     fs.writeFileSync(path.join(dir, 'manifest.json'), manifestStr);
   }
 
-  console.log('[Favicon Generator] Successfully created Google-ready icons (48x48, 96x96, 192x192, 512x512, .ico, apple-touch-icon)!');
+  console.log('[Favicon Generator] Successfully created Google-ready icons (48x48, 96x96, 192x192, 512x512, .ico, apple-touch-icon, logo.svg, favicon.svg)!');
+  process.exit(0);
 }
 
 generateFavicons().catch(err => {

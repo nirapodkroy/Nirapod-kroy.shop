@@ -277,13 +277,13 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({
             <div className="flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center bg-white shadow-md shrink-0">
                 <img
-                  src="/logo.png"
+                  src="/logo.png?v=20261012"
                   alt="Nirapod Kroy Logo"
                   className="w-full h-full object-contain"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    if (target.src.endsWith(".png")) {
-                      target.src = "/logo.svg";
+                    if (target.src.includes(".png")) {
+                      target.src = "/logo.svg?v=20261012";
                     }
                   }}
                 />

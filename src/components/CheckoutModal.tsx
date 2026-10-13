@@ -399,13 +399,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <div className="relative w-20 h-20 mx-auto">
                 <div className="w-20 h-20 rounded-full overflow-hidden bg-white shadow-lg flex items-center justify-center">
                   <img
-                    src="/logo.png"
+                    src="/logo.png?v=20261012"
                     alt="Nirapod Kroy Logo"
                     className="w-full h-full object-contain"
                     onError={(e) => {
                       const target = e.currentTarget;
-                      if (target.src.endsWith(".png")) {
-                        target.src = "/logo.svg";
+                      if (target.src.includes(".png")) {
+                        target.src = "/logo.svg?v=20261012";
                       }
                     }}
                   />
@@ -518,13 +518,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full overflow-hidden bg-white shadow-sm flex items-center justify-center shrink-0">
                   <img
-                    src="/logo.png"
+                    src="/logo.png?v=20261012"
                     alt="Nirapod Kroy Logo"
                     className="w-full h-full object-contain"
                     onError={(e) => {
                       const target = e.currentTarget;
-                      if (target.src.endsWith(".png")) {
-                        target.src = "/logo.svg";
+                      if (target.src.includes(".png")) {
+                        target.src = "/logo.svg?v=20261012";
                       }
                     }}
                   />

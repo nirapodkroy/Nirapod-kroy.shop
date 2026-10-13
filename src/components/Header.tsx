@@ -294,13 +294,13 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Official Nirapod Kroy Handshake Logo Badge */}
               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden flex items-center justify-center shadow-md bg-white group-hover:scale-105 transition-transform shrink-0">
                 <img
-                  src="/logo.png"
+                  src="/logo.png?v=20261012"
                   alt="Nirapod Kroy Logo"
                   className="w-full h-full object-contain"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    if (target.src.endsWith(".png")) {
-                      target.src = "/logo.svg";
+                    if (target.src.includes(".png")) {
+                      target.src = "/logo.svg?v=20261012";
                     }
                   }}
                 />
@@ -866,13 +866,13 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-full bg-white dark:bg-zinc-800 shadow-xs shrink-0 overflow-hidden flex items-center justify-center">
                     <img
-                      src="/logo.png"
+                      src="/logo.png?v=20261012"
                       alt="Nirapod Kroy"
                       className="w-full h-full object-contain"
                       onError={(e) => {
                         const target = e.currentTarget;
-                        if (target.src.endsWith(".png")) {
-                          target.src = "/logo.svg";
+                        if (target.src.includes(".png")) {
+                          target.src = "/logo.svg?v=20261012";
                         }
                       }}
                     />

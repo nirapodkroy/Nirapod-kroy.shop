@@ -103,6 +103,7 @@ try {
     'favicon-512x512.png',
     'apple-touch-icon.png',
     'logo.png',
+    'logo.svg',
     'site.webmanifest',
     'manifest.json'
   ];

@@ -328,6 +328,7 @@ function loadReviewsFromFiles(): Review[] {
 // Helper to save reviews across all static targets and TS data file
 function saveReviewsToStaticFiles(reviewsList: Review[]): void {
   try {
+    storeState.reviews = reviewsList;
     const jsonStr = JSON.stringify(reviewsList, null, 2);
     const pub = path.join(process.cwd(), "public", "reviews.json");
     const docs = path.join(process.cwd(), "docs", "reviews.json");
@@ -345,6 +346,11 @@ function saveReviewsToStaticFiles(reviewsList: Review[]): void {
       const tsCode = `export interface Review {\n  id: string;\n  name: string;\n  email: string;\n  phone?: string;\n  location: string;\n  rating: number;\n  productName: string;\n  category: "all" | "food" | "dates" | "oil_ghee" | "fashion" | "gadgets";\n  comment: string;\n  date: string;\n  isActive: boolean;\n  isVerified: boolean;\n  likes: number;\n}\n\nexport const DEFAULT_REVIEWS: Review[] = ${jsonStr};\n`;
       fs.writeFileSync(tsFile, tsCode, "utf-8");
     }
+
+    // Also persist to master DATA_FILE (.app_store_data.json)
+    try {
+      fs.writeFileSync(DATA_FILE, JSON.stringify(storeState, null, 2), "utf-8");
+    } catch {}
   } catch (err) {
     console.warn("[Store] Error saving reviews to static files:", err);
   }
@@ -482,6 +488,16 @@ function loadState() {
 
     if (!storeState.customers || !Array.isArray(storeState.customers) || storeState.customers.length === 0) {
       storeState.customers = INITIAL_CUSTOMERS;
+    }
+
+    // Always restore reviews from authoritative static files or default reviews
+    if (!storeState.reviews || !Array.isArray(storeState.reviews) || storeState.reviews.length === 0) {
+      const diskReviews = loadReviewsFromFiles();
+      if (Array.isArray(diskReviews) && diskReviews.length > 0) {
+        storeState.reviews = diskReviews;
+      } else {
+        storeState.reviews = DEFAULT_REVIEWS;
+      }
     }
 
     if (!storeState.webhookUrl || storeState.webhookUrl.includes("AKfycbxR4AaUJHq0xQ5dYZfm5sqOBD5tb9urKwjgGQgImUQLP2AuQoxR6bo2hA7V9r9BHq4")) {
@@ -1032,6 +1048,7 @@ async function syncReviewToGoogleSheets(review: any): Promise<boolean> {
     const payload = {
       action: "customer_review",
       type: "review",
+      isReview: true,
       sheetTab: "review sheet",
       targetSheet: "review sheet",
       targetTab: "review sheet",
@@ -1047,7 +1064,9 @@ async function syncReviewToGoogleSheets(review: any): Promise<boolean> {
       email: revEmail,
       phone: revPhone,
       rating: revRating,
+      ratingStr: revRatingStr,
       productName: revProduct,
+      product: revProduct,
       category: revCategory,
       location: revLocation,
       comment: revComment,
@@ -1057,7 +1076,7 @@ async function syncReviewToGoogleSheets(review: any): Promise<boolean> {
     };
 
     const urlWithParams = targetUrl + (targetUrl.includes("?") ? "&" : "?") + 
-      `tab=review+sheet&target=review+sheet&sheetTab=review+sheet&targetSheet=review+sheet&altTab=Customer+Reviews&type=review&action=customer_review&id=${encodeURIComponent(revId)}&name=${encodeURIComponent(revName)}&email=${encodeURIComponent(revEmail)}&phone=${encodeURIComponent(revPhone)}&rating=${encodeURIComponent(revRating)}&product=${encodeURIComponent(revProduct)}&location=${encodeURIComponent(revLocation)}&comment=${encodeURIComponent(revComment)}&date=${encodeURIComponent(revDate)}`;
+      `tab=review+sheet&target=review+sheet&sheetTab=review+sheet&targetSheet=review+sheet&altTab=Customer+Reviews&type=review&action=customer_review&isReview=true&id=${encodeURIComponent(revId)}&name=${encodeURIComponent(revName)}&email=${encodeURIComponent(revEmail)}&phone=${encodeURIComponent(revPhone)}&rating=${encodeURIComponent(revRating)}&product=${encodeURIComponent(revProduct)}&location=${encodeURIComponent(revLocation)}&comment=${encodeURIComponent(revComment)}&date=${encodeURIComponent(revDate)}`;
 
     console.log(`[Google Sheets] Dispatching review from ${revName} (${revEmail}) to ${urlWithParams}`);
 
@@ -3187,6 +3206,7 @@ app.delete("/api/reviews/:id", (req, res) => {
   if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
   storeState.reviews = storeState.reviews.filter(r => String(r.id).trim() !== String(id).trim());
   saveReviewsToStaticFiles(storeState.reviews);
+  saveState();
   res.json({ success: true, message: "Review deleted successfully" });
 });
 
@@ -3222,6 +3242,7 @@ app.post("/api/reviews", async (req, res) => {
       storeState.reviews.unshift(newReview);
     }
     saveReviewsToStaticFiles(storeState.reviews);
+    saveState();
 
     // Sync to Google Sheets webhook under "review sheet" tab!
     syncReviewToGoogleSheets(newReview).catch(err => {
@@ -3240,12 +3261,42 @@ app.get("/api/admin/reviews", requireAdmin, (_req, res) => {
   res.json({ reviews: allReviews });
 });
 
+// POST /api/admin/reviews/save-all (Admin: save all reviews to database, static files, and Google Sheets)
+app.post("/api/admin/reviews/save-all", requireAdmin, async (req, res) => {
+  try {
+    const incoming = req.body.reviews;
+    if (!Array.isArray(incoming)) {
+      return res.status(400).json({ error: "Reviews array is required." });
+    }
+    storeState.reviews = incoming;
+    saveReviewsToStaticFiles(incoming);
+    saveState();
+
+    // Sync all reviews to Google Sheets in background
+    let count = 0;
+    for (const r of incoming) {
+      syncReviewToGoogleSheets(r).catch(() => {});
+      count++;
+    }
+
+    res.json({
+      success: true,
+      message: `সফলভাবে ${incoming.length} টি রিভিউ ডাটাবেজ, ফাইল ও গুগল শিটে সেভ করা হয়েছে!`,
+      reviews: incoming,
+      count
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/admin/reviews/sync-sheets (Admin: push and sync all reviews to Google Sheets)
 app.post("/api/admin/reviews/sync-sheets", requireAdmin, async (req, res) => {
   const incoming = req.body.reviews;
   if (Array.isArray(incoming) && incoming.length > 0) {
     storeState.reviews = incoming;
     saveReviewsToStaticFiles(incoming);
+    saveState();
   }
   const reviewsToSync = storeState.reviews || loadReviewsFromFiles();
   let count = 0;
@@ -3286,6 +3337,7 @@ app.post("/api/admin/reviews", requireAdmin, async (req, res) => {
       storeState.reviews.unshift(newReview);
     }
     saveReviewsToStaticFiles(storeState.reviews);
+    saveState();
 
     // Sync to Google Sheets
     syncReviewToGoogleSheets(newReview).catch(() => {});
@@ -3314,6 +3366,7 @@ app.put("/api/admin/reviews/:id", requireAdmin, (req, res) => {
   };
 
   saveReviewsToStaticFiles(storeState.reviews);
+  saveState();
 
   // Sync edited review to Google Sheets
   syncReviewToGoogleSheets(storeState.reviews[idx]).catch(err => {
@@ -3329,6 +3382,7 @@ app.delete("/api/admin/reviews/:id", requireAdmin, (req, res) => {
   if (!storeState.reviews) storeState.reviews = loadReviewsFromFiles();
   storeState.reviews = storeState.reviews.filter(r => String(r.id).trim() !== String(id).trim());
   saveReviewsToStaticFiles(storeState.reviews);
+  saveState();
   res.json({ success: true, message: "Review deleted successfully" });
 });
 
@@ -3456,6 +3510,40 @@ app.post("/api/admin/test-email", requireAdmin, async (req, res) => {
   }
   return res.status(502).json({
     error: "টেস্ট ইমেইল রিকোয়েস্ট পাঠাতে সমস্যা হয়েছে। আপনার Apps Script কোড এবং Webhook URL নিশ্চিত করুন।"
+  });
+});
+
+// POST /api/admin/test-review-webhook - Test sending a live customer review to the review sheet tab
+app.post("/api/admin/test-review-webhook", requireAdmin, async (req, res) => {
+  const targetUrl = req.body.url || req.body.webhookUrl || storeState.webhookUrl || googleSheetWebhookUrl || DEFAULT_GOOGLE_SHEET_WEBHOOK;
+  if (!targetUrl || !targetUrl.startsWith("http")) {
+    return res.status(400).json({ error: "একটি সঠিক গুগল শিট ওয়েবহুক ইউআরএল দিন।" });
+  }
+
+  const testReview = {
+    id: "REV-TEST-" + Math.floor(1000 + Math.random() * 9000),
+    name: "তানভীর আহমেদ (টেস্ট রিভিউ)",
+    email: "tanvir.test@gmail.com",
+    phone: "01712345678",
+    rating: 5,
+    productName: "সুন্দরবনের খাঁটি মধু (টেস্ট)",
+    category: "food",
+    location: "মিরপুর, ঢাকা",
+    comment: "অসাধারণ পণ্য! সার্ভিস ও ডেলিভারি খুব দ্রুত হয়েছে। টেস্ট রিভিউ সফল হয়েছে।",
+    date: new Date().toISOString(),
+    isActive: true,
+    isVerified: true
+  };
+
+  const ok = await syncReviewToGoogleSheets(testReview);
+  if (ok) {
+    return res.json({
+      success: true,
+      message: "টেস্ট রিভিউ রিকোয়েস্ট সফলভাবে পাঠানো হয়েছে! গুগল শিটের 'review sheet' ট্যাবে চেক করুন।"
+    });
+  }
+  return res.status(502).json({
+    error: "টেস্ট রিভিউ পাঠাতে সমস্যা হয়েছে। আপনার Apps Script কোড আপডেট করে New Version হিসেবে ডিপ্লয় করেছেন কিনা চেক করুন।"
   });
 });
 
@@ -4019,6 +4107,8 @@ async function startServer() {
           res.setHeader("Expires", "0");
         } else if (filePath.endsWith(".js") || filePath.endsWith(".css")) {
           res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+        } else if (filePath.endsWith(".png") || filePath.endsWith(".ico") || filePath.endsWith(".svg") || filePath.endsWith(".webmanifest")) {
+          res.setHeader("Cache-Control", "public, max-age=3600, must-revalidate");
         }
       }
     }));

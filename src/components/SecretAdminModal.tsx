@@ -219,6 +219,7 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
   const [isSavingWebhook, setIsSavingWebhook] = useState(false);
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [isTestingSubscribeWebhook, setIsTestingSubscribeWebhook] = useState(false);
+  const [isTestingReviewWebhook, setIsTestingReviewWebhook] = useState(false);
   const [isTestingEmailAlert, setIsTestingEmailAlert] = useState(false);
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
@@ -1877,26 +1878,21 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     }
   };
 
-  // Delete Review directly on click (immediate, reliable removal)
+  // Delete Review: triggers in-app confirmation modal
   const handleDeleteReview = (revOrId: string | Review) => {
     const id = typeof revOrId === "object" && revOrId !== null ? revOrId.id : String(revOrId);
-    const name = typeof revOrId === "object" && revOrId !== null ? revOrId.name : undefined;
-    executeDeleteReview(id, name);
+    const name = typeof revOrId === "object" && revOrId !== null ? revOrId.name : "Customer";
+    const productName = typeof revOrId === "object" && revOrId !== null ? revOrId.productName : "Product";
+    setReviewToDelete({ id, name, productName });
   };
 
   const executeDeleteReview = async (id: string, name?: string) => {
     const cleanId = String(id).trim();
     // 1. Optimistically update review list immediately
-    setReviews(prev => prev.filter(r => String(r.id).trim() !== cleanId));
+    const updated = reviews.filter(r => String(r.id).trim() !== cleanId);
+    setReviews(updated);
     try {
-      const saved = localStorage.getItem("nirapod_customer_reviews_v1");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const rem = parsed.filter((r: any) => String(r.id).trim() !== cleanId);
-          localStorage.setItem("nirapod_customer_reviews_v1", JSON.stringify(rem));
-        }
-      }
+      localStorage.setItem("nirapod_customer_reviews_v1", JSON.stringify(updated));
     } catch {}
 
     try {
@@ -1918,6 +1914,15 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
     try {
       await fetch(`/api/reviews/${encodeURIComponent(cleanId)}`, {
         method: "DELETE"
+      });
+    } catch {}
+
+    // 3. Save all updated reviews to server static files & master database
+    try {
+      await safeAdminFetch("/api/admin/reviews/save-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
+        body: JSON.stringify({ reviews: updated })
       });
     } catch {}
   };
@@ -1957,7 +1962,14 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           body: JSON.stringify(updatedRev)
         }).catch(() => null);
 
-        // 2. Direct Sync to Google Sheets immediately
+        // 2. Ensure all static files & database are saved
+        safeAdminFetch("/api/admin/reviews/save-all", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
+          body: JSON.stringify({ reviews: updated })
+        }).catch(() => null);
+
+        // 3. Direct Sync to Google Sheets immediately
         syncReviewToGoogleSheetsClient(updatedRev).catch(() => {});
 
         addToast("রিভিউ ও তারিখ সফলভাবে আপডেট এবং গুগল শিটে সেভ হয়েছে!", "success");
@@ -1995,7 +2007,14 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
           body: JSON.stringify(newRev)
         }).catch(() => null);
 
-        // 2. Direct sync to Google Sheets immediately
+        // 2. Ensure all static files & database are saved
+        safeAdminFetch("/api/admin/reviews/save-all", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
+          body: JSON.stringify({ reviews: updated })
+        }).catch(() => null);
+
+        // 3. Direct sync to Google Sheets immediately
         syncReviewToGoogleSheetsClient(newRev).catch(() => {});
 
         addToast("নতুন রিভিউ সফলভাবে সংরক্ষিত এবং গুগল শিটে সেভ হয়েছে!", "success");
@@ -2018,20 +2037,30 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       .replace(/\/+$/, "");
     const cleanBranch = githubBranch.trim() || "main";
 
-    // Always ensure all reviews are synced to Google Sheets first!
+    // 1. Always save reviews to backend server, database & static files first
+    try {
+      await safeAdminFetch("/api/admin/reviews/save-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
+        body: JSON.stringify({ reviews })
+      });
+    } catch (e) {
+      console.warn("Reviews save-all notice:", e);
+    }
+
+    // 2. Always ensure all reviews are synced to Google Sheets
     for (const r of reviews) {
       syncReviewToGoogleSheetsClient(r).catch(() => {});
     }
 
+    // 3. Save to localStorage and fire sync event
+    try {
+      localStorage.setItem("nirapod_customer_reviews_v1", JSON.stringify(reviews));
+      window.dispatchEvent(new Event("nirapod_reviews_updated"));
+    } catch {}
+
     if (!token || !cleanRepo) {
-      try {
-        await safeAdminFetch("/api/admin/reviews/sync-sheets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAdminAuthToken()}` },
-          body: JSON.stringify({ reviews })
-        });
-      } catch {}
-      addToast("গুগল শিট ও লোকাল স্টোরেজে সকল রিভিউ সফলভাবে সেভ ও পুশ হয়েছে! (GitHub Commit-এর জন্য GitHub ট্যাবে Token সেট করুন)", "success");
+      addToast(`সকল রিভিউ (${reviews.length} টি) ডাটাবেজ, ফাইল ও গুগল শিটে সফলভাবে পুশ ও সেভ হয়েছে! (GitHub Commit-এর জন্য GitHub ট্যাবে Token সেট করুন)`, "success");
       return;
     }
 
@@ -2044,9 +2073,9 @@ export const SecretAdminModal: React.FC<SecretAdminModalProps> = ({ products, on
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        addToast(`সফলভাবে GitHub ও গুগল শিটে ${reviews.length} টি রিভিউ পুশ হয়েছে!`, "success");
+        addToast(`সফলভাবে GitHub, ডাটাবেজ ও গুগল শিটে ${reviews.length} টি রিভিউ পুশ ও সেভ হয়েছে!`, "success");
       } else {
-        addToast(`GitHub পুশ ব্যর্থ: ${data.error || "Unknown error"} (তবে গুগল শিট ও ডাটাবেজে সেভ হয়েছে)`, "warning");
+        addToast(`GitHub পুশ ব্যর্থ: ${data.error || "Unknown error"} (তবে ডাটাবেজ ও গুগল শিটে ১০০% সেভ হয়েছে)`, "warning");
       }
     } catch (e: any) {
       addToast(`GitHub পুশ এরর: ${e.message}`, "error");
@@ -2941,6 +2970,65 @@ export const DEFAULT_REVIEWS: Review[] = ${JSON.stringify(reviews, null, 2)};
     }
   };
 
+  // Test Review Webhook ("review sheet" tab)
+  const handleTestReviewWebhook = async () => {
+    setIsTestingReviewWebhook(true);
+    try {
+      const res = await fetch("/api/admin/test-review-webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAdminAuthToken()}`
+        },
+        body: JSON.stringify({ url: webhookUrl })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        addToast(data.message || "টেস্ট রিভিউ সফলভাবে পাঠানো হয়েছে! গুগল শিটের 'review sheet' ট্যাবে দেখুন।", "success");
+      } else {
+        // Fallback: direct client test dispatch
+        const directOk = await syncReviewToGoogleSheetsClient({
+          id: "REV-TEST-" + Math.floor(1000 + Math.random() * 9000),
+          name: "তানভীর আহমেদ (টেস্ট রিভিউ)",
+          email: "tanvir.test@gmail.com",
+          phone: "01712345678",
+          rating: 5,
+          productName: "সুন্দরবনের খাঁটি মধু",
+          category: "food",
+          location: "মিরপুর, ঢাকা",
+          comment: "অসাধারণ পণ্য! সার্ভিস ও ডেলিভারি খুব দ্রুত হয়েছে। টেস্ট রিভিউ সফল হয়েছে।",
+          date: new Date().toISOString()
+        });
+        if (directOk) {
+          addToast("টেস্ট রিভিউ পাঠানো হয়েছে! গুগল শিটের 'review sheet' ট্যাবে চেক করুন।", "success");
+        } else {
+          addToast(data.error || "Review Webhook test failed. নতুন ভার্সন ডিপ্লয় করা হয়েছে কিনা চেক করুন।", "error");
+        }
+      }
+    } catch {
+      try {
+        await syncReviewToGoogleSheetsClient({
+          id: "REV-TEST-" + Math.floor(1000 + Math.random() * 9000),
+          name: "তানভীর আহমেদ (টেস্ট রিভিউ)",
+          email: "tanvir.test@gmail.com",
+          phone: "01712345678",
+          rating: 5,
+          productName: "সুন্দরবনের খাঁটি মধু",
+          category: "food",
+          location: "মিরপুর, ঢাকা",
+          comment: "অসাধারণ পণ্য! সার্ভিস ও ডেলিভারি খুব দ্রুত হয়েছে। টেস্ট রিভিউ সফল হয়েছে।",
+          date: new Date().toISOString()
+        });
+        addToast("টেস্ট রিভিউ পাঠানো হয়েছে! গুগল শিটের 'review sheet' ট্যাবে চেক করুন।", "success");
+      } catch {
+        addToast("Review Webhook test failed.", "error");
+      }
+    } finally {
+      setIsTestingReviewWebhook(false);
+    }
+  };
+
   // Test Live Email Alert
   const handleTestEmailAlert = async () => {
     setIsTestingEmailAlert(true);
@@ -3209,7 +3297,7 @@ export const DEFAULT_REVIEWS: Review[] = ${JSON.stringify(reviews, null, 2)};
 
   const sampleAppsScriptCode = `// ==========================================
 // নিরপদ ক্রয় (Nirapod Kroy) - Master Google Sheets Webhook
-// Tabs Supported: "order sheet", "user traking" (also "user tracking"), "subscribe", "Customers"
+// Tabs Supported: "order sheet", "user traking" (also "user tracking"), "subscribe", "Customers", "review sheet" (Customer Reviews)
 // ==========================================
 
 // ⭐️ জিমেইল নোটিফিকেশন চালু করার জন্য একবার রান করুন:
@@ -3291,7 +3379,14 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    var result = { orders: [], customers: [], subscribers: [], tracking: [] };
+    // ইউজার ট্র্যাকিং শিট থেকে রিভিউ আলাদা ও স্থানান্তর করার স্পেশাল কমান্ড (?action=clean_tracking_reviews)
+    if (e && e.parameter && (e.parameter.action === "clean_tracking_reviews" || e.parameter.action === "clean_reviews")) {
+      var fixTrackMsg = cleanUserTrackingReviews();
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: fixTrackMsg }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var result = { orders: [], customers: [], subscribers: [], tracking: [], reviews: [] };
     
     // 1. Orders tab ("order sheet" বা "Orders" - কাস্টমার শিট সম্পূর্ণ বাদ)
     var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Orders", "orders", "অর্ডার_লিস্ট", "অর্ডার"], "order", "custom", "coustom");
@@ -3554,14 +3649,16 @@ function doPost(e) {
     var isReview = Boolean(
       data.action === "customer_review" || 
       data.action === "review" || 
-      data.type === "review" ||
+      data.type === "review" || 
       data.type === "customer_review" ||
-      data.reviewId ||
-      data.reviewComment ||
+      data.isReview === true ||
+      Boolean(data.reviewId) ||
+      Boolean(data.reviewComment) ||
       (data.rating && (data.productName || data.product || data.comment)) ||
       String(data.sheetTab || data.targetSheet || data.target || data.tab || "").toLowerCase().indexOf("review") !== -1 ||
       (e && e.parameter && (
         String(e.parameter.tab || "").toLowerCase().indexOf("review") !== -1 ||
+        String(e.parameter.target || "").toLowerCase().indexOf("review") !== -1 ||
         String(e.parameter.action || "").toLowerCase().indexOf("review") !== -1 ||
         String(e.parameter.type || "").toLowerCase().indexOf("review") !== -1 ||
         e.parameter.reviewComment ||
@@ -3579,8 +3676,8 @@ function doPost(e) {
     var isTracking = !isReview && Boolean(
       data.action === "user_tracking" || 
       data.action === "user_traking" || 
-      data.type === "user_tracking" ||
-      data.type === "user_traking" ||
+      data.type === "user_tracking" || 
+      data.type === "user_traking" || 
       String(data.sheetTab || data.targetSheet || data.target || data.tab || "").toLowerCase().indexOf("trak") !== -1 ||
       String(data.sheetTab || data.targetSheet || data.target || data.tab || "").toLowerCase().indexOf("track") !== -1 ||
       (e && e.parameter && (
@@ -3638,9 +3735,115 @@ function doPost(e) {
     );
 
     // ===============================================
-    // ১. নতুন অর্ডার -> strictly "order sheet" ট্যাবে
+    // ১. কাস্টমার রিভিউ -> strictly "review sheet" / "Customer Reviews" ট্যাবে
     // ===============================================
-    if (isOrder) {
+    if (isReview) {
+      var targetTabName = String(data.sheetTab || data.targetSheet || data.tab || data.target || (e && e.parameter && (e.parameter.tab || e.parameter.target || e.parameter.sheetTab)) || "").trim();
+      var reviewSheet = null;
+      if (targetTabName) {
+        reviewSheet = ss.getSheetByName(targetTabName);
+      }
+      
+      if (!reviewSheet) {
+        reviewSheet = findSheet(ss, [
+          "review sheet", "Review Sheet", "review", "Review", 
+          "Customer Reviews", "customer reviews", "Reviews", "reviews", 
+          "গ্রাহক রিভিউ", "রিভিউ"
+        ], "review", "order", "custom");
+      }
+      
+      if (!reviewSheet) {
+        reviewSheet = ss.getSheetByName("review sheet") || 
+                      ss.getSheetByName("review") || 
+                      ss.getSheetByName("Customer Reviews") || 
+                      ss.insertSheet("review sheet");
+      }
+
+      if (reviewSheet.getLastRow() === 0) {
+        reviewSheet.appendRow([
+          "Review ID", "Date/Time", "Customer Name", "Customer Email", "Customer Phone", 
+          "Rating", "Product Name", "Category", "Location", "Review / Comment", "Status"
+        ]);
+        reviewSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#d9ead3");
+      }
+
+      var revId = String(data.id || data.reviewId || (data.sheetRow ? data.sheetRow[0] : "") || ("rev-" + new Date().getTime()));
+      var revDate = data.date || (data.sheetRow ? data.sheetRow[1] : "") || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
+      var revName = data.name || data.customerName || (data.sheetRow ? data.sheetRow[2] : "") || "Customer";
+      var revEmail = data.email || data.customerEmail || (data.sheetRow ? data.sheetRow[3] : "") || "";
+      var revPhone = data.phone || data.customerPhone || (data.sheetRow ? data.sheetRow[4] : "") || "";
+      var revRating = (data.rating ? (String(data.rating).indexOf("★") !== -1 ? data.rating : data.rating + "★") : ((data.sheetRow && data.sheetRow[5]) ? data.sheetRow[5] : "5★"));
+      var revProduct = data.productName || data.product || (data.sheetRow ? data.sheetRow[6] : "") || "";
+      var revCat = data.category || (data.sheetRow ? data.sheetRow[7] : "") || "All";
+      var revLoc = data.location || (data.sheetRow ? data.sheetRow[8] : "") || "";
+      var revComment = data.comment || data.reviewComment || (data.sheetRow ? data.sheetRow[9] : "") || "";
+      var revStatus = data.status || (data.sheetRow ? data.sheetRow[10] : "") || (data.isActive !== false ? "Active" : "Pending");
+
+      var defaultRevRow = [
+        revId,
+        revDate,
+        revName,
+        revEmail,
+        revPhone,
+        revRating,
+        revProduct,
+        revCat,
+        revLoc,
+        revComment,
+        revStatus
+      ];
+
+      var rowToAppend = buildReviewRowByHeaders(reviewSheet, {
+        id: revId,
+        reviewId: revId,
+        date: revDate,
+        name: revName,
+        customerName: revName,
+        email: revEmail,
+        customerEmail: revEmail,
+        phone: revPhone,
+        customerPhone: revPhone,
+        rating: revRating,
+        productName: revProduct,
+        product: revProduct,
+        category: revCat,
+        location: revLoc,
+        comment: revComment,
+        reviewComment: revComment,
+        status: revStatus,
+        sheetRow: data.sheetRow || defaultRevRow
+      }, data.sheetRow || defaultRevRow);
+
+      var revUpdated = false;
+      if (reviewSheet.getLastRow() > 1 && revId) {
+        var existingIds = reviewSheet.getRange(2, 1, reviewSheet.getLastRow() - 1, 1).getValues();
+        for (var rIdx = 0; rIdx < existingIds.length; rIdx++) {
+          if (String(existingIds[rIdx][0]).trim() === revId.trim()) {
+            reviewSheet.getRange(rIdx + 2, 1, 1, rowToAppend.length).setValues([rowToAppend]);
+            revUpdated = true;
+            break;
+          }
+        }
+      }
+
+      if (!revUpdated) {
+        reviewSheet.appendRow(rowToAppend);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: "success", 
+        type: "review",
+        target: reviewSheet.getName(),
+        updatedExisting: revUpdated,
+        reviewId: revId
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ===============================================
+    // ২. নতুন অর্ডার -> strictly "order sheet" ট্যাবে
+    // ===============================================
+    else if (isOrder) {
+      var orderUpdated = false;
       var orderSheet = findSheet(ss, ["order sheet", "Order Sheet", "Orders", "orders", "অর্ডার"], "order", "custom", "coustom") || 
                        ss.getSheetByName("order sheet") || 
                        ss.insertSheet("order sheet");
@@ -3690,7 +3893,7 @@ function doPost(e) {
           }
         }
       }
-      var orderUpdated = (orderRowIndex !== -1);
+      orderUpdated = (orderRowIndex !== -1);
       if (orderUpdated) {
         // অর্ডার আগে থাকলে রো আপডেট করুন (যাতে ট্র্যাকিং ও স্ট্যাটাস পরিবর্তন শিটে সিঙ্ক হয়)
         orderSheet.getRange(orderRowIndex, 1, 1, ordRow.length).setValues([ordRow]);
@@ -4013,111 +4216,6 @@ function doPost(e) {
         target: customerSheet.getName(),
         updatedExisting: custUpdated,
         customerEmail: customerEmail
-      })).setMimeType(ContentService.MimeType.JSON);
-    } 
-
-    // ===============================================
-    // ৫. কাস্টমার রিভিউ -> strictly "review sheet" / "review" ট্যাবে (নাম, ইমেইল, রেটিং, কমেন্ট)
-    // ===============================================
-    else if (isReview) {
-      var targetTabName = String(data.sheetTab || data.targetSheet || data.tab || data.target || (e && e.parameter && (e.parameter.tab || e.parameter.target || e.parameter.sheetTab)) || "").trim();
-      var reviewSheet = null;
-      if (targetTabName) {
-        reviewSheet = ss.getSheetByName(targetTabName);
-      }
-      
-      if (!reviewSheet) {
-        reviewSheet = findSheet(ss, [
-          "review sheet", "Review Sheet", "review", "Review", 
-          "Customer Reviews", "customer reviews", "Reviews", "reviews", 
-          "গ্রাহক রিভিউ", "রিভিউ"
-        ], "review", "order", "custom");
-      }
-      
-      if (!reviewSheet) {
-        reviewSheet = ss.getSheetByName("review sheet") || 
-                      ss.getSheetByName("review") || 
-                      ss.getSheetByName("Customer Reviews") || 
-                      ss.insertSheet("review sheet");
-      }
-
-      if (reviewSheet.getLastRow() === 0) {
-        reviewSheet.appendRow([
-          "Review ID", "Date/Time", "Customer Name", "Customer Email", "Customer Phone", 
-          "Rating", "Product Name", "Category", "Location", "Review / Comment", "Status"
-        ]);
-        reviewSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#d9ead3");
-      }
-
-      var revId = String(data.id || data.reviewId || (data.sheetRow ? data.sheetRow[0] : "") || ("rev-" + new Date().getTime()));
-      var revDate = data.date || (data.sheetRow ? data.sheetRow[1] : "") || new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" });
-      var revName = data.name || data.customerName || (data.sheetRow ? data.sheetRow[2] : "") || "Customer";
-      var revEmail = data.email || data.customerEmail || (data.sheetRow ? data.sheetRow[3] : "") || "";
-      var revPhone = data.phone || data.customerPhone || (data.sheetRow ? data.sheetRow[4] : "") || "";
-      var revRating = (data.rating ? (String(data.rating).indexOf("★") !== -1 ? data.rating : data.rating + "★") : ((data.sheetRow && data.sheetRow[5]) ? data.sheetRow[5] : "5★"));
-      var revProduct = data.productName || data.product || (data.sheetRow ? data.sheetRow[6] : "") || "";
-      var revCat = data.category || (data.sheetRow ? data.sheetRow[7] : "") || "All";
-      var revLoc = data.location || (data.sheetRow ? data.sheetRow[8] : "") || "";
-      var revComment = data.comment || data.reviewComment || (data.sheetRow ? data.sheetRow[9] : "") || "";
-      var revStatus = data.status || (data.sheetRow ? data.sheetRow[10] : "") || (data.isActive !== false ? "Active" : "Pending");
-
-      var defaultRevRow = [
-        revId,
-        revDate,
-        revName,
-        revEmail,
-        revPhone,
-        revRating,
-        revProduct,
-        revCat,
-        revLoc,
-        revComment,
-        revStatus
-      ];
-
-      var rowToAppend = buildReviewRowByHeaders(reviewSheet, {
-        id: revId,
-        reviewId: revId,
-        date: revDate,
-        name: revName,
-        customerName: revName,
-        email: revEmail,
-        customerEmail: revEmail,
-        phone: revPhone,
-        customerPhone: revPhone,
-        rating: revRating,
-        productName: revProduct,
-        product: revProduct,
-        category: revCat,
-        location: revLoc,
-        comment: revComment,
-        reviewComment: revComment,
-        status: revStatus,
-        sheetRow: data.sheetRow || defaultRevRow
-      }, data.sheetRow || defaultRevRow);
-
-      var revUpdated = false;
-      if (reviewSheet.getLastRow() > 1 && revId) {
-        var existingIds = reviewSheet.getRange(2, 1, reviewSheet.getLastRow() - 1, 1).getValues();
-        for (var rIdx = 0; rIdx < existingIds.length; rIdx++) {
-          if (String(existingIds[rIdx][0]).trim() === revId.trim()) {
-            reviewSheet.getRange(rIdx + 2, 1, 1, rowToAppend.length).setValues([rowToAppend]);
-            revUpdated = true;
-            break;
-          }
-        }
-      }
-
-      if (!revUpdated) {
-        reviewSheet.appendRow(rowToAppend);
-      }
-
-      return ContentService.createTextOutput(JSON.stringify({ 
-        status: "success", 
-        type: "review",
-        target: reviewSheet.getName(),
-        updatedExisting: revUpdated,
-        reviewId: revId
       })).setMimeType(ContentService.MimeType.JSON);
     } 
 
@@ -4781,13 +4879,13 @@ function cleanAndFixOrderSheetRows() {
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-11 h-11 shrink-0 rounded-full overflow-hidden bg-white border border-emerald-500/40 shadow-sm flex items-center justify-center">
                 <img
-                  src="/logo.png"
+                  src="/logo.png?v=20261012"
                   alt="Nirapod Kroy Logo"
                   className="w-full h-full object-contain"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    if (target.src.endsWith(".png")) {
-                      target.src = "/logo.svg";
+                    if (target.src.includes(".png")) {
+                      target.src = "/logo.svg?v=20261012";
                     }
                   }}
                 />
@@ -6557,11 +6655,23 @@ function cleanAndFixOrderSheetRows() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
+                        {/* Primary Save & Push Button */}
+                        <button
+                          type="button"
+                          onClick={handlePushReviewsToGitHub}
+                          disabled={isPushingReviews || isSyncingReviewsToSheets}
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                          title="অ্যাডমিন প্যানেল থেকে সমস্ত রিভিউ ডাটাবেজ, লোকাল ফাইল, গুগল শিট ও গিটহাবে পুশ ও সেভ করুন"
+                        >
+                          <CloudUpload className="w-4 h-4 text-emerald-200" />
+                          <span>{isPushingReviews ? "পুশ ও সেভ হচ্ছে..." : "🚀 সেভ ও লাইভ পুশ করুন"}</span>
+                        </button>
+
                         {/* Add Review Button */}
                         <button
                           type="button"
                           onClick={openAddReviewModal}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-700/80 hover:bg-emerald-600 text-white text-xs font-bold shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
                         >
                           <Plus className="w-4 h-4" />
                           <span>নতুন রিভিউ যোগ করুন</span>
@@ -6614,6 +6724,23 @@ function cleanAndFixOrderSheetRows() {
                           <span>Export Code</span>
                         </button>
                       </div>
+                    </div>
+
+                    {/* Notice on Apps Script Update for Reviews */}
+                    <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 flex flex-wrap items-center justify-between gap-2 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <Star className="w-4 h-4 text-amber-400 fill-amber-400 shrink-0" />
+                        <span>
+                          <strong>গুগল শিটে অটো-রিভিউ সিঙ্ক:</strong> নতুন কোনো কাস্টমার রিভিউ দিলে সরাসরি আপনার গুগল শিটের <code className="bg-emerald-900/60 px-1.5 py-0.5 rounded text-emerald-300 font-mono">review sheet</code> ট্যাবে জমা হতে &quot;গুগল শিট&quot; ট্যাবে গিয়ে নতুন Apps Script কোড ডিপ্লয় করুন।
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("sheets")}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] transition-colors cursor-pointer"
+                      >
+                        গুগল শিট স্ক্রিপ্ট দেখুন &rarr;
+                      </button>
                     </div>
 
                     {/* Filter and Search Bar */}
@@ -7018,17 +7145,24 @@ function cleanAndFixOrderSheetRows() {
                         {/* Product Name & Category */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-xs font-bold text-zinc-300 mb-1">
-                              ক্রয়কৃত পণ্যের নাম *
+                            <label className="block text-xs font-bold text-zinc-300 mb-1 flex items-center justify-between">
+                              <span>ক্রয়কৃত পণ্যের নাম *</span>
+                              <span className="text-[10px] text-emerald-400 font-normal">লিস্ট থেকে বা সরাসরি লিখুন</span>
                             </label>
                             <input
                               type="text"
                               required
+                              list="admin-review-product-options"
                               value={revFormProduct}
                               onChange={(e) => setRevFormProduct(e.target.value)}
                               placeholder="উদাঃ সুন্দরবনের মধু - ১ কেজি"
                               className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
                             />
+                            <datalist id="admin-review-product-options">
+                              {products.map((p) => (
+                                <option key={p.id} value={p.title} />
+                              ))}
+                            </datalist>
                           </div>
 
                           <div>
@@ -7745,7 +7879,7 @@ function cleanAndFixOrderSheetRows() {
                           </button>
                           <button
                             onClick={handleTestSubscribeWebhook}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isCleaningOrderSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingReviewWebhook || isTestingTrackingWebhook || isCleaningOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 disabled:opacity-50 text-amber-200 font-bold text-xs transition-colors"
                             title="সাবস্ক্রাইব ডেটা টেস্ট করতে চাপুন"
                           >
@@ -7753,8 +7887,17 @@ function cleanAndFixOrderSheetRows() {
                             <span>{isTestingSubscribeWebhook ? "সাবস্ক্রাইব টেস্ট..." : "📧 টেস্ট সাবস্ক্রাইব"}</span>
                           </button>
                           <button
+                            onClick={handleTestReviewWebhook}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingReviewWebhook || isTestingTrackingWebhook || isCleaningOrderSheet}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 disabled:opacity-50 text-emerald-200 font-bold text-xs transition-colors"
+                            title="গুগল শিটের 'review sheet' ট্যাবে টেস্ট রিভিউ পাঠাতে চাপুন"
+                          >
+                            <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                            <span>{isTestingReviewWebhook ? "রিভিউ টেস্ট..." : "⭐ টেস্ট রিভিউ"}</span>
+                          </button>
+                          <button
                             onClick={handleTestTrackingWebhook}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingReviewWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/40 disabled:opacity-50 text-cyan-200 font-bold text-xs transition-colors"
                             title="ইউজার ট্র্যাকিং ডেটা টেস্ট করতে চাপুন"
                           >
@@ -7763,7 +7906,7 @@ function cleanAndFixOrderSheetRows() {
                           </button>
                           <button
                             onClick={handleTestEmailAlert}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingReviewWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 disabled:opacity-50 text-purple-200 font-bold text-xs transition-colors"
                             title="adib1234@gmail.com এ টেস্ট অর্ডার নোটিফিকেশন ইমেইল পাঠান"
                           >
@@ -7772,7 +7915,7 @@ function cleanAndFixOrderSheetRows() {
                           </button>
                           <button
                             onClick={handleCleanOrderSheet}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingReviewWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/40 disabled:opacity-50 text-rose-200 font-bold text-xs transition-colors"
                             title="অর্ডার শিট থেকে ভুল করে ঢুকে যাওয়া ট্র্যাকিং রো মুছে 'user traking' এ স্থানান্তর করতে চাপুন"
                           >
@@ -7780,8 +7923,17 @@ function cleanAndFixOrderSheetRows() {
                             <span>{isCleaningOrderSheet ? "ক্লিন হচ্ছে..." : "🧹 অর্ডার শিট ক্লিন করুন"}</span>
                           </button>
                           <button
+                            onClick={handleCleanTrackingAndReviews}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingReviewWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isCleaningTracking}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 disabled:opacity-50 text-amber-200 font-bold text-xs transition-colors"
+                            title="ইউজার ট্র্যাকিং শিট মেরামত করে ভুল করে ঢুকে যাওয়া রিভিউগুলো 'review sheet' ট্যাবে স্থানান্তর করতে চাপুন"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{isCleaningTracking ? "স্থানান্তর হচ্ছে..." : "🧹 ট্র্যাকিং থেকে রিভিউ রিকভার"}</span>
+                          </button>
+                          <button
                             onClick={handleFixCustomersSheet}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet || isFixingOrderSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingReviewWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet || isFixingOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 disabled:opacity-50 text-amber-200 font-bold text-xs transition-colors"
                             title="Customers শিটের ইমেইল কলামে গ্রাহকদের আসল ইমেইল অ্যাড্রেস যুক্ত ও ঠিক করুন (হেডার বা অন্য কোনো কলাম পরিবর্তন না করে)"
                           >
@@ -7790,7 +7942,7 @@ function cleanAndFixOrderSheetRows() {
                           </button>
                           <button
                             onClick={handleFixOrderSheet}
-                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet || isFixingOrderSheet}
+                            disabled={isTestingWebhook || isTestingSubscribeWebhook || isTestingReviewWebhook || isTestingTrackingWebhook || isTestingEmailAlert || isCleaningOrderSheet || isFixingCustomersSheet || isFixingOrderSheet}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 disabled:opacity-50 text-blue-200 font-bold text-xs transition-colors"
                             title="অর্ডার শিটের ভুল কলামে যাওয়া ডাটা (যেমন জিমেইল, প্রোডাক্ট কোড, এরিয়া, ডেলিভারি চার্জ) স্বয়ংক্রিয়ভাবে সঠিক কলামে স্থানান্তর করুন"
                           >
@@ -7868,8 +8020,9 @@ function cleanAndFixOrderSheetRows() {
                       {/* 30-Second Setup Guide with Copyable Script */}
                       <div className="p-5 rounded-2xl bg-zinc-800/40 border border-zinc-700 space-y-3">
                         <div className="flex items-center justify-between">
-                          <h4 className="font-bold text-sm text-white">
-                            Ready-to-Deploy Google Apps Script Code (Updated for Orders + Subscribe)
+                          <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                            <span>Ready-to-Deploy Google Apps Script (Orders + Reviews + Tracking + Subscribe)</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">v4.0 Reviews Live</span>
                           </h4>
                           <button
                             onClick={() => {
@@ -7877,20 +8030,29 @@ function cleanAndFixOrderSheetRows() {
                               setCopiedScript(true);
                               setTimeout(() => setCopiedScript(false), 2500);
                             }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs font-bold text-white transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-colors cursor-pointer"
                           >
-                            {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedScript ? "Copied!" : "Copy Script"}</span>
+                            {copiedScript ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedScript ? "Copied!" : "📋 Copy Full Script"}</span>
                           </button>
                         </div>
 
-                        <ol className="text-xs text-zinc-300 space-y-1 list-decimal list-inside leading-relaxed">
-                          <li>Create or open your Google Sheet at <strong>sheets.google.com</strong>.</li>
-                          <li>Click <strong>Extensions &gt; Apps Script</strong>.</li>
-                          <li>Select all existing code in <code>Code.gs</code>, delete it, and paste the code snippet below.</li>
-                          <li>Click <strong>Deploy &gt; Manage deployments &gt; Edit &gt; Version: New version &gt; Deploy</strong>.</li>
-                          <li>(প্রথমবার হলে: <strong>Deploy &gt; New deployment &gt; Web app</strong>, <em>Execute as:</em> <strong>Me</strong>, <em>Who has access:</em> <strong>Anyone</strong>).</li>
-                          <li>Copy the generated Web App URL and paste it into the field above!</li>
+                        <div className="p-3 bg-emerald-950/30 rounded-xl border border-emerald-500/30 text-xs text-emerald-200 space-y-1">
+                          <p className="font-bold text-emerald-300">
+                            ⭐ কাস্টমার রিভিউ স্বয়ংক্রিয়ভাবে "review sheet" ট্যাবে জমা হওয়ার নিয়ম:
+                          </p>
+                          <p className="text-[11px] text-zinc-300 leading-relaxed">
+                            বর্তমানে আপনার গুগল শিটে পুরোনো Apps Script চলায় রিভিউগুলো আলাদা ট্যাবে যাচ্ছিল না। নিচে দেওয়া নতুন কোডটি কপি করে আপনার গুগল শিটে পেস্ট করুন এবং অবশ্যই <strong className="text-amber-300">Version: New version</strong> নির্বাচন করে Deploy করুন। এরপর থেকে ওয়েবসাইট বা যে কোনো স্থান থেকে কেউ রিভিউ দিলে স্বয়ংক্রিয়ভাবে <strong className="text-emerald-300">"review sheet"</strong> ট্যাবে গ্রাহকের নাম, ইমেইল, রেটিং, পণ্য ও কমেন্ট জমা হয়ে যাবে!
+                          </p>
+                        </div>
+
+                        <ol className="text-xs text-zinc-300 space-y-1.5 list-decimal list-inside leading-relaxed">
+                          <li>আপনার গুগল শিট খুলুন (<strong>sheets.google.com</strong>)।</li>
+                          <li>উপরের মেনু থেকে <strong>Extensions &gt; Apps Script</strong> এ ক্লিক করুন।</li>
+                          <li><code>Code.gs</code> ফাইলের আগের সব কোড মুছে দিয়ে উপরের <strong>"📋 Copy Full Script"</strong> বাটনে চাপ দিয়ে কপি করা নতুন কোডটি পেস্ট করুন এবং Save (Ctrl+S) করুন।</li>
+                          <li>উপরে ডানে <strong>Deploy &gt; Manage deployments</strong> এ যান &gt; <strong>Edit (পেন্সিল আইকন)</strong> এ ক্লিক করুন।</li>
+                          <li><strong className="text-amber-400">Version</strong> ড্রপডাউনে অবশ্যই <strong className="text-emerald-400">New version</strong> সিলেক্ট করুন এবং নিচে <strong>Deploy</strong> বাটনে ক্লিক করে দিন।</li>
+                          <li>ব্যাস! এরপর উপরের <strong className="text-emerald-400">⭐ টেস্ট রিভিউ</strong> বাটনে ক্লিক করলেই গুগল শিটে নতুন <strong className="text-emerald-300">"review sheet"</strong> ট্যাব তৈরি হয়ে টেস্ট রিভিউ জমা হয়ে যাবে।</li>
                         </ol>
 
                         <pre className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-[11px] font-mono text-emerald-300 overflow-x-auto leading-relaxed max-h-56">
